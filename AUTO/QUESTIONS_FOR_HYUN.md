@@ -24,3 +24,8 @@
 - T8 / 튜토리얼 문구 언어 / 영어 한 줄(예: "Make a fist with your LEFT hand") / 심사위원이 영어권 + 기존 HUD도 영어 / `TutorialDirector.PromptText`.
 - T8 / 첫 실행 판정 / START를 누르면 튜토리얼을 한 번도 끝내거나 건너뛰지 않았을 때만 튜토리얼부터(PlayerPrefs `HandHero.TutorialSeen`). 앱을 켜자마자 자동 시작하지는 않음 / 콜드 스타트에서 메뉴 1단계는 유지하고 "Best First Five Minutes"는 START 한 번으로 바로 배우게 / 다시 보려면 TUTORIAL 버튼, 기록 지우려면 PlayerPrefs 삭제.
 - T8 / 연습 예고선 판정 / 실제 빔 레이캐스트 대신 "발사 순간 히어로가 고정점에서 1.5m 이상 벗어났나"로 판정, 데미지 없음 / 튜토리얼에서 죽거나 체력이 깎이지 않게, 테스트 가능하게 / `TutorialDirector`의 Rules(`DodgeHitRadius` 등).
+- T9 / 트래킹 원점 / XR Origin = **Device 모드 + 눈높이 1.2m 고정**(시작 순간 머리 위치가 원점). Floor 모드가 아님 / 착석 플레이에서 키·의자 높이와 상관없이 아레나가 늘 같은 높이로 보이게, 샌드박스 카메라 높이(1.2m)와 레이아웃 동일 / 씬 빌더 `SeatEyeHeight`, `XRRig()`. 앱 시작 후 자세를 바꾸면 Quest 시스템 재센터(Meta 버튼 길게)로 맞춤.
+- T9 / 앱 이름·패키지 / `productName` 310_Final → **Hand Hero**, Android 패키지 com.DefaultCompany.VRTemplate → **com.hyun.handhero** / 대회 대시보드에 새 앱으로 올라가야 하고 헤드셋 라이브러리에 보이는 이름 / `BuildScript.ApplicationId`·`ProductName`. 대시보드에서 앱을 만들 때 이 패키지명을 써야 함.
+- T9 / OpenXR Android 기능 / **Android XR Support 기능을 끔**(Meta Quest 기능과 동시에 켜져 있었음), Meta Quest·Hand Tracking·Meta Hand Tracking Aim은 켬 / Quest 전용 APK / Android XR 기기 빌드가 필요하면 Project Settings > XR Plug-in Management > OpenXR(Android)에서 다시 켬.
+- T9 / 손 추적 매니페스트 / XR Hands가 자동으로 넣는 `com.oculus.permission.HAND_TRACKING` + `oculus.software.handtracking required=false`를 그대로 둠(직접 패치 안 함) / 패키지 기본 동작과 충돌 없게. 손 전용 앱이라 `required=true`로 바꿀 수도 있지만 설치 제약만 늘어남 / 필요하면 IPostGenerateGradleAndroidProject로 패치.
+- T9 / Unity Connect(엔진 데이터 전송)를 에디터가 켜려고 함 / 되돌려서 꺼진 상태로 커밋 / 외부 서비스 금지 규칙 / 다음 빌드 때 또 켜질 수 있음 → `git checkout -- ProjectSettings/UnityConnectSettings.asset`.
