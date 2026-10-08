@@ -32,6 +32,8 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     [SerializeField] private float pinchResetThreshold = 0.5f;
     [Tooltip("Seconds after the aim-hand fist opens before a pinch can fire (a fist reads as a pinch)")]
     [SerializeField] private float fistSuppressTime = 0.15f;
+    [Tooltip("Aim-hand fist strength above this blocks the pinch even before the fist clutch engages (closing a fist reads as a pinch)")]
+    [SerializeField] private float pinchMaxFistStrength = 0.45f;
 
     [Header("Charge shot (both palms together) with hysteresis")]
     [Tooltip("Legacy charge gesture (both palms together). Off: the charge shot is a held right-hand pinch")]
@@ -58,6 +60,13 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     private readonly PalmPushRecognizer _leftPush = new PalmPushRecognizer();
     private readonly PalmPushRecognizer _rightPush = new PalmPushRecognizer();
 
+    // Switched back on (resume from pause, round start): the pinch that pressed
+    // RESUME is still closed and must open before it fires or charges.
+    private void OnEnable()
+    {
+        _pinch.RequireReopen();
+    }
+
     protected override HandInputData Sample()
     {
         HandGestureTracker t = tracker != null ? tracker : HandGestureTracker.Instance;
@@ -83,8 +92,9 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         // Pinch edge = normal shot, pinch level = charge hold. Ignored while the
         // aim-hand fist is closed. Keeps stepping through a palms charge so a pinch
         // held through it doesn't fire afterwards.
+        bool fistBlocks = PinchTrigger.FistBlocks(data.AimClutchHeld, aimHand.FistStrength, pinchMaxFistStrength);
         PinchState pinch = _pinch.Step(aimHand.IsTracked, aimHand.PinchStrength, pinchFireThreshold,
-            pinchResetThreshold, data.AimClutchHeld, fistSuppressTime, Time.deltaTime);
+            pinchResetThreshold, fistBlocks, fistSuppressTime, Time.deltaTime);
 
         if (!aimHand.IsTracked)
             return data; // HasAim = false: reticle freezes at the last aim point

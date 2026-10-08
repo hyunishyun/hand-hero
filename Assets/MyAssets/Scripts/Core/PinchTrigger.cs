@@ -22,9 +22,11 @@ namespace HandHero.Core
         public PinchState Step(bool tracked, float pinchStrength, float fireThreshold, float resetThreshold,
             bool fistHeld, float fistSuppressTime, float dt)
         {
+            // A half-occluded pinching hand drops out for a frame or two; when it
+            // comes back still pinched it must not fire (or restart a charge).
             if (!tracked)
             {
-                Reset();
+                RequireReopen();
                 return default;
             }
 
@@ -48,11 +50,19 @@ namespace HandHero.Core
             return new PinchState { FireTriggered = fired, Held = _gate.IsOn };
         }
 
-        public void Reset()
+        // Drops any pinch in progress; a pinch still closed must open before it
+        // fires or holds (tracking loss, input source switched back on after pause).
+        public void RequireReopen()
         {
             _gate.Reset();
-            _suppressTimer = 0f;
-            _mustReopen = false;
+            _mustReopen = true;
+        }
+
+        // A closing fist brings thumb and index together before the fist clutch
+        // engages, so a fist strength above the ceiling already blocks the pinch.
+        public static bool FistBlocks(bool clutchHeld, float fistStrength, float maxFistStrength)
+        {
+            return clutchHeld || fistStrength > maxFistStrength;
         }
     }
 }

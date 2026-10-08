@@ -92,7 +92,49 @@ namespace HandHero.Tests
         {
             Assert.IsTrue(Step(0.9f).FireTriggered);
             Assert.IsFalse(Step(0.9f, tracked: false).Held);
+            Assert.IsFalse(Step(0.4f).FireTriggered);
             Assert.IsTrue(Step(0.9f).FireTriggered);
+        }
+
+        // Review finding 1: a pinching hand half-occluded for a frame must not fire
+        // a stray shot (and restart the charge) when tracking returns still pinched.
+        [Test]
+        public void TrackingBlipMidHold_DoesNotFireOrHoldUntilReopened()
+        {
+            Assert.IsTrue(Step(0.9f).FireTriggered);
+            Step(0.9f, tracked: false);
+
+            PinchState back = Step(0.9f);
+            Assert.IsFalse(back.FireTriggered);
+            Assert.IsFalse(back.Held);
+
+            Step(0.4f);
+            Assert.IsTrue(Step(0.9f).FireTriggered);
+        }
+
+        // Review finding 2: the pinch that presses RESUME is still closed when the
+        // input source switches back on; it must open before it fires or charges.
+        [Test]
+        public void RequireReopen_HeldPinchDoesNotFireOrHold()
+        {
+            _pinch.RequireReopen();
+
+            PinchState s = Step(0.9f);
+            Assert.IsFalse(s.FireTriggered);
+            Assert.IsFalse(s.Held);
+
+            Step(0.4f);
+            Assert.IsTrue(Step(0.9f).FireTriggered);
+        }
+
+        // Review finding 3: a closing fist reads as a pinch before the fist clutch
+        // (0.7) engages, so a fist strength above the ceiling already blocks the pinch.
+        [Test]
+        public void FistBlocks_ClutchOrStrengthAboveCeiling()
+        {
+            Assert.IsTrue(PinchTrigger.FistBlocks(clutchHeld: true, fistStrength: 0f, maxFistStrength: 0.45f));
+            Assert.IsTrue(PinchTrigger.FistBlocks(clutchHeld: false, fistStrength: 0.5f, maxFistStrength: 0.45f));
+            Assert.IsFalse(PinchTrigger.FistBlocks(clutchHeld: false, fistStrength: 0.3f, maxFistStrength: 0.45f));
         }
     }
 }
