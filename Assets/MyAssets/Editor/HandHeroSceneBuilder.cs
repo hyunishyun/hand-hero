@@ -186,8 +186,7 @@ namespace HandHero.EditorTools
             SetRefs(pointing, ("character", flying), ("reticle", reticle.transform), ("beam", beam),
                 ("inputSource", playerInput), ("chargeIndicator", chargeOrb.transform),
                 ("hitEffectPrefab", impactPrefab), ("audioSource", flying.GetComponent<AudioSource>()),
-                ("reticleRenderer", reticle.GetComponent<Renderer>()), ("health", flying.GetComponent<HeroHealth>()),
-                ("cursorMarker", cursorMarker.transform), ("cursorRenderer", cursorMarker.GetComponent<Renderer>()));
+                ("health", flying.GetComponent<HeroHealth>()), ("cursorMarker", cursorMarker.transform));
             SetArray(pointing, "assistOnlyVisuals", reticle);
             SetArray(pointing, "cursorOnlyVisuals", cursorMarker, cursorGround);
 

@@ -22,14 +22,12 @@ public class PointingBeamController : MonoBehaviour
     [SerializeField] private float reticleSmoothing = 20f;
 
     [Header("Aim Assist (ASSIST mode)")]
-    [Tooltip("Reticle snaps to a target within this cone around the aim ray (degrees); 0 = off")]
-    [SerializeField] private float assistAngle = 8f;
+    [Tooltip("The aim snaps to a target within this cone around the aim ray (degrees); 0 = off")]
+    [SerializeField] private float assistAngle = 4f;
     [Tooltip("The snap holds until the target leaves this cone (degrees, wider than assistAngle = no flicker)")]
-    [SerializeField] private float assistReleaseAngle = 11f;
-    [Tooltip("Reticle / cursor marker color while snapped to a target")]
-    [SerializeField] private Color lockedReticleColor = new Color(1f, 0.55f, 0.1f);
-    [Tooltip("Optional. Reticle renderer, tinted while snapped")]
-    [SerializeField] private Renderer reticleRenderer;
+    [SerializeField] private float assistReleaseAngle = 6f;
+    [Tooltip("Optional. Ring shown around the target the aim snapped to (both modes)")]
+    [SerializeField] private LockOnRing lockOnRing;
 
     [Header("Aim Mode")]
     [Tooltip("Player's ASSIST / CURSOR setting. Empty = always ASSIST (the bot)")]
@@ -41,17 +39,15 @@ public class PointingBeamController : MonoBehaviour
     [Tooltip("Shown only in CURSOR mode (the marker and its floor disc)")]
     [SerializeField] private GameObject[] cursorOnlyVisuals;
 
-    [Header("Cursor (CURSOR mode: right fist drags a 3D aim marker)")]
+    [Header("Cursor (CURSOR mode: right gun grip drags a 3D aim marker, index fires)")]
+    [Tooltip("The 3D aim marker (no collider)")]
     [SerializeField] private Transform cursorMarker;
-    [Tooltip("Optional. Marker renderer, tinted while snapped")]
-    [SerializeField] private Renderer cursorRenderer;
     [Tooltip("World meters the marker moves per meter of right-hand movement (same idea as the puppeteer's positionScale)")]
     [SerializeField] private float cursorPositionScale = 60f;
     [Tooltip("The aim snaps to a target this close to the marker (meters); 0 = off")]
-    [SerializeField] private float cursorAssistRadius = 2.5f;
+    [SerializeField] private float cursorAssistRadius = 1.2f;
     [Tooltip("The snap holds until the target is this far from the marker (meters, larger = no flicker)")]
-    [SerializeField] private float cursorAssistReleaseRadius = 3.5f;
-    [SerializeField] private Color cursorColor = new Color(1f, 0.6f, 0.15f);
+    [SerializeField] private float cursorAssistReleaseRadius = 1.8f;
 
     [Header("Firing")]
     [SerializeField] private float fireCooldown = 0.35f;
@@ -96,9 +92,7 @@ public class PointingBeamController : MonoBehaviour
     private readonly List<Vector3> _candidatePositions = new List<Vector3>();
     private readonly List<AimAssistTarget> _candidateTargets = new List<AimAssistTarget>();
     private AimAssistTarget _assistTarget;
-    private MaterialPropertyBlock _tintBlock;
-    private Color _reticleIdleColor = Color.white;
-    private bool _reticleColorRead;
+    private Vector3 _rawAimPoint;
     private readonly AimCursorModel _cursor = new AimCursorModel();
     private bool _visualsApplied;
     private AimMode _visualsMode;
@@ -111,7 +105,7 @@ public class PointingBeamController : MonoBehaviour
     // Cursor back to the arena center, assist lock dropped.
     public void ResetAim()
     {
-        _assistTarget = null;
+        SetAssistTarget(null);
         if (character == null) return;
         _cursor.Reset(character.Bounds.Center);
         if (Mode == AimMode.Cursor) _aimPoint = _cursor.Position;
@@ -167,10 +161,18 @@ public class PointingBeamController : MonoBehaviour
         AimMode mode = Mode;
         ApplyModeVisuals(mode);
 
-        // CURSOR: the aim-hand fist drags the marker. ASSIST: a lost aiming hand
+        // CURSOR: the gun grip drags the marker. ASSIST: a lost aiming hand
         // arrives as HasAim = false and the reticle freezes at the last aim point.
         if (mode == AimMode.Cursor) UpdateCursor(input);
         else if (input.HasAim) UpdateAim(input.AimRay);
+
+        // CURSOR fires with the index trigger (the pinch can't happen while gripping);
+        // the same pinch rules then apply to it.
+        if (mode == AimMode.Cursor)
+        {
+            input.FireTriggered = input.TriggerFired;
+            input.PinchHeld = input.TriggerHeld;
+        }
 
         // Charge shot: a held pinch charges, release fires. Losing the aim hand or
         // a switched-off source (pause) cancels without firing (ChargeInputRule).
@@ -196,6 +198,7 @@ public class PointingBeamController : MonoBehaviour
     private void OnDisable()
     {
         if (health != null) health.Respawned -= ResetAim;
+        SetAssistTarget(null);
         _charge.Cancel();
         UpdateChargeIndicator(default);
         if (character != null) character.SetChargeSpeedMultiplier(1f);
@@ -220,27 +223,25 @@ public class PointingBeamController : MonoBehaviour
         CollectCandidates();
         int current = _assistTarget != null ? _candidateTargets.IndexOf(_assistTarget) : -1;
         int pick = AimAssist.SelectByAngle(ray, _candidatePositions, current, assistAngle, assistReleaseAngle);
-        _assistTarget = pick >= 0 ? _candidateTargets[pick] : null;
-        Tint(reticleRenderer, _assistTarget != null ? lockedReticleColor : ReticleIdleColor());
+        SetAssistTarget(pick >= 0 ? _candidateTargets[pick] : null);
 
-        Vector3 point;
-        if (pick >= 0)
-            point = _candidatePositions[pick];
-        else
-            point = RaycastIgnoringSelf(ray, maxAimDistance, out RaycastHit hit)
-                ? hit.point
-                : ray.GetPoint(maxAimDistance);
-
-        // Snapped: sit exactly on the target (a smoothed point would trail a fast
-        // hero and miss). Free aim keeps the smoothing that hides hand jitter.
+        // The reticle always shows where the hand points (smoothed against jitter):
+        // snapped onto a target it would sit inside the hero mesh and vanish. The
+        // lock-on ring shows the snap instead.
+        Vector3 raw = RaycastIgnoringSelf(ray, maxAimDistance, out RaycastHit hit)
+            ? hit.point
+            : ray.GetPoint(maxAimDistance);
         float t = 1f - Mathf.Exp(-reticleSmoothing * Time.deltaTime);
-        _aimPoint = pick >= 0 || _aimPoint == Vector3.zero ? point : Vector3.Lerp(_aimPoint, point, t);
+        _rawAimPoint = _rawAimPoint == Vector3.zero ? raw : Vector3.Lerp(_rawAimPoint, raw, t);
+
+        // Snapped: fire exactly at the target (a smoothed point would trail a fast hero).
+        _aimPoint = pick >= 0 ? _candidatePositions[pick] : _rawAimPoint;
 
         if (reticle != null)
         {
-            reticle.position = _aimPoint;
+            reticle.position = _rawAimPoint;
             // Reticle keeps a readable size at any distance.
-            float dist = Vector3.Distance(Camera.main != null ? Camera.main.transform.position : ray.origin, _aimPoint);
+            float dist = Vector3.Distance(Camera.main != null ? Camera.main.transform.position : ray.origin, _rawAimPoint);
             reticle.localScale = Vector3.one * Mathf.Max(0.1f, dist * 0.02f);
         }
     }
@@ -254,8 +255,7 @@ public class PointingBeamController : MonoBehaviour
         int current = _assistTarget != null ? _candidateTargets.IndexOf(_assistTarget) : -1;
         int pick = AimAssist.SelectByRadius(cursor, _candidatePositions, current, cursorAssistRadius,
             cursorAssistReleaseRadius);
-        _assistTarget = pick >= 0 ? _candidateTargets[pick] : null;
-        Tint(cursorRenderer, _assistTarget != null ? lockedReticleColor : cursorColor);
+        SetAssistTarget(pick >= 0 ? _candidateTargets[pick] : null);
 
         // The clutch already smooths the marker; a snapped aim sits on the target.
         _aimPoint = pick >= 0 ? _candidatePositions[pick] : cursor;
@@ -266,7 +266,7 @@ public class PointingBeamController : MonoBehaviour
         if (_visualsApplied && _visualsMode == mode) return;
         _visualsApplied = true;
         _visualsMode = mode;
-        _assistTarget = null; // a lock never carries over between modes
+        SetAssistTarget(null); // a lock never carries over between modes
 
         SetActive(assistOnlyVisuals, mode == AimMode.Assist);
         SetActive(cursorOnlyVisuals, mode == AimMode.Cursor);
@@ -294,24 +294,13 @@ public class PointingBeamController : MonoBehaviour
         }
     }
 
-    private Color ReticleIdleColor()
+    // The lock-on ring follows the current snap target in both modes.
+    private void SetAssistTarget(AimAssistTarget target)
     {
-        if (!_reticleColorRead && reticleRenderer != null && reticleRenderer.sharedMaterial != null)
-        {
-            Material m = reticleRenderer.sharedMaterial;
-            _reticleIdleColor = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : m.color;
-            _reticleColorRead = true;
-        }
-        return _reticleIdleColor;
-    }
-
-    private void Tint(Renderer r, Color c)
-    {
-        if (r == null) return;
-        _tintBlock ??= new MaterialPropertyBlock();
-        _tintBlock.SetColor("_BaseColor", c);
-        _tintBlock.SetColor("_Color", c);
-        r.SetPropertyBlock(_tintBlock);
+        _assistTarget = target;
+        if (lockOnRing == null) return;
+        if (target != null) lockOnRing.Show(target.transform);
+        else lockOnRing.Hide();
     }
 
     private void TryFire()
