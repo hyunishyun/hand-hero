@@ -27,7 +27,8 @@ public class MatchHud : MonoBehaviour
 
         if (scoreLine != null)
         {
-            bool inMatch = m.Phase != MatchPhase.Menu && m.Phase != MatchPhase.Boot && m.Phase != MatchPhase.Tutorial;
+            bool inMatch = m.Phase != MatchPhase.Menu && m.Phase != MatchPhase.Boot && m.Phase != MatchPhase.Tutorial
+                && m.Phase != MatchPhase.Run; // the run has its own HUD (R10)
             scoreLine.gameObject.SetActive(inMatch);
             if (inMatch) scoreLine.text = ScoreText(m);
         }

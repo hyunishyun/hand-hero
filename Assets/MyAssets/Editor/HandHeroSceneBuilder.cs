@@ -22,6 +22,7 @@ namespace HandHero.EditorTools
         public const string SandboxScenePath = SceneDir + "/HandHero_Sandbox.unity";
         public const string ArenaMainScenePath = SceneDir + "/Arena_Main.unity";
         public const string BotDifficultyPath = BotDir + "/BotDifficulty_Normal.asset";
+        public const string RunBotPrefabPath = BotDir + "/RunBot.prefab";
         private const string FxDir = "Assets/MyAssets/Generated/FX";
         public const string ImpactPrefabPath = FxDir + "/BeamImpact.prefab";
 
@@ -147,6 +148,8 @@ namespace HandHero.EditorTools
 
             var flying = Hero("PlayerHero", arena.transform, Vector3.zero, heroMat, noseMat, barMat, isBot: false);
             GroundMarker(flying, heroMarkerMat, beamMat, new Color(0.4f, 0.7f, 1f, 0.5f));
+            // RUN mode items (R7): neutral until a run binds its inventory.
+            var playerStats = flying.gameObject.AddComponent<RunHeroStats>();
 
             // Aim feedback: reticle without collider (else the aim ray hits it and jitters).
             GameObject reticle = Primitive(PrimitiveType.Sphere, "Reticle", null, ArenaCenter, Vector3.one * 0.4f, reticleMat);
@@ -213,36 +216,14 @@ namespace HandHero.EditorTools
             BotDifficulty difficulty = GetOrCreateBotDifficulty();
             var botFlying = Hero("BotHero", arena.transform, new Vector3(6f, 3f, 12f), botMat, noseMat, barMat,
                 isBot: true);
-            GroundMarker(botFlying, botMarkerMat, beamMat, new Color(1f, 0.4f, 0.4f, 0.5f));
-
-            var botBeamGo = new GameObject("BotBeamRenderer");
-            var botBeam = botBeamGo.AddComponent<LineRenderer>();
-            botBeam.sharedMaterial = beamMat;
-            botBeam.enabled = false;
-
+            GameObject botMarker = GroundMarker(botFlying, botMarkerMat, beamMat, new Color(1f, 0.4f, 0.4f, 0.5f));
             var bot = new GameObject("Bot");
-            var botInput = bot.AddComponent<BotInputSource>();
-            var botPuppeteer = bot.AddComponent<HandPuppeteerController>();
-            SetRefs(botPuppeteer, ("character", botFlying), ("inputSource", botInput));
-            var botPointing = bot.AddComponent<PointingBeamController>();
-            SetRefs(botPointing, ("character", botFlying), ("beam", botBeam), ("inputSource", botInput),
-                ("hitEffectPrefab", impactPrefab), ("audioSource", botFlying.GetComponent<AudioSource>()));
-            var beamSo = new SerializedObject(botPointing);
-            beamSo.FindProperty("beamColor").colorValue = new Color(1f, 0.25f, 0.2f);
-            // No assist for the bot: a snap at fire time would retarget the player's
-            // current position and void the telegraph dodge (spec D10).
-            beamSo.FindProperty("assistAngle").floatValue = 0f;
-            beamSo.ApplyModifiedPropertiesWithoutUndo();
-            SetRefs(botInput, ("self", botFlying), ("puppeteer", botPuppeteer), ("enemy", flying.transform),
-                ("hitReceiver", botFlying.GetComponent<BeamHitReceiver>()), ("difficulty", difficulty));
+            BotInputSource botInput = BotControllers(bot, botFlying, flying.transform, difficulty, beamMat, impactPrefab);
 
-            // Enemy beam warning line (aim locked -> thickens, yellow -> red -> fire).
-            var telegraphGo = new GameObject("BotTelegraphRenderer");
-            var telegraph = telegraphGo.AddComponent<LineRenderer>();
-            telegraph.sharedMaterial = beamMat;
-            telegraph.enabled = false;
-            var telegraphLine = bot.AddComponent<BotTelegraphLine>();
-            SetRefs(telegraphLine, ("bot", botInput), ("botHero", botFlying), ("line", telegraph));
+            // RUN mode (R8): island bots come from a generated prefab, the Quick
+            // Match bot hides while a run is on.
+            RunBot runBotPrefab = GetOrCreateRunBotPrefab(botMat, noseMat, barMat, botMarkerMat, beamMat,
+                impactPrefab, difficulty);
 
             // Match loop (T6): heroes act only during the fight; HUD in front of the seat.
             var match = new GameObject("Match");
@@ -252,6 +233,26 @@ namespace HandHero.EditorTools
             if (xr) SetArray(director, "fightOnly", xrInput);
             else SetArray(director, "fightOnly", playerInput, xrInput);
             SetArray(director, "opponentOnly", botInput);
+
+            var runDirector = match.AddComponent<RunDirector>();
+            SetRefs(runDirector, ("match", director), ("playerHealth", flying.GetComponent<HeroHealth>()),
+                ("playerStats", playerStats), ("botPrefab", runBotPrefab), ("arena", arena.transform));
+            Vector3[] runSpawnSpots =
+            {
+                new Vector3(6f, 3f, 12f),
+                new Vector3(-7f, 5f, 12f),
+                new Vector3(1f, 7f, 15f),
+            };
+            var runSpawns = new Object[runSpawnSpots.Length];
+            for (int i = 0; i < runSpawnSpots.Length; i++)
+            {
+                var spawn = new GameObject($"RunBotSpawn_{i + 1}");
+                spawn.transform.SetParent(arena.transform, false);
+                spawn.transform.localPosition = runSpawnSpots[i];
+                runSpawns[i] = spawn.transform;
+            }
+            SetArray(runDirector, "botSpawnPoints", runSpawns);
+            SetArray(runDirector, "hideDuringRun", botFlying.gameObject, botMarker);
 
             // Seat-space UI (HUD, menus, wrist button, tutorial prompt) lives under the
             // Camera Offset, so the T10 tabletop scale keeps it at the same apparent
@@ -564,6 +565,67 @@ namespace HandHero.EditorTools
             asset = ScriptableObject.CreateInstance<BotDifficulty>();
             AssetDatabase.CreateAsset(asset, BotDifficultyPath);
             return asset;
+        }
+
+        // Bot input + puppeteer + beam + telegraph on `bot`, flying `botHero` at `enemy`.
+        // Shared by the Quick Match bot and the RUN bot prefab. `renderParent` holds
+        // the line renderers (null = scene root).
+        private static BotInputSource BotControllers(GameObject bot, FlyingCharacter botHero, Transform enemy,
+            BotDifficulty difficulty, Material beamMat, GameObject impactPrefab, Transform renderParent = null)
+        {
+            var botBeamGo = new GameObject("BotBeamRenderer");
+            botBeamGo.transform.SetParent(renderParent, false);
+            var botBeam = botBeamGo.AddComponent<LineRenderer>();
+            botBeam.sharedMaterial = beamMat;
+            botBeam.enabled = false;
+
+            var botInput = bot.AddComponent<BotInputSource>();
+            var botPuppeteer = bot.AddComponent<HandPuppeteerController>();
+            SetRefs(botPuppeteer, ("character", botHero), ("inputSource", botInput));
+            var botPointing = bot.AddComponent<PointingBeamController>();
+            SetRefs(botPointing, ("character", botHero), ("beam", botBeam), ("inputSource", botInput),
+                ("hitEffectPrefab", impactPrefab), ("audioSource", botHero.GetComponent<AudioSource>()));
+            var beamSo = new SerializedObject(botPointing);
+            beamSo.FindProperty("beamColor").colorValue = new Color(1f, 0.25f, 0.2f);
+            // No assist for the bot: a snap at fire time would retarget the player's
+            // current position and void the telegraph dodge (spec D10).
+            beamSo.FindProperty("assistAngle").floatValue = 0f;
+            beamSo.ApplyModifiedPropertiesWithoutUndo();
+            SetRefs(botInput, ("self", botHero), ("puppeteer", botPuppeteer), ("enemy", enemy),
+                ("hitReceiver", botHero.GetComponent<BeamHitReceiver>()), ("difficulty", difficulty));
+
+            // Enemy beam warning line (aim locked -> thickens, yellow -> red -> fire).
+            var telegraphGo = new GameObject("BotTelegraphRenderer");
+            telegraphGo.transform.SetParent(renderParent, false);
+            var telegraph = telegraphGo.AddComponent<LineRenderer>();
+            telegraph.sharedMaterial = beamMat;
+            telegraph.enabled = false;
+            var telegraphLine = bot.AddComponent<BotTelegraphLine>();
+            SetRefs(telegraphLine, ("bot", botInput), ("botHero", botHero), ("line", telegraph));
+            return botInput;
+        }
+
+        // RUN island bot (R8): the Quick Match bot's hero and controllers under one
+        // root. The arena and the enemy are set at spawn (RunBot.Setup); the input
+        // starts off and RunDirector turns it on while the island is fought.
+        // Rewritten on every build so the asset always matches this code.
+        private static RunBot GetOrCreateRunBotPrefab(Material botMat, Material noseMat, Material barMat,
+            Material markerMat, Material beamMat, GameObject impactPrefab, BotDifficulty difficulty)
+        {
+            EnsureFolder(BotDir);
+            var root = new GameObject("RunBot");
+            FlyingCharacter hero = Hero("RunBotHero", root.transform, Vector3.zero, botMat, noseMat, barMat, isBot: true);
+            GroundMarker(hero, markerMat, beamMat, new Color(1f, 0.4f, 0.4f, 0.5f)).transform.SetParent(root.transform, false);
+            BotInputSource input = BotControllers(root, hero, null, difficulty, beamMat, impactPrefab, root.transform);
+            input.enabled = false;
+
+            var runBot = root.AddComponent<RunBot>();
+            SetRefs(runBot, ("hero", hero), ("health", hero.GetComponent<HeroHealth>()), ("input", input),
+                ("pointing", root.GetComponent<PointingBeamController>()));
+
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, RunBotPrefabPath);
+            Object.DestroyImmediate(root);
+            return prefab.GetComponent<RunBot>();
         }
 
         // Floor disc + drop line under a hero (depth cue, T12). Lives outside the

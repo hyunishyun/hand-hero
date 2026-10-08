@@ -25,12 +25,19 @@ public class BotInputSource : HandInputSourceBehaviour
 
     private BotBrain _brain;
     private FlyingCharacter _enemyHero;
+    private float _fireIntervalScale = 1f;
 
     public BotBrain Brain => _brain;
 
     public void SetEnemy(Transform target)
     {
         enemy = target;
+    }
+
+    // Run bots (R8): the boss fires more often (< 1). 1 = the difficulty asset's timing.
+    public void SetFireIntervalScale(float scale)
+    {
+        _fireIntervalScale = Mathf.Max(0.05f, scale);
     }
 
     private void Awake()
@@ -83,6 +90,8 @@ public class BotInputSource : HandInputSourceBehaviour
     {
         BotParams p = difficulty != null ? difficulty.Params : BotParams.Default;
         if (puppeteer != null) p.PositionScale = puppeteer.PositionScale;
+        p.FireInterval *= _fireIntervalScale;
+        p.FireIntervalJitter *= _fireIntervalScale;
         return p;
     }
 }

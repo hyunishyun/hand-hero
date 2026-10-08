@@ -54,6 +54,7 @@ public class HeroHealth : MonoBehaviour
     public bool IsStunned => _model.IsStunned;
 
     private HeroHealthModel _model;
+    private float _healthScale = 1f;
     private Vector3 _spawnPosition;
     private float _flashTimer;
     private bool _stunTinted;
@@ -118,6 +119,30 @@ public class HeroHealth : MonoBehaviour
         SyncMaxHealth();
         _model.Reset();
         Respawn();
+    }
+
+    // Run bots (R8): enemy scaling of the base max health, then full health.
+    public void SetHealthScale(float scale)
+    {
+        _healthScale = Mathf.Max(0.01f, scale);
+        ResetHealth();
+    }
+
+    // Run (R8): a revive item saved the run. Alive again at the spawn point with this health.
+    public void Revive(float health)
+    {
+        _model.Reset();
+        _model.SetHealth(health);
+        Respawn();
+    }
+
+    // Run (R8): back to the spawn point between islands, keeping the health.
+    public void ReturnToSpawn()
+    {
+        if (_model.IsDead) return;
+        Vector3 at = spawnPoint != null ? spawnPoint.position : _spawnPosition;
+        if (character != null) character.Respawn(at);
+        else transform.position = at;
     }
 
     // Run (R8): heal on island clear. Capped at max, ignored while dead.
@@ -187,7 +212,7 @@ public class HeroHealth : MonoBehaviour
         Respawned?.Invoke();
     }
 
-    private float EffectiveMaxHealth() => CombatMath.MaxHealth(maxHealth, RunHeroStats.StatsOf(runStats));
+    private float EffectiveMaxHealth() => CombatMath.MaxHealth(maxHealth * _healthScale, RunHeroStats.StatsOf(runStats));
 
     // A max-health item mid-run: a gain heals by the gain, a loss clamps (HeroHealthModel).
     private void SyncMaxHealth()

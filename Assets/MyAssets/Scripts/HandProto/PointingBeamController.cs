@@ -95,6 +95,7 @@ public class PointingBeamController : MonoBehaviour
     private IHandInputSource _sourceOverride;
     private readonly ShotCooldown _shots = new ShotCooldown();
     private float _beamTimer;
+    private float _damageScale = 1f;
     private readonly ChargeShotModel _charge = new ChargeShotModel();
 
     // Assist candidates, rebuilt each frame. The current pick is remembered as the
@@ -146,6 +147,12 @@ public class PointingBeamController : MonoBehaviour
             beam.endColor = beamColor;
             beam.enabled = false;
         }
+    }
+
+    // Run bots (R8): enemy damage scaling (Elite). 1 = the tuned damage.
+    public void SetDamageScale(float scale)
+    {
+        _damageScale = Mathf.Max(0f, scale);
     }
 
     // Code-assigned source (bot, test). Takes priority over the inspector field.
@@ -204,7 +211,8 @@ public class PointingBeamController : MonoBehaviour
 
         if (step.Released && _aimPoint != Vector3.zero)
         {
-            Fire(CombatMath.Shot(Mathf.Lerp(chargeMinDamage, chargeMaxDamage, step.Power), true, stats, CritRoll(stats)),
+            Fire(CombatMath.Shot(Mathf.Lerp(chargeMinDamage, chargeMaxDamage, step.Power) * _damageScale, true, stats,
+                    CritRoll(stats)),
                 Mathf.Lerp(1.5f, chargeMaxWidthMultiplier, step.Power));
             return;
         }
@@ -214,7 +222,7 @@ public class PointingBeamController : MonoBehaviour
         // aim hand or the hero drops the buffered shot.
         if (!input.HasAim || !character.IsAlive) _shots.ClearPending();
         else if (_shots.Step(input.FireTriggered, Time.time, CombatMath.FireCooldown(fireCooldown, stats)))
-            Fire(CombatMath.Shot(damage, false, stats, CritRoll(stats)), 1f);
+            Fire(CombatMath.Shot(damage * _damageScale, false, stats, CritRoll(stats)), 1f);
     }
 
     private void OnDisable()

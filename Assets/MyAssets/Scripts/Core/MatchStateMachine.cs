@@ -12,6 +12,7 @@ namespace HandHero.Core
         Fight,
         RoundEnd,  // shows the round result
         MatchEnd,  // shows the match result, then back to the menu
+        Run,       // RUN mode (R8): RunStateMachine drives the game; stays until ReturnToMenu
     }
 
     public enum MatchSide
@@ -96,6 +97,15 @@ namespace HandHero.Core
 
             if (withTutorial) Enter(MatchPhase.Tutorial);
             else BeginRound();
+            return true;
+        }
+
+        // RUN mode: the match only hosts pause and menu return; RunStateMachine
+        // owns the islands, so Tick and ReportKO do nothing in this phase.
+        public bool StartRun()
+        {
+            if (Phase != MatchPhase.Menu) return false;
+            Enter(MatchPhase.Run);
             return true;
         }
 

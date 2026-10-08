@@ -305,5 +305,44 @@ namespace HandHero.Tests
             Run(m, P.CountdownTime + 0.2f);
             Assert.AreEqual(MatchPhase.Fight, m.Phase);
         }
+
+        // RUN mode (R8): the match only hosts it (pause, menu return); the run
+        // has its own state machine, so the match does nothing on its own here.
+        [Test]
+        public void StartRun_OnlyFromMenu()
+        {
+            var m = InMenu();
+            Assert.IsTrue(m.StartRun());
+            Assert.AreEqual(MatchPhase.Run, m.Phase);
+            Assert.IsFalse(m.StartRun());
+            Assert.IsFalse(m.StartMatch(false), "no Quick Match while a run is on");
+
+            var fighting = InFight();
+            Assert.IsFalse(fighting.StartRun(), "no run while a Quick Match is on");
+            Assert.AreEqual(MatchPhase.Fight, fighting.Phase);
+        }
+
+        [Test]
+        public void Run_IgnoresTimeAndKOs()
+        {
+            var m = InMenu();
+            m.StartRun();
+            Run(m, 600f, 0f, 1f);
+            Assert.AreEqual(MatchPhase.Run, m.Phase);
+            Assert.IsFalse(m.ReportKO(MatchSide.Player));
+            Assert.AreEqual(MatchPhase.Run, m.Phase);
+        }
+
+        [Test]
+        public void Run_PausesAndReturnsToMenu()
+        {
+            var m = InMenu();
+            m.StartRun();
+            Assert.IsTrue(m.Pause());
+            Assert.IsTrue(m.IsPaused);
+            m.ReturnToMenu();
+            Assert.AreEqual(MatchPhase.Menu, m.Phase);
+            Assert.IsFalse(m.IsPaused);
+        }
     }
 }

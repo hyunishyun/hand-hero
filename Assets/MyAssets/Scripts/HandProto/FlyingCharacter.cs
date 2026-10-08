@@ -50,6 +50,12 @@ public class FlyingCharacter : MonoBehaviour
         runStats = RunHeroStats.Find(runStats, this);
     }
 
+    // Run bots are spawned from a prefab, which can't reference the scene's arena.
+    public void SetArenaCenter(Transform center)
+    {
+        arenaCenter = center;
+    }
+
     // Called by HandPuppeteerController while the clutch (fist) is held.
     public void SetTarget(Vector3 worldPosition)
     {

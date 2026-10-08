@@ -58,6 +58,7 @@ public class MatchDirector : MonoBehaviour
     [SerializeField] private bool debugKeys = true;
 
     private MatchStateMachine _match;
+    private bool _runFighting;
     private bool _userWasPresent = true;
     private readonly List<XRInputDevice> _heads = new List<XRInputDevice>();
 
@@ -99,6 +100,22 @@ public class MatchDirector : MonoBehaviour
     }
 
     public static bool TutorialSeen => PlayerPrefs.GetInt(TutorialSeenKey, 0) == 1;
+
+    // RUN mode (R8): RunDirector drives the islands; this keeps pause, focus
+    // loss and menu return. Returns false outside the main menu.
+    public bool StartRun()
+    {
+        _runFighting = false;
+        return _match.StartRun();
+    }
+
+    // RunDirector: the player's controls are live only while an island is fought.
+    public void SetRunControls(bool fighting)
+    {
+        if (_runFighting == fighting) return;
+        _runFighting = fighting;
+        ApplyControlGating();
+    }
     public void ReturnToMenu() => _match.ReturnToMenu();
     public void Pause() => _match.Pause();
     public void Resume() => _match.Resume();
@@ -194,6 +211,8 @@ public class MatchDirector : MonoBehaviour
 
     private void OnPhaseChanged(MatchPhase phase)
     {
+        if (phase != MatchPhase.Run) _runFighting = false;
+
         if (phase == MatchPhase.Countdown || phase == MatchPhase.Menu)
         {
             // Fresh heroes at their spawn points for every round (and in the menu).
@@ -214,7 +233,8 @@ public class MatchDirector : MonoBehaviour
     {
         bool fighting = _match.Phase == MatchPhase.Fight && !_match.IsPaused;
         bool practicing = _match.Phase == MatchPhase.Tutorial && !_match.IsPaused;
-        SetEnabled(fightOnly, fighting || practicing);
+        bool running = _match.Phase == MatchPhase.Run && !_match.IsPaused && _runFighting;
+        SetEnabled(fightOnly, fighting || practicing || running);
         SetEnabled(opponentOnly, fighting);
     }
 
