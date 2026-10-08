@@ -16,13 +16,17 @@ public class TutorialDirector : MonoBehaviour
     [SerializeField] private HandInputSourceBehaviour playerInput;
     [Tooltip("Seat camera, for the ghost hand placement. Falls back to Camera.main")]
     [SerializeField] private Transform head;
+    [Tooltip("The player's beam controller: the aim step checks its aim point (works in ASSIST and CURSOR)")]
+    [SerializeField] private PointingBeamController playerAim;
+    [Tooltip("Optional. Picks the aim step prompt (ASSIST / CURSOR)")]
+    [SerializeField] private AimModeSetting aimModeSetting;
 
     [Header("Scene objects (shown only during the tutorial)")]
     [SerializeField] private GameObject tutorialRoot;
     [SerializeField] private Transform ring;
     [SerializeField] private float ringRadius = 2f;
     [SerializeField] private BeamHitReceiver target;
-    [Tooltip("Aim counts while the aim ray passes within this distance of the target center")]
+    [Tooltip("Aim counts while the aim point (or, without playerAim, the aim ray) is within this distance of the target center")]
     [SerializeField] private float targetAimRadius = 1.5f;
     [SerializeField] private Transform telegraphOrigin;
     [SerializeField] private LineRenderer telegraph;
@@ -119,7 +123,13 @@ public class TutorialDirector : MonoBehaviour
             o.HeroInRing = ring != null && Vector3.Distance(o.HeroPosition, ring.position) <= ringRadius;
         }
 
-        if (input.HasAim && target != null)
+        if (playerAim != null && target != null)
+        {
+            // Mode-agnostic: ASSIST snaps the aim point onto the target, CURSOR
+            // needs the marker dragged there.
+            o.AimOnTarget = Vector3.Distance(playerAim.AimPoint, target.transform.position) <= targetAimRadius;
+        }
+        else if (input.HasAim && target != null)
         {
             var aim = new Ray(input.AimOrigin, input.AimDirection);
             Vector3 toTarget = target.transform.position - aim.origin;
@@ -157,7 +167,10 @@ public class TutorialDirector : MonoBehaviour
             case TutorialStep.Grab: return "Make a fist with your LEFT hand";
             case TutorialStep.DragToRing: return "Keep the fist and drag your hero into the ring";
             case TutorialStep.Glide: return "Open your hand - let it glide";
-            case TutorialStep.Aim: return "Point your RIGHT hand at the target";
+            case TutorialStep.Aim:
+                return aimModeSetting != null && aimModeSetting.Mode == AimMode.Cursor
+                    ? "Make a RIGHT fist and drag the orange marker onto the target"
+                    : "Point at the target with your RIGHT hand";
             case TutorialStep.Shoot: return "Pinch to shoot";
             case TutorialStep.Dodge:
                 return Time.time - _lastShotHitTime < 1.5f
