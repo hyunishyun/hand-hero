@@ -95,6 +95,50 @@ namespace HandHero.Tests
             Assert.AreEqual(1f, m.SpeedMultiplier);
         }
 
+        // T5 / Q7: shockwave = stun (slow), no damage, no knockback.
+        [Test]
+        public void Stun_SlowsForDuration_WithoutDamage()
+        {
+            var m = NewModel();
+            m.ApplyStun(1.2f, 0.15f);
+            Assert.IsTrue(m.IsStunned);
+            Assert.AreEqual(0.15f, m.SpeedMultiplier);
+            Assert.AreEqual(100f, m.CurrentHealth);
+            Assert.AreEqual(0, m.DamageCount);
+
+            m.Tick(1.1f);
+            Assert.AreEqual(0.15f, m.SpeedMultiplier);
+            m.Tick(0.2f);
+            Assert.IsFalse(m.IsStunned);
+            Assert.AreEqual(1f, m.SpeedMultiplier);
+        }
+
+        [Test]
+        public void StunAndHitSlow_TheStrongerSlowWins()
+        {
+            var m = NewModel();
+            m.ApplyDamage(10f);
+            m.ApplyStun(1f, 0.15f);
+            Assert.AreEqual(0.15f, m.SpeedMultiplier);
+            m.Tick(1.1f);
+            Assert.AreEqual(0.5f, m.SpeedMultiplier, "hit slow still running");
+        }
+
+        [Test]
+        public void StunWhileDead_IsIgnored_AndResetClearsStun()
+        {
+            var m = NewModel();
+            m.ApplyDamage(100f);
+            m.ApplyStun(1f, 0.15f);
+            Assert.IsFalse(m.IsStunned);
+
+            var alive = NewModel();
+            alive.ApplyStun(1f, 0.15f);
+            alive.Reset();
+            Assert.IsFalse(alive.IsStunned);
+            Assert.AreEqual(1f, alive.SpeedMultiplier);
+        }
+
         [Test]
         public void Normalized_IsFraction()
         {

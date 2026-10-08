@@ -47,6 +47,7 @@ namespace HandHero.EditorTools
             Material targetMat = LitMaterial("Target", new Color(1f, 0.5f, 0.15f));
             Material reticleMat = UnlitMaterial("Reticle", new Color(1f, 1f, 0.3f));
             Material barMat = UnlitMaterial("HealthBar", new Color(0.3f, 1f, 0.4f));
+            Material chargeMat = UnlitMaterial("ChargeOrb", new Color(0.55f, 0.95f, 1f));
             Material beamMat = BeamMaterial("Beam");
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -111,9 +112,19 @@ namespace HandHero.EditorTools
             var controllers = new GameObject("Controllers");
             var puppeteer = controllers.AddComponent<HandPuppeteerController>();
             SetRefs(puppeteer, ("character", flying), ("inputSource", debugInput));
+            // Charge orb lives outside the hero so HeroHealth's flash/visibility leave it alone.
+            GameObject chargeOrb = Primitive(PrimitiveType.Sphere, "ChargeOrb", null, ArenaCenter, Vector3.one, chargeMat);
             var pointing = controllers.AddComponent<PointingBeamController>();
             SetRefs(pointing, ("character", flying), ("reticle", reticle.transform), ("beam", beam),
-                ("inputSource", debugInput));
+                ("inputSource", debugInput), ("chargeIndicator", chargeOrb.transform));
+
+            // Palm push shockwave (T5): stuns the bot when it is within reach.
+            var ringGo = new GameObject("ShockwaveRingRenderer");
+            var ring = ringGo.AddComponent<LineRenderer>();
+            ring.sharedMaterial = beamMat;
+            ring.enabled = false;
+            var shockwave = controllers.AddComponent<ShockwaveController>();
+            SetRefs(shockwave, ("character", flying), ("inputSource", debugInput), ("ring", ring));
 
             // Bot opponent: same hero, same controllers, input from BotInputSource.
             BotDifficulty difficulty = GetOrCreateBotDifficulty();

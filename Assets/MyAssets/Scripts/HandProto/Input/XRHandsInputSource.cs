@@ -31,7 +31,26 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     [Tooltip("Pinch strength below this re-arms the next shot")]
     [SerializeField] private float pinchResetThreshold = 0.5f;
 
+    [Header("Charge shot (both palms together) with hysteresis")]
+    [Tooltip("Palms closer than this (meters) start charging")]
+    [SerializeField] private float chargeJoinDistance = 0.10f;
+    [Tooltip("Palms farther apart than this (meters) release the charge shot (larger than join = no flicker)")]
+    [SerializeField] private float chargeSeparateDistance = 0.18f;
+    [Tooltip("Seconds the charge survives while a hand drops out of tracking (touching hands occlude each other)")]
+    [SerializeField] private float chargeLostGraceTime = 0.3f;
+
+    [Header("Shockwave (palm push) with hysteresis")]
+    [SerializeField] private bool pushWithLeftHand = true;
+    [SerializeField] private bool pushWithRightHand = true;
+    [Tooltip("Push speed / re-arm speed (m/s along the palm normal) and the open-hand limit")]
+    [SerializeField] private PalmPushParams push = PalmPushParams.Default;
+    [Tooltip("Palm-facing direction in the palm joint's local space. XR Hands: palm faces -Y (back of hand is +Y). Flip if pushes fire on pulls.")]
+    [SerializeField] private Vector3 palmNormalLocal = Vector3.down;
+
     private readonly HandClutchSampler _clutch = new HandClutchSampler();
+    private readonly PalmsTogetherRecognizer _palmsTogether = new PalmsTogetherRecognizer();
+    private readonly PalmPushRecognizer _leftPush = new PalmPushRecognizer();
+    private readonly PalmPushRecognizer _rightPush = new PalmPushRecognizer();
     private HysteresisGate _pinchGate;
 
     protected override HandInputData Sample()
@@ -49,6 +68,8 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         data.ClutchHeld = _clutch.Step(clutchHand.IsTracked, clutchHand.FistStrength, clutchHand.PalmPosition,
             grabThreshold, releaseThreshold, out data.ClutchDelta);
 
+        bool charging = SampleGestures(t, ref data);
+
         if (!aimHand.IsTracked)
         {
             _pinchGate.Reset();
@@ -60,10 +81,35 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         data.AimOrigin = aim.origin;
         data.AimDirection = aim.direction;
 
-        // Edge-detected pinch: fire once per pinch.
-        data.FireTriggered = _pinchGate.Step(aimHand.PinchStrength, pinchFireThreshold, pinchResetThreshold)
+        // Edge-detected pinch: fire once per pinch. The gate keeps stepping while
+        // charging so a pinch held through the charge doesn't fire afterwards.
+        bool pinched = _pinchGate.Step(aimHand.PinchStrength, pinchFireThreshold, pinchResetThreshold)
             == GateEdge.Rising;
+        data.FireTriggered = pinched && !charging;
 
         return data;
+    }
+
+    // Charge (palms together) and shockwave (palm push). Returns true while charging.
+    private bool SampleGestures(HandGestureTracker t, ref HandInputData data)
+    {
+        HandGestureTracker.HandState left = t.Left;
+        HandGestureTracker.HandState right = t.Right;
+        float dt = Time.deltaTime;
+
+        bool charging = _palmsTogether.Step(left.IsTracked, right.IsTracked, left.PalmPosition, right.PalmPosition,
+            chargeJoinDistance, chargeSeparateDistance, chargeLostGraceTime, dt);
+
+        // Both recognizers always step so their speed history stays continuous.
+        bool leftPush = _leftPush.Step(left.IsTracked, left.PalmPosition, left.PalmRotation * palmNormalLocal,
+            left.FistStrength, dt, push) && pushWithLeftHand;
+        bool rightPush = _rightPush.Step(right.IsTracked, right.PalmPosition, right.PalmRotation * palmNormalLocal,
+            right.FistStrength, dt, push) && pushWithRightHand;
+
+        if (charging) data.Gestures |= HandGestures.ChargeHeld;
+        // Charging wins: pushing both joined hands forward is not a shockwave.
+        else if (leftPush || rightPush) data.Gestures |= HandGestures.Shockwave;
+
+        return charging;
     }
 }

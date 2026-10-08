@@ -8,6 +8,8 @@ using UnityEngine.InputSystem;
 //   W A S D / Q E      = clutch + drag with the keyboard (forward/left/back/right, down/up)
 //   Mouse position     = aim ray through the cursor
 //   Left click / Space = pinch (fire)
+//   C held             = both palms together (charge shot; fires on release)
+//   F                  = palm push (shockwave)
 // It emits the same HandInputData as the hand source, in virtual "hand meters",
 // so HandPuppeteerController.positionScale applies unchanged.
 [DefaultExecutionOrder(HandInputSourceBehaviour.ExecutionOrder)]
@@ -79,6 +81,17 @@ public class DebugKeyboardMouseInputSource : HandInputSourceBehaviour
 
         if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame)
             data.FireTriggered = true;
+
+        // Same rules as the hand source: charging blocks normal fire and shockwaves.
+        if (keyboard != null && keyboard.cKey.isPressed)
+        {
+            data.Gestures |= HandGestures.ChargeHeld;
+            data.FireTriggered = false;
+        }
+        else if (keyboard != null && keyboard.fKey.wasPressedThisFrame)
+        {
+            data.Gestures |= HandGestures.Shockwave;
+        }
 
         return data;
     }

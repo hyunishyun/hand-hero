@@ -25,6 +25,19 @@ public class PointingBeamController : MonoBehaviour
     [Tooltip("Health removed from a hero (HeroHealth) per beam hit")]
     [SerializeField] private float damage = 20f;
 
+    [Header("Charge Shot (both palms together, fires on release)")]
+    [Tooltip("Min/max charge seconds; shorter holds fire nothing")]
+    [SerializeField] private ChargeParams charge = ChargeParams.Default;
+    [Tooltip("Damage of a charge shot released right at the min charge time")]
+    [SerializeField] private float chargeMinDamage = 30f;
+    [Tooltip("Damage of a fully charged shot")]
+    [SerializeField] private float chargeMaxDamage = 70f;
+    [Tooltip("Beam width multiplier of a fully charged shot (min charge = 1.5x)")]
+    [SerializeField] private float chargeMaxWidthMultiplier = 4f;
+    [Tooltip("Optional orb that follows the hero and grows while charging (no collider)")]
+    [SerializeField] private Transform chargeIndicator;
+    [SerializeField] private float chargeIndicatorMaxSize = 1.4f;
+
     [Header("Beam")]
     [SerializeField] private float beamDuration = 0.12f;
     [SerializeField] private float beamWidth = 0.06f;
@@ -41,9 +54,12 @@ public class PointingBeamController : MonoBehaviour
     private IHandInputSource _sourceOverride;
     private float _lastFireTime = -999f;
     private float _beamTimer;
+    private readonly ChargeShotModel _charge = new ChargeShotModel();
 
     private void Awake()
     {
+        if (chargeIndicator != null) chargeIndicator.gameObject.SetActive(false);
+
         if (beam != null)
         {
             beam.useWorldSpace = true;
@@ -78,11 +94,35 @@ public class PointingBeamController : MonoBehaviour
         UpdateBeamTimer();
 
         // A lost aiming hand arrives as HasAim = false: the reticle freezes at
-        // the last aim point and nothing fires.
-        if (!input.HasAim) return;
+        // the last aim point and normal shots don't fire.
+        if (input.HasAim) UpdateAim(input.AimRay);
 
-        UpdateAim(input.AimRay);
-        if (input.FireTriggered && character.IsAlive) TryFire();
+        // Charge shot: releases at the last aim point even if the aiming hand
+        // dropped out while the hands were together.
+        bool charging = input.Has(HandGestures.ChargeHeld);
+        if (!character.IsAlive) _charge.Cancel();
+        ChargeStep step = _charge.Step(charging && character.IsAlive, Time.deltaTime, charge);
+        UpdateChargeIndicator(step);
+        if (step.Released && _aimPoint != Vector3.zero)
+        {
+            Fire(Mathf.Lerp(chargeMinDamage, chargeMaxDamage, step.Power),
+                Mathf.Lerp(1.5f, chargeMaxWidthMultiplier, step.Power));
+            return;
+        }
+
+        if (input.HasAim && input.FireTriggered && !charging && character.IsAlive) TryFire();
+    }
+
+    private void UpdateChargeIndicator(ChargeStep step)
+    {
+        if (chargeIndicator == null) return;
+        chargeIndicator.gameObject.SetActive(step.Charging);
+        if (!step.Charging) return;
+
+        chargeIndicator.position = character.transform.position;
+        // Small until the min charge is reached, then grows with the charge.
+        float size = step.Ready ? Mathf.Lerp(0.5f, 1f, step.Fraction) : 0.3f;
+        chargeIndicator.localScale = Vector3.one * (size * chargeIndicatorMaxSize);
     }
 
     private void UpdateAim(Ray ray)
@@ -108,6 +148,11 @@ public class PointingBeamController : MonoBehaviour
     private void TryFire()
     {
         if (Time.time - _lastFireTime < fireCooldown) return;
+        Fire(damage, 1f);
+    }
+
+    private void Fire(float shotDamage, float widthMultiplier)
+    {
         _lastFireTime = Time.time;
 
         Vector3 origin = character.transform.position;
@@ -127,7 +172,7 @@ public class PointingBeamController : MonoBehaviour
 
             var receiver = hit.collider.GetComponentInParent<BeamHitReceiver>();
             if (receiver != null)
-                receiver.Receive(new BeamHit { Point = hit.point, Direction = dir, Damage = damage, Shooter = character });
+                receiver.Receive(new BeamHit { Point = hit.point, Direction = dir, Damage = shotDamage, Shooter = character });
 
             if (hitEffectPrefab != null)
             {
@@ -138,6 +183,8 @@ public class PointingBeamController : MonoBehaviour
 
         if (beam != null)
         {
+            beam.startWidth = beamWidth * widthMultiplier;
+            beam.endWidth = beamWidth * 0.5f * widthMultiplier;
             beam.SetPosition(0, origin);
             beam.SetPosition(1, end);
             beam.enabled = true;

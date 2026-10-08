@@ -36,8 +36,11 @@ public class HeroHealth : MonoBehaviour
     [Header("Hit Flash")]
     [SerializeField] private Color flashColor = Color.white;
     [SerializeField] private float flashDuration = 0.12f;
+    [Tooltip("Hero tint while stunned by a shockwave")]
+    [SerializeField] private Color stunColor = new Color(0.55f, 0.35f, 1f);
 
     public event Action Damaged;
+    public event Action Stunned;
     public event Action Died;
     public event Action Respawned;
 
@@ -45,10 +48,12 @@ public class HeroHealth : MonoBehaviour
     public float MaxHealth => maxHealth;
     public bool IsDead => _model.IsDead;
     public float SpeedMultiplier => _model.SpeedMultiplier;
+    public bool IsStunned => _model.IsStunned;
 
     private HeroHealthModel _model;
     private Vector3 _spawnPosition;
     private float _flashTimer;
+    private bool _stunTinted;
     private Vector3 _barScale;
     private readonly List<Renderer> _renderers = new List<Renderer>();
     private readonly List<Color> _baseColors = new List<Color>();
@@ -95,6 +100,14 @@ public class HeroHealth : MonoBehaviour
         UpdateBar();
     }
 
+    // Shockwave (T5, Q7): slow/stagger, no damage, no knockback.
+    public void ApplyStun(float duration, float multiplier)
+    {
+        if (_model.IsDead) return;
+        _model.ApplyStun(duration, multiplier);
+        Stunned?.Invoke();
+    }
+
     // Full health, alive, at the spawn point (round start).
     public void ResetHealth()
     {
@@ -118,6 +131,19 @@ public class HeroHealth : MonoBehaviour
         {
             _flashTimer -= Time.deltaTime;
             if (_flashTimer <= 0f) RestoreColors();
+        }
+        else if (_model.IsStunned != _stunTinted)
+        {
+            // The hit flash takes priority; the stun tint shows outside it.
+            if (_model.IsStunned)
+            {
+                SetColor(stunColor);
+                _stunTinted = true;
+            }
+            else
+            {
+                RestoreColors();
+            }
         }
     }
 
@@ -165,6 +191,7 @@ public class HeroHealth : MonoBehaviour
     private void RestoreColors()
     {
         _flashTimer = 0f;
+        _stunTinted = false;
         for (int i = 0; i < _renderers.Count; i++) _renderers[i].material.color = _baseColors[i];
     }
 

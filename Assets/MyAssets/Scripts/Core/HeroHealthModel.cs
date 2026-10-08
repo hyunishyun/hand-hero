@@ -40,6 +40,8 @@ namespace HandHero.Core
     {
         private float _slowTimer;
         private float _respawnTimer;
+        private float _stunTimer;
+        private float _stunMultiplier = 1f;
 
         public HeroHealthModel(HealthParams p)
         {
@@ -55,8 +57,18 @@ namespace HandHero.Core
 
         public float Normalized => Params.MaxHealth > 0f ? CurrentHealth / Params.MaxHealth : 0f;
 
-        // 1 normally, SlowMultiplier while the hit penalty runs.
-        public float SpeedMultiplier => _slowTimer > 0f ? Params.SlowMultiplier : 1f;
+        public bool IsStunned => _stunTimer > 0f;
+
+        // 1 normally, SlowMultiplier while the hit penalty runs; a shockwave stun
+        // can slow further (the stronger slow wins, they don't stack).
+        public float SpeedMultiplier
+        {
+            get
+            {
+                float m = _slowTimer > 0f ? Params.SlowMultiplier : 1f;
+                return IsStunned ? Mathf.Min(m, _stunMultiplier) : m;
+            }
+        }
 
         public void Reset()
         {
@@ -64,6 +76,16 @@ namespace HandHero.Core
             IsDead = false;
             _slowTimer = 0f;
             _respawnTimer = 0f;
+            _stunTimer = 0f;
+        }
+
+        // Shockwave (T5, Q7): slow/stagger with no damage and no knockback.
+        // Restarts the stun; ignored while dead.
+        public void ApplyStun(float duration, float multiplier)
+        {
+            if (IsDead || duration <= 0f) return;
+            _stunTimer = duration;
+            _stunMultiplier = Mathf.Clamp01(multiplier);
         }
 
         public HitOutcome ApplyDamage(float damage)
@@ -85,6 +107,7 @@ namespace HandHero.Core
         public bool Tick(float dt)
         {
             if (_slowTimer > 0f) _slowTimer -= dt;
+            if (_stunTimer > 0f) _stunTimer -= dt;
 
             if (!IsDead) return false;
 
