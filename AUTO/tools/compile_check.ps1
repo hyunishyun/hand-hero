@@ -35,7 +35,9 @@ if (-not (Test-Path $unityExe)) {
     exit 3
 }
 
-$running = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
+# Only editor processes count; Unity Hub ships its own "unity.exe serve" helper.
+$running = Get-Process -Name "Unity" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path -like "*\Editor\Unity.exe" }
 if ($running) {
     Write-Output "RESULT: UNITY_RUNNING - a Unity process is already running (PID $($running.Id -join ',')). Close it first."
     exit 4
@@ -63,6 +65,8 @@ if ($Tests) {
 
 Write-Output "Running Unity $version ($(if ($Tests) {'EditMode tests'} elseif ($ExecuteMethod) {"executeMethod $ExecuteMethod"} else {'compile check'}))..."
 $proc = Start-Process -FilePath $unityExe -ArgumentList $unityArgs -PassThru -NoNewWindow
+# PS 5.1 quirk: ExitCode stays empty unless the process handle is opened before waiting.
+$null = $proc.Handle
 if (-not $proc.WaitForExit($TimeoutMinutes * 60 * 1000)) {
     $proc.Kill()
     Write-Output "RESULT: TIMEOUT after $TimeoutMinutes min. See $logFile"
