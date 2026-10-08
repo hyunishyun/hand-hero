@@ -14,8 +14,8 @@
 | R8 섬·봇 런타임 (RunDirector) | DONE | `b3ddd35`. `MatchPhase.Run` 추가(메뉴에서만 시작, 시간·KO 무시, 일시정지·메뉴 복귀는 그대로 — 테스트 3개, 301/301 통과). `RunDirector`가 `RunStateMachine`을 돌린다: 빌더가 만드는 `Generated/Bot/RunBot.prefab`에서 봇 생성(체력·데미지·발사 간격 스케일), 처치 → 크리스탈, 클리어 때 회복, Spiked 상자 체력 차감, 부활/패배, 섬마다 플레이어를 출발점으로. 런 중에는 퀵 매치 봇을 숨긴다. 씬 배선(RunDirector·`RunHeroStats`·스폰 지점 3개)과 디버그 키 R·1–3·B·N도 미리 넣었다(R11 일부). **헤드셋·플레이 모드 확인은 아직 없음**(컴파일·씬 빌드·테스트만). 알려진 점: 봇 빔이 다른 봇에 맞으면 그 처치도 플레이어 처치로 센다. |
 | R9 선택 UI (포털·상자·상점) | DONE | `f2cbc5e`. 메뉴 자리에 포털(2–3개)·상자(카드 3–4장, 이름·`Lv n`·등급 단어·설명, 등급 색)·상점(2×2 + REROLL·LEAVE, 가격·잔액, 살 수 없으면 어둡게) 패널. `HandMenuButton`에 `SetCustomAction`/`SetLabel`/`SetIdleColor` 추가(기존 메뉴 버튼은 그대로), `HandMenu`가 선택 패널이 뜨면 포인터를 켠다. 글자·배치는 순수 로직 `RunChoiceText` + 테스트 12개, 313/313 통과. 씬 재생성 완료(배선 오류 없음). **플레이 모드·헤드셋 확인 없음**: 카드 글자 크기와 패널 폭(3개 = 약 ±29°)을 기기에서 볼 것. |
 | R10 HUD·메뉴 | DONE | `e3da4a4`. 메인 메뉴 3열×2행(QUICK MATCH·RUN·TUTORIAL / MR TABLE·AIM), START → QUICK MATCH. RUN도 튜토리얼 우선(`MatchStateMachine.StartRun(withTutorial)` — 튜토리얼이 끝나면 Run으로, 테스트 2개). `RunDirector`는 매치가 Run 단계에 들어오면 런을 시작한다. 런 HUD(섬 n/9·종류·목표·HP·크리스탈)와 카운트다운·FIGHT!·CLEARED·VICTORY/DEFEAT(섬 수·아이템 수·런 시간) 배너는 `MatchHud`가 `RunHudText`(테스트 6개)로 쓴다. 런이 끝나면 기존 MENU 끝 패널이 뜬다. 321/321 통과, 씬 재생성(배선 오류 없음). **플레이 모드·헤드셋 확인 없음.** |
-| R11 씬·디버그 키·APK | TODO | |
-| R12 최종 리뷰·리포트 | TODO | |
+| R11 씬·디버그 키·APK | DONE | `9b38020`. 두 씬 모두 RunDirector·`RunHeroStats`·스폰 지점·선택 패널·런 HUD 배선 확인(R8–R10에서 이미 들어감, 배선 오류 0). 디버그 키 R·1–3·B·N은 `RunDirector`에 있고 두 씬 모두 켜져 있다(기기에는 키보드가 없어 영향 없음). 테스트 321/321, 씬 재생성(fileID만 바뀜), APK `MetaAwards\Build\HandHero_20261008.apk`(약 55 MB, 2.9분) 빌드 성공. **헤드셋 확인 없음.** |
+| R12 최종 리뷰·리포트 | IN_PROGRESS | |
 
 ## 세션 로그
 
