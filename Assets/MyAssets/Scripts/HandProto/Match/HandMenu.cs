@@ -6,6 +6,7 @@ using UnityEngine;
 //   Menu      -> main panel (START / TUTORIAL)
 //   paused    -> pause panel (RESUME / MENU), in the tutorial (RESUME / SKIP / MENU)
 //   MatchEnd  -> end panel (MENU; the match also returns by itself)
+//   Run       -> RunChoiceMenu shows its own portal / chest / shop panels
 // Panels are world-fixed in front of the seat, never head-locked.
 public class HandMenu : MonoBehaviour
 {
@@ -17,6 +18,8 @@ public class HandMenu : MonoBehaviour
     [SerializeField] private GameObject pausePanel;
     [SerializeField] private GameObject tutorialPausePanel;
     [SerializeField] private GameObject matchEndPanel;
+    [Tooltip("Optional RUN choice panels (portal / chest / shop); the pointer is on while they show")]
+    [SerializeField] private RunChoiceMenu runChoices;
 
     private void LateUpdate()
     {
@@ -30,7 +33,8 @@ public class HandMenu : MonoBehaviour
         SetActive(pausePanel, paused && !tutorial);
         SetActive(tutorialPausePanel, paused && tutorial);
         SetActive(matchEndPanel, end);
-        if (pointer != null) pointer.enabled = main || paused || end;
+        bool runChoice = runChoices != null && runChoices.IsShowing;
+        if (pointer != null) pointer.enabled = main || paused || end || runChoice;
     }
 
     private static void SetActive(GameObject go, bool on)

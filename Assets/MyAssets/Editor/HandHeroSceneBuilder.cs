@@ -323,9 +323,12 @@ namespace HandHero.EditorTools
             SetRefs(director, ("aimMode", aimMode));
             SetRefs(pointing, ("aimModeSetting", aimMode));
 
+            RunChoiceMenu runChoices = RunChoicePanels(menuGo, panelPos, runDirector, buttonMat);
+
             var handMenu = menuGo.AddComponent<HandMenu>();
             SetRefs(handMenu, ("director", director), ("pointer", pointer), ("mainPanel", mainPanel),
-                ("pausePanel", pausePanel), ("tutorialPausePanel", tutorialPausePanel), ("matchEndPanel", endPanel));
+                ("pausePanel", pausePanel), ("tutorialPausePanel", tutorialPausePanel), ("matchEndPanel", endPanel),
+                ("runChoices", runChoices));
 
             // Wrist pause button: left palm toward the face, pinch that hand.
             var wristButton = new GameObject("WristButton");
@@ -527,8 +530,22 @@ namespace HandHero.EditorTools
         private static HandMenuButton MenuButton(Transform panel, string text, MatchDirector.MenuAction action,
             float x, float y, MatchDirector director, Material mat)
         {
-            var size = new Vector3(0.8f, 0.32f, 0.04f);
-            var go = new GameObject($"Button_{text}");
+            HandMenuButton button = Button(panel, $"Button_{text}", text, x, y, MenuButtonSize, mat);
+            SetRefs(button, ("director", director));
+            var so = new SerializedObject(button);
+            so.FindProperty("action").enumValueIndex = (int)action;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            return button;
+        }
+
+        private static readonly Vector3 MenuButtonSize = new Vector3(0.8f, 0.32f, 0.04f);
+
+        // A HandMenuButton without a MenuAction; RunChoiceMenu sets its action and text.
+        // `wrap` lets long card text (item descriptions) break into lines before it shrinks.
+        private static HandMenuButton Button(Transform panel, string name, string text, float x, float y,
+            Vector3 size, Material mat, bool wrap = false, float fontMin = 0.8f)
+        {
+            var go = new GameObject(name);
             go.transform.SetParent(panel, false);
             go.transform.localPosition = new Vector3(x, y, 0f);
             var box = go.AddComponent<BoxCollider>();
@@ -541,18 +558,72 @@ namespace HandHero.EditorTools
             PlaceLocal(label, new Vector3(0f, 0f, -size.z * 0.5f - 0.005f));
             label.text = text;
             // One line that shrinks to fit the button ("AIM: CURSOR" is wider than 0.8 m at 1.6).
-            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.textWrappingMode = wrap ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
             label.enableAutoSizing = true;
             label.fontSizeMax = 1.6f;
-            label.fontSizeMin = 0.8f;
+            label.fontSizeMin = fontMin;
             label.margin = new Vector4(0.04f, 0f, 0.04f, 0f);
 
             var button = go.AddComponent<HandMenuButton>();
-            SetRefs(button, ("director", director), ("background", bg.GetComponent<Renderer>()), ("label", label));
-            var so = new SerializedObject(button);
-            so.FindProperty("action").enumValueIndex = (int)action;
-            so.ApplyModifiedPropertiesWithoutUndo();
+            SetRefs(button, ("background", bg.GetComponent<Renderer>()), ("label", label));
             return button;
+        }
+
+        // Title line above a panel's buttons, at `y` m above the panel center.
+        private static TextMeshPro PanelHeader(GameObject panel, float y)
+        {
+            TextMeshPro header = WorldText("Header", panel.transform, panel.transform.position, 1.4f);
+            header.rectTransform.sizeDelta = new Vector2(3f, 0.25f);
+            PlaceLocal(header, new Vector3(0f, y, 0f));
+            header.textWrappingMode = TextWrappingModes.NoWrap;
+            header.enableAutoSizing = true;
+            header.fontSizeMax = 1.4f;
+            header.fontSizeMin = 0.6f;
+            return header;
+        }
+
+        // RUN choice panels (R9) at the menu spot: portal buttons, chest cards and
+        // the shop. RunChoiceMenu lays out and labels the portal / chest buttons.
+        private static RunChoiceMenu RunChoicePanels(GameObject menuGo, Vector3 panelPos, RunDirector runDirector,
+            Material mat)
+        {
+            var portalSize = new Vector3(0.85f, 0.4f, 0.04f);
+            var cardSize = new Vector3(0.85f, 0.6f, 0.04f);
+            var slotSize = new Vector3(0.85f, 0.46f, 0.04f);
+
+            GameObject portalPanel = Panel("RunPortalPanel", menuGo.transform, panelPos);
+            TextMeshPro portalHeader = PanelHeader(portalPanel, 0.42f);
+            var portals = new Object[3];
+            for (int i = 0; i < portals.Length; i++)
+                portals[i] = Button(portalPanel.transform, $"Portal_{i + 1}", "", 0f, 0f, portalSize, mat);
+
+            GameObject chestPanel = Panel("RunChestPanel", menuGo.transform, panelPos);
+            TextMeshPro chestHeader = PanelHeader(chestPanel, 0.75f);
+            var cards = new Object[4]; // 3 + Big Chests
+            for (int i = 0; i < cards.Length; i++)
+                cards[i] = Button(chestPanel.transform, $"Card_{i + 1}", "", 0f, 0f, cardSize, mat, wrap: true,
+                    fontMin: 0.5f);
+
+            // Shop: 2x2 pedestals, REROLL / LEAVE below.
+            GameObject shopPanel = Panel("RunShopPanel", menuGo.transform, panelPos);
+            TextMeshPro shopHeader = PanelHeader(shopPanel, 0.85f);
+            var slots = new Object[Core.Shop.PedestalCount];
+            for (int i = 0; i < slots.Length; i++)
+                slots[i] = Button(shopPanel.transform, $"Slot_{i + 1}", "", (i % 2 - 0.5f) * 0.95f,
+                    0.53f - (i / 2) * 0.52f, slotSize, mat, wrap: true, fontMin: 0.5f);
+            HandMenuButton reroll = Button(shopPanel.transform, "Button_REROLL", "REROLL", -0.475f, -0.5f,
+                MenuButtonSize, mat);
+            HandMenuButton leave = Button(shopPanel.transform, "Button_LEAVE", "LEAVE", 0.475f, -0.5f,
+                MenuButtonSize, mat);
+
+            var menu = menuGo.AddComponent<RunChoiceMenu>();
+            SetRefs(menu, ("run", runDirector), ("portalPanel", portalPanel), ("portalHeader", portalHeader),
+                ("chestPanel", chestPanel), ("chestHeader", chestHeader), ("shopPanel", shopPanel),
+                ("shopHeader", shopHeader), ("rerollButton", reroll), ("leaveButton", leave));
+            SetArray(menu, "portalButtons", portals);
+            SetArray(menu, "chestCards", cards);
+            SetArray(menu, "shopSlots", slots);
+            return menu;
         }
 
         // Kept if it already exists so tuning done in the editor survives rebuilds.

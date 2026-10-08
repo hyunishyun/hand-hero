@@ -22,8 +22,24 @@ public class HandMenuButton : MonoBehaviour
     private MaterialPropertyBlock _block;
     private Vector3 _baseScale;
     private bool _hovered;
+    private System.Action _customAction;
 
     public MatchDirector.MenuAction Action => action;
+
+    // RUN choice buttons (R9): a press calls this instead of the director's MenuAction.
+    public void SetCustomAction(System.Action onPress) => _customAction = onPress;
+
+    public void SetLabel(string text)
+    {
+        if (label != null) label.text = text;
+    }
+
+    public void SetIdleColor(Color color)
+    {
+        if (idleColor == color) return;
+        idleColor = color;
+        ApplyVisuals();
+    }
 
     private void Awake()
     {
@@ -45,7 +61,8 @@ public class HandMenuButton : MonoBehaviour
 
     public void Press()
     {
-        if (director != null) director.HandleMenuAction(action);
+        if (_customAction != null) _customAction();
+        else if (director != null) director.HandleMenuAction(action);
     }
 
     private void ApplyVisuals()
