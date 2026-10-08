@@ -1,8 +1,11 @@
 using System.IO;
 using TMPro;
+using Unity.XR.CoreUtils;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.XR;
 using UnityEngine.SceneManagement;
 
 namespace HandHero.EditorTools
@@ -16,19 +19,27 @@ namespace HandHero.EditorTools
         private const string MaterialDir = "Assets/MyAssets/Generated/Materials";
         private const string BotDir = "Assets/MyAssets/Generated/Bot";
         public const string SandboxScenePath = SceneDir + "/HandHero_Sandbox.unity";
+        public const string ArenaMainScenePath = SceneDir + "/Arena_Main.unity";
         public const string BotDifficultyPath = BotDir + "/BotDifficulty_Normal.asset";
 
         // Heroes stay on the Default layer: PointingBeamController skips its own
-        // hero's colliders, so player and bot can hit each other without new
-        // project layers (ProjectSettings stay untouched until T9).
+        // hero's colliders, so player and bot can hit each other without a
+        // FlyingHero layer / aimMask rule. The reticle has no collider (else the
+        // aim ray hits it and jitters).
 
         private static readonly Vector3 ArenaCenter = new Vector3(0f, 2f, 20f);
         private static readonly Vector3 ArenaSize = new Vector3(35f, 20f, 35f);
+
+        // Seated eye height above the XR Origin (Device tracking origin: the
+        // headset's start pose is the origin, so every player sees the same layout).
+        private const float SeatEyeHeight = 1.2f;
 
         [MenuItem("HandHero/Build All Scenes")]
         public static void BuildAll()
         {
             BuildSandbox();
+            BuildArenaMain();
+            RegisterBuildScenes();
         }
 
         // Headset-free test scene: plain camera, greybox arena, player hero,
@@ -36,6 +47,35 @@ namespace HandHero.EditorTools
         // swap the controllers' Input Source field to use it).
         [MenuItem("HandHero/Build Sandbox Scene")]
         public static void BuildSandbox()
+        {
+            BuildScene(SandboxScenePath, xr: false);
+        }
+
+        // Headset scene for the APK: fixed XR Origin (never moved, ADR 4/5), XR
+        // hand input drives the player hero, tutorial and menus.
+        [MenuItem("HandHero/Build Arena_Main Scene")]
+        public static void BuildArenaMain()
+        {
+            BuildScene(ArenaMainScenePath, xr: true);
+        }
+
+        // Arena_Main first and enabled; older class-project scenes stay listed but disabled.
+        public static void RegisterBuildScenes()
+        {
+            var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>
+            {
+                new EditorBuildSettingsScene(ArenaMainScenePath, true),
+            };
+            foreach (EditorBuildSettingsScene existing in EditorBuildSettings.scenes)
+            {
+                if (existing.path == ArenaMainScenePath) continue;
+                scenes.Add(new EditorBuildSettingsScene(existing.path, false));
+            }
+            EditorBuildSettings.scenes = scenes.ToArray();
+            Debug.Log($"[HandHeroSceneBuilder] Build scenes: {ArenaMainScenePath} (+{scenes.Count - 1} disabled)");
+        }
+
+        private static void BuildScene(string scenePath, bool xr)
         {
             EnsureFolder(SceneDir);
             EnsureFolder(MaterialDir);
@@ -56,13 +96,15 @@ namespace HandHero.EditorTools
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            // Seat: fixed camera, never moves (ADR 4/5).
+            // Seat: fixed camera / XR Origin, never moves (ADR 4/5).
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
-            camGo.transform.position = new Vector3(0f, 1.2f, 0f);
             var cam = camGo.AddComponent<Camera>();
             cam.nearClipPlane = 0.05f;
             cam.farClipPlane = 200f;
             camGo.AddComponent<AudioListener>();
+            Transform trackingSpace = null;
+            if (xr) trackingSpace = XRRig(cam);
+            else camGo.transform.position = new Vector3(0f, SeatEyeHeight, 0f);
 
             var lightGo = new GameObject("Directional Light");
             lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
@@ -104,23 +146,29 @@ namespace HandHero.EditorTools
             beam.sharedMaterial = beamMat;
             beam.enabled = false;
 
-            // Input: debug keyboard/mouse drives the controllers in the editor.
+            // Input: XR hands drive the controllers in Arena_Main; the sandbox uses
+            // debug keyboard/mouse (XR hand input is present there too).
             var inputGo = new GameObject("HandInput");
             var tracker = inputGo.AddComponent<HandGestureTracker>();
-            SetRefs(tracker, ("headCamera", camGo.transform));
+            SetRefs(tracker, ("headCamera", camGo.transform), ("xrOrigin", trackingSpace));
             var xrInput = inputGo.AddComponent<XRHandsInputSource>();
             SetRefs(xrInput, ("tracker", tracker));
-            var debugInput = inputGo.AddComponent<DebugKeyboardMouseInputSource>();
-            SetRefs(debugInput, ("viewCamera", cam));
+            HandInputSourceBehaviour playerInput = xrInput;
+            if (!xr)
+            {
+                var debugInput = inputGo.AddComponent<DebugKeyboardMouseInputSource>();
+                SetRefs(debugInput, ("viewCamera", cam));
+                playerInput = debugInput;
+            }
 
             var controllers = new GameObject("Controllers");
             var puppeteer = controllers.AddComponent<HandPuppeteerController>();
-            SetRefs(puppeteer, ("character", flying), ("inputSource", debugInput));
+            SetRefs(puppeteer, ("character", flying), ("inputSource", playerInput));
             // Charge orb lives outside the hero so HeroHealth's flash/visibility leave it alone.
             GameObject chargeOrb = Primitive(PrimitiveType.Sphere, "ChargeOrb", null, ArenaCenter, Vector3.one, chargeMat);
             var pointing = controllers.AddComponent<PointingBeamController>();
             SetRefs(pointing, ("character", flying), ("reticle", reticle.transform), ("beam", beam),
-                ("inputSource", debugInput), ("chargeIndicator", chargeOrb.transform));
+                ("inputSource", playerInput), ("chargeIndicator", chargeOrb.transform));
 
             // Palm push shockwave (T5): stuns the bot when it is within reach.
             var ringGo = new GameObject("ShockwaveRingRenderer");
@@ -128,7 +176,7 @@ namespace HandHero.EditorTools
             ring.sharedMaterial = beamMat;
             ring.enabled = false;
             var shockwave = controllers.AddComponent<ShockwaveController>();
-            SetRefs(shockwave, ("character", flying), ("inputSource", debugInput), ("ring", ring));
+            SetRefs(shockwave, ("character", flying), ("inputSource", playerInput), ("ring", ring));
 
             // Bot opponent: same hero, same controllers, input from BotInputSource.
             BotDifficulty difficulty = GetOrCreateBotDifficulty();
@@ -164,7 +212,8 @@ namespace HandHero.EditorTools
             var director = match.AddComponent<MatchDirector>();
             SetRefs(director, ("playerHealth", flying.GetComponent<HeroHealth>()),
                 ("opponentHealth", botFlying.GetComponent<HeroHealth>()));
-            SetArray(director, "fightOnly", debugInput, xrInput);
+            if (xr) SetArray(director, "fightOnly", xrInput);
+            else SetArray(director, "fightOnly", playerInput, xrInput);
             SetArray(director, "opponentOnly", botInput);
 
             Vector3 seat = camGo.transform.position;
@@ -265,7 +314,7 @@ namespace HandHero.EditorTools
             tutorialRoot.SetActive(false);
 
             var tutorial = tutorialGo.AddComponent<TutorialDirector>();
-            SetRefs(tutorial, ("director", director), ("playerHero", flying), ("playerInput", debugInput),
+            SetRefs(tutorial, ("director", director), ("playerHero", flying), ("playerInput", playerInput),
                 ("head", camGo.transform), ("tutorialRoot", tutorialRoot), ("ring", ringGoal.transform),
                 ("target", practiceReceiver), ("telegraphOrigin", telegraphOrigin.transform),
                 ("telegraph", practiceBeam), ("prompt", tutorialPrompt), ("ghostHand", ghost.transform));
@@ -273,9 +322,41 @@ namespace HandHero.EditorTools
             tutorialSo.FindProperty("ringRadius").floatValue = ringRadius;
             tutorialSo.ApplyModifiedPropertiesWithoutUndo();
 
-            EditorSceneManager.SaveScene(scene, SandboxScenePath);
+            EditorSceneManager.SaveScene(scene, scenePath);
             AssetDatabase.SaveAssets();
-            Debug.Log($"[HandHeroSceneBuilder] Built {SandboxScenePath}");
+            Debug.Log($"[HandHeroSceneBuilder] Built {scenePath}");
+        }
+
+        // XR Origin > Camera Offset > Main Camera. The origin sits at the world
+        // origin and nothing ever moves or rotates it (ADR 4/5). Device tracking
+        // origin + a fixed eye height keeps the seated layout identical for every
+        // player. Returns the tracking space (Camera Offset): XR Hands reports
+        // joints relative to it.
+        private static Transform XRRig(Camera cam)
+        {
+            var originGo = new GameObject("XR Origin");
+            var offsetGo = new GameObject("Camera Offset");
+            offsetGo.transform.SetParent(originGo.transform, false);
+            offsetGo.transform.localPosition = new Vector3(0f, SeatEyeHeight, 0f);
+            cam.transform.SetParent(offsetGo.transform, false);
+            cam.transform.localPosition = Vector3.zero;
+
+            var origin = originGo.AddComponent<XROrigin>();
+            origin.Camera = cam;
+            origin.CameraFloorOffsetObject = offsetGo;
+            origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Device;
+            origin.CameraYOffset = SeatEyeHeight;
+
+            var pose = cam.gameObject.AddComponent<TrackedPoseDriver>();
+            pose.trackingType = TrackedPoseDriver.TrackingType.RotationAndPosition;
+            pose.updateType = TrackedPoseDriver.UpdateType.UpdateAndBeforeRender;
+            pose.positionInput = new InputActionProperty(new InputAction("Head Position",
+                InputActionType.Value, "<XRHMD>/centerEyePosition", expectedControlType: "Vector3"));
+            pose.rotationInput = new InputActionProperty(new InputAction("Head Rotation",
+                InputActionType.Value, "<XRHMD>/centerEyeRotation", expectedControlType: "Quaternion"));
+            pose.trackingStateInput = new InputActionProperty(new InputAction("Head Tracking State",
+                InputActionType.Value, "<XRHMD>/trackingState", expectedControlType: "Integer"));
+            return offsetGo.transform;
         }
 
         // Greybox hero: collider + BeamHitReceiver + HeroHealth on the root (beams

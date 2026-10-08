@@ -25,7 +25,7 @@ public class HandGestureTracker : MonoBehaviour
     }
 
     [Header("References")]
-    [SerializeField] private Transform xrOrigin;   // XR Origin root transform
+    [SerializeField] private Transform xrOrigin;   // XR tracking space: the XR Origin's Camera Offset
     [SerializeField] private Transform headCamera; // Main Camera under the XR Origin
 
     [Header("Fist Detection (tip-to-palm distance, meters)")]

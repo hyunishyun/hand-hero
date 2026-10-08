@@ -5,6 +5,7 @@
 #   powershell -ExecutionPolicy Bypass -File AUTO\tools\compile_check.ps1
 #   powershell -ExecutionPolicy Bypass -File AUTO\tools\compile_check.ps1 -Tests
 #   powershell -ExecutionPolicy Bypass -File AUTO\tools\compile_check.ps1 -ExecuteMethod HandHero.EditorTools.HandHeroSceneBuilder.BuildAll
+#   powershell -ExecutionPolicy Bypass -File AUTO\tools\compile_check.ps1 -BuildTarget Android -TimeoutMinutes 120 -ExecuteMethod HandHero.EditorTools.BuildScript.BuildQuestApk
 #
 # Exit codes:
 #   0 = OK
@@ -19,6 +20,7 @@
 param(
     [switch]$Tests,
     [string]$ExecuteMethod = "",
+    [string]$BuildTarget = "",
     [string]$ProjectPath = "C:\Users\AISTUDIO\Desktop\Hyun's Playground\MetaAwards\A_4",
     [int]$TimeoutMinutes = 60
 )
@@ -62,6 +64,8 @@ if ($Tests) {
     $unityArgs = @("-batchmode", "-nographics", "-quit", "-projectPath", "`"$ProjectPath`"",
                    "-logFile", "`"$logFile`"")
 }
+# Start the editor on this platform (e.g. Android for the APK build) instead of switching in-process.
+if ($BuildTarget) { $unityArgs += @("-buildTarget", $BuildTarget) }
 
 Write-Output "Running Unity $version ($(if ($Tests) {'EditMode tests'} elseif ($ExecuteMethod) {"executeMethod $ExecuteMethod"} else {'compile check'}))..."
 $proc = Start-Process -FilePath $unityExe -ArgumentList $unityArgs -PassThru -NoNewWindow
