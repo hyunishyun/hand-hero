@@ -7,8 +7,10 @@ using UnityEngine.InputSystem;
 //                        scroll wheel pushes it away / pulls it closer
 //   W A S D / Q E      = clutch + drag with the keyboard (forward/left/back/right, down/up)
 //   Mouse position     = aim ray through the cursor
-//   Left click / Space = pinch (fire)
-//   C held             = both palms together (charge shot; fires on release)
+//   Left click / Space = pinch: press fires, holding charges (charge shot on release)
+//   C held             = long pinch (fires, then charges)
+//   Left Ctrl + right-drag / WASDQE / wheel
+//                      = aim-hand fist: drags the CURSOR aim marker instead of the hero
 //   F                  = palm push (shockwave)
 // It emits the same HandInputData as the hand source, in virtual "hand meters",
 // so HandPuppeteerController.positionScale applies unchanged.
@@ -67,8 +69,18 @@ public class DebugKeyboardMouseInputSource : HandInputSourceBehaviour
             }
         }
 
-        data.ClutchHeld = held;
-        data.ClutchDelta = held ? delta : Vector3.zero;
+        // Left Ctrl turns the same drag into the aim-hand fist (CURSOR aim marker).
+        bool aimHand = keyboard != null && keyboard.leftCtrlKey.isPressed;
+        if (aimHand)
+        {
+            data.AimClutchHeld = held;
+            data.AimClutchDelta = held ? delta : Vector3.zero;
+        }
+        else
+        {
+            data.ClutchHeld = held;
+            data.ClutchDelta = held ? delta : Vector3.zero;
+        }
 
         if (mouse != null)
         {
@@ -77,20 +89,18 @@ public class DebugKeyboardMouseInputSource : HandInputSourceBehaviour
             data.AimOrigin = ray.origin;
             data.AimDirection = ray.direction;
             data.FireTriggered = mouse.leftButton.wasPressedThisFrame;
+            data.PinchHeld = mouse.leftButton.isPressed;
         }
 
-        if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame)
-            data.FireTriggered = true;
-
-        // Same rules as the hand source: charging blocks normal fire and shockwaves.
-        if (keyboard != null && keyboard.cKey.isPressed)
+        if (keyboard != null)
         {
-            data.Gestures |= HandGestures.ChargeHeld;
-            data.FireTriggered = false;
-        }
-        else if (keyboard != null && keyboard.fKey.wasPressedThisFrame)
-        {
-            data.Gestures |= HandGestures.Shockwave;
+            // Space and C are a pinch too: press fires, holding charges.
+            if (keyboard.spaceKey.wasPressedThisFrame || keyboard.cKey.wasPressedThisFrame)
+                data.FireTriggered = true;
+            if (keyboard.spaceKey.isPressed || keyboard.cKey.isPressed)
+                data.PinchHeld = true;
+            if (keyboard.fKey.wasPressedThisFrame)
+                data.Gestures |= HandGestures.Shockwave;
         }
 
         return data;
