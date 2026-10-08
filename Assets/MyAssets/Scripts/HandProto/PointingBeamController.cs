@@ -5,24 +5,22 @@ using UnityEngine;
 // You point AT the world (shoulder-anchored ray from HandGestureTracker),
 // a reticle shows the aim point, and a pinch makes the CHARACTER fire a beam
 // from its own position to that point. Aiming is yours, firing is the hero's.
+// Input comes only as HandInputData (ADR 9); pinch thresholds live in XRHandsInputSource.
 public class PointingBeamController : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private FlyingCharacter character;
     [SerializeField] private Transform reticle;   // small sphere/quad in the arena
     [SerializeField] private LineRenderer beam;   // world-space line renderer
-
-    [Header("Hand")]
-    [SerializeField] private bool useRightHand = true;
+    [Tooltip("Where this hero's input comes from (XR hands, debug keyboard/mouse, ...)")]
+    [SerializeField] private HandInputSourceBehaviour inputSource;
 
     [Header("Aiming")]
     [SerializeField] private LayerMask aimMask = -1;
     [SerializeField] private float maxAimDistance = 80f;
     [SerializeField] private float reticleSmoothing = 20f;
 
-    [Header("Firing (pinch) thresholds with hysteresis")]
-    [SerializeField] private float pinchFireThreshold = 0.8f;
-    [SerializeField] private float pinchResetThreshold = 0.5f;
+    [Header("Firing")]
     [SerializeField] private float fireCooldown = 0.35f;
 
     [Header("Beam")]
@@ -36,7 +34,7 @@ public class PointingBeamController : MonoBehaviour
     [SerializeField] private AudioClip fireSound;
 
     private Vector3 _aimPoint;
-    private HysteresisGate _pinchGate;
+    private IHandInputSource _sourceOverride;
     private float _lastFireTime = -999f;
     private float _beamTimer;
 
@@ -54,28 +52,37 @@ public class PointingBeamController : MonoBehaviour
         }
     }
 
+    // Code-assigned source (bot, test). Takes priority over the inspector field.
+    public void SetInputSource(IHandInputSource source)
+    {
+        _sourceOverride = source;
+    }
+
+    private IHandInputSource Source()
+    {
+        if (_sourceOverride != null) return _sourceOverride;
+        return inputSource != null ? inputSource : null;
+    }
+
     private void Update()
     {
-        var tracker = HandGestureTracker.Instance;
-        if (tracker == null || character == null) return;
+        IHandInputSource source = Source();
+        if (source == null || character == null) return;
 
-        HandGestureTracker.HandState hand = useRightHand ? tracker.Right : tracker.Left;
+        HandInputData input = source.Current;
 
         UpdateBeamTimer();
 
-        if (!hand.IsTracked)
-        {
-            _pinchGate.Reset();
-            return; // reticle freezes at the last aim point
-        }
+        // A lost aiming hand arrives as HasAim = false: the reticle freezes at
+        // the last aim point and nothing fires.
+        if (!input.HasAim) return;
 
-        UpdateAim(hand);
-        UpdateFire(hand);
+        UpdateAim(input.AimRay);
+        if (input.FireTriggered) TryFire();
     }
 
-    private void UpdateAim(HandGestureTracker.HandState hand)
+    private void UpdateAim(Ray ray)
     {
-        Ray ray = hand.AimRay;
         if (ray.direction == Vector3.zero) return;
 
         Vector3 point = Physics.Raycast(ray, out RaycastHit hit, maxAimDistance, aimMask)
@@ -92,13 +99,6 @@ public class PointingBeamController : MonoBehaviour
             float dist = Vector3.Distance(Camera.main != null ? Camera.main.transform.position : ray.origin, _aimPoint);
             reticle.localScale = Vector3.one * Mathf.Max(0.1f, dist * 0.02f);
         }
-    }
-
-    private void UpdateFire(HandGestureTracker.HandState hand)
-    {
-        // Edge-detected pinch with hysteresis: fire once per pinch.
-        if (_pinchGate.Step(hand.PinchStrength, pinchFireThreshold, pinchResetThreshold) == GateEdge.Rising)
-            TryFire();
     }
 
     private void TryFire()
