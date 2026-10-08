@@ -68,6 +68,11 @@ public struct HeroNetInput : INetworkInput
    같은 결과인지 비교 테스트를 붙인다. 이후 `ClutchMapper.Step(held, delta, ...)`에 그대로 넣는다.
 2. **`HandInputData`에 `PinchHeld`·`ShockwaveSeq` 추가** (기존 `FireTriggered`·`Shockwave` 플래그는 그대로 둠 → 싱글 경로 불변).
    `XRHandsInputSource`/`DebugKeyboardMouseInputSource`/`BotBrain`이 같이 채우게 하면 `OnInput`은 단순 포장이 된다.
+   - **2026-10-08 갱신 (aim modes, `hyun/aim-modes`)**: `HandInputData.PinchHeld`는 이미 들어갔다(차지 = 핀치 홀드).
+     `AimClutchHeld`·`AimClutchDelta`(CURSOR 조준)도 추가됐다. 따라서 `HeroNetInput`에는 **`PinchHeld` 비트와
+     오른손 손바닥 절대 위치**(`AimHandPos`)도 실어야 한다. 커서 델타는 왼손 클러치와 같은 규칙으로 시뮬레이션이
+     직전 값과의 차이로 계산한다(빠진 입력이 반복돼도 두 번 적용되지 않게). 조준 모드(ASSIST/CURSOR)는 세션 시작 때
+     정해지는 플레이어 설정이라 매 틱 보낼 필요가 없다.
 3. **좌석 변환**: 좌석마다 아레나를 보는 방향이 다르면(2.3) `ClutchHandPos`와 리그 포즈를 좌석 로컬로 보내고,
    서버가 `seatRotation * delta`로 월드 델타를 만든다. 순수 함수라 Core에 둔다.
 
