@@ -143,6 +143,9 @@ namespace HandHero.Core
         public RunPhase Phase { get; private set; }
         public bool IsPaused { get; private set; }
         public Inventory Inventory { get; private set; }
+        public CrystalWallet Crystals { get; private set; } = new CrystalWallet();
+        // Open only in the Shop phase.
+        public Shop CurrentShop { get; private set; }
         public HeroStats Stats => HeroStats.From(Inventory);
 
         // 1-based island number (1..9).
@@ -169,6 +172,8 @@ namespace HandHero.Core
         {
             if (Phase != RunPhase.Idle) return false;
             Inventory = new Inventory(ItemCatalog.Get);
+            Crystals = new CrystalWallet();
+            CurrentShop = null;
             IslandsCleared = 0;
             Kills = 0;
             RunTime = 0f;
@@ -182,6 +187,7 @@ namespace HandHero.Core
             SetPaused(false);
             _chestChoices.Clear();
             _portals.Clear();
+            CurrentShop = null;
             Enter(RunPhase.Idle);
         }
 
@@ -192,6 +198,7 @@ namespace HandHero.Core
             if (Phase != RunPhase.Island || IsPaused) return false;
             Kills++;
             _islandKills++;
+            Crystals.Add(Economy.KillReward(Stats));
             if (Spec.Type != IslandType.Horde && _islandKills >= Spec.BotCount) ClearIsland();
             return true;
         }
@@ -234,9 +241,20 @@ namespace HandHero.Core
             return true;
         }
 
+        public bool BuyShopItem(int index)
+        {
+            return Phase == RunPhase.Shop && !IsPaused && CurrentShop.TryBuy(index, Crystals);
+        }
+
+        public bool RerollShop()
+        {
+            return Phase == RunPhase.Shop && !IsPaused && CurrentShop.TryReroll(Crystals);
+        }
+
         public bool LeaveShop()
         {
             if (Phase != RunPhase.Shop) return false;
+            CurrentShop = null;
             OfferPortals();
             return true;
         }
@@ -307,6 +325,7 @@ namespace HandHero.Core
         private void ClearIsland()
         {
             IslandsCleared++;
+            Crystals.Add(Economy.ClearReward(Stats, Crystals.Balance));
             Enter(RunPhase.IslandCleared);
         }
 
@@ -323,7 +342,12 @@ namespace HandHero.Core
 
         private void AfterChest()
         {
-            if (Island + 1 == RunRules.ShopBeforeIsland) Enter(RunPhase.Shop);
+            if (Island + 1 == RunRules.ShopBeforeIsland)
+            {
+                // Priced like the island it stands before (islandIndex = Island).
+                CurrentShop = new Shop(Inventory, Island, _rng);
+                Enter(RunPhase.Shop);
+            }
             else OfferPortals();
         }
 

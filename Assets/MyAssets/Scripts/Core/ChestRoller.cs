@@ -37,13 +37,20 @@ namespace HandHero.Core
         public static List<ItemDefinition> Roll(ChestType type, Inventory inventory, Random rng)
         {
             if (inventory == null) throw new ArgumentNullException(nameof(inventory));
+            return Roll(type, inventory, ChoiceCount(type, HeroStats.From(inventory).ExtraChoices), rng);
+        }
+
+        // Same pool and weights, a fixed number of picks (shop pedestals, R6).
+        public static List<ItemDefinition> Roll(ChestType type, Inventory inventory, int choices, Random rng)
+        {
+            if (inventory == null) throw new ArgumentNullException(nameof(inventory));
             if (rng == null) throw new ArgumentNullException(nameof(rng));
 
             List<ItemDefinition> pool = Pool(type, inventory);
             var weights = new List<float>(pool.Count);
             foreach (ItemDefinition item in pool) weights.Add(Weight(item, inventory));
 
-            int count = Math.Min(ChoiceCount(type, HeroStats.From(inventory).ExtraChoices), pool.Count);
+            int count = Math.Min(Math.Max(0, choices), pool.Count);
             var picks = new List<ItemDefinition>(count);
             for (int n = 0; n < count; n++)
             {
