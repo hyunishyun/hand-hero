@@ -1,4 +1,5 @@
 using System.IO;
+using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -155,6 +156,19 @@ namespace HandHero.EditorTools
             var telegraphLine = bot.AddComponent<BotTelegraphLine>();
             SetRefs(telegraphLine, ("bot", botInput), ("botHero", botFlying), ("line", telegraph));
 
+            // Match loop (T6): heroes act only during the fight; HUD in front of the seat.
+            var match = new GameObject("Match");
+            var director = match.AddComponent<MatchDirector>();
+            SetRefs(director, ("playerHealth", flying.GetComponent<HeroHealth>()),
+                ("opponentHealth", botFlying.GetComponent<HeroHealth>()));
+            SetArray(director, "fightOnly", debugInput, xrInput, botInput);
+
+            Vector3 seat = camGo.transform.position;
+            TextMeshPro scoreLine = WorldText("HUD_Score", match.transform, seat + new Vector3(0f, 0.9f, 4f), 1.5f);
+            TextMeshPro banner = WorldText("HUD_Banner", match.transform, seat + new Vector3(0f, 0.15f, 4f), 3.5f);
+            var hud = match.AddComponent<MatchHud>();
+            SetRefs(hud, ("director", director), ("scoreLine", scoreLine), ("banner", banner));
+
             EditorSceneManager.SaveScene(scene, SandboxScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log($"[HandHeroSceneBuilder] Built {SandboxScenePath}");
@@ -219,6 +233,36 @@ namespace HandHero.EditorTools
             go.GetComponent<Renderer>().sharedMaterial = mat;
             if (!keepCollider) Object.DestroyImmediate(go.GetComponent<Collider>());
             return go;
+        }
+
+        // TextMeshPro (3D): font size 10 is about 1 m tall. Faces the seat (looks down +Z).
+        private static TextMeshPro WorldText(string name, Transform parent, Vector3 worldPos, float fontSize)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.position = worldPos;
+            var text = go.AddComponent<TextMeshPro>();
+            text.rectTransform.sizeDelta = new Vector2(8f, 2f);
+            text.alignment = TextAlignmentOptions.Center;
+            text.fontSize = fontSize;
+            text.color = Color.white;
+            text.text = "";
+            return text;
+        }
+
+        private static void SetArray(Object target, string field, params Object[] values)
+        {
+            var so = new SerializedObject(target);
+            SerializedProperty prop = so.FindProperty(field);
+            if (prop == null || !prop.isArray)
+            {
+                Debug.LogError($"[HandHeroSceneBuilder] {target.GetType().Name} has no array field '{field}'");
+                return;
+            }
+            prop.arraySize = values.Length;
+            for (int i = 0; i < values.Length; i++)
+                prop.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static void SetRefs(Object target, params (string field, Object value)[] refs)

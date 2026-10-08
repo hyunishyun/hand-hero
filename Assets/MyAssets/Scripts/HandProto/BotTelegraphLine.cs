@@ -33,7 +33,9 @@ public class BotTelegraphLine : MonoBehaviour
     {
         if (line == null) return;
 
-        bool show = bot != null && bot.Brain != null && bot.Brain.IsTelegraphing
+        // A disabled bot (outside the fight, MatchDirector) keeps its last brain
+        // state, so it must not leave a frozen warning line behind.
+        bool show = bot != null && bot.isActiveAndEnabled && bot.Brain != null && bot.Brain.IsTelegraphing
                     && botHero != null && botHero.IsAlive;
         line.enabled = show;
         if (!show) return;
