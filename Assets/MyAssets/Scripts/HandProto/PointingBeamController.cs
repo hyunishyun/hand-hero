@@ -26,6 +26,12 @@ public class PointingBeamController : MonoBehaviour
     [SerializeField] private float assistAngle = 4f;
     [Tooltip("The snap holds until the target leaves this cone (degrees, wider than assistAngle = no flicker)")]
     [SerializeField] private float assistReleaseAngle = 6f;
+    [Tooltip("Acquire cone in the MR tabletop view (degrees): heroes are tiny there, so it is wider. Ignored when assistAngle is 0")]
+    [SerializeField] private float tabletopAssistAngle = 6f;
+    [Tooltip("Release cone in the MR tabletop view (degrees, wider than tabletopAssistAngle = no flicker)")]
+    [SerializeField] private float tabletopAssistReleaseAngle = 8f;
+    [Tooltip("The view counts as the tabletop when HandGestureTracker.WorldScale is above this (VR arena = 1)")]
+    [SerializeField] private float tabletopWorldScaleThreshold = 1.5f;
     [Tooltip("Optional. Ring shown around the target the aim snapped to (both modes)")]
     [SerializeField] private LockOnRing lockOnRing;
 
@@ -229,7 +235,11 @@ public class PointingBeamController : MonoBehaviour
 
         CollectCandidates();
         int current = _assistTarget != null ? _candidateTargets.IndexOf(_assistTarget) : -1;
-        int pick = AimAssist.SelectByAngle(ray, _candidatePositions, current, assistAngle, assistReleaseAngle);
+        HandGestureTracker tracker = HandGestureTracker.Instance;
+        bool tabletop = tracker != null && tracker.WorldScale > tabletopWorldScaleThreshold;
+        AimAssist.Cone(tabletop, assistAngle, assistReleaseAngle, tabletopAssistAngle, tabletopAssistReleaseAngle,
+            out float acquire, out float release);
+        int pick = AimAssist.SelectByAngle(ray, _candidatePositions, current, acquire, release);
         SetAssistTarget(pick >= 0 ? _candidateTargets[pick] : null);
 
         // The reticle always shows where the hand points (smoothed against jitter):

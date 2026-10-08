@@ -53,6 +53,17 @@ namespace HandHero.Core
             return best;
         }
 
+        // ASSIST cone for the current view. The tabletop shrinks every hero to a few
+        // centimeters, so it gets a wider cone. An assist switched off (the bot, 0)
+        // stays off in both views.
+        public static void Cone(bool tabletop, float arenaAcquire, float arenaRelease,
+            float tabletopAcquire, float tabletopRelease, out float acquire, out float release)
+        {
+            bool wide = tabletop && arenaAcquire > 0f;
+            acquire = wide ? tabletopAcquire : arenaAcquire;
+            release = wide ? tabletopRelease : arenaRelease;
+        }
+
         // False for targets behind the ray origin.
         private static bool TryAngle(Ray ray, Vector3 target, out float angle)
         {

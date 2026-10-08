@@ -95,5 +95,29 @@ namespace HandHero.Tests
             var candidates = new List<Vector3> { cursor };
             Assert.AreEqual(-1, AimAssist.SelectByRadius(cursor, candidates, -1, 0f, 0f));
         }
+
+        [Test]
+        public void Cone_Arena_UsesArenaAngles()
+        {
+            AimAssist.Cone(false, 4f, 6f, 6f, 8f, out float acquire, out float release);
+            Assert.AreEqual(4f, acquire);
+            Assert.AreEqual(6f, release);
+        }
+
+        [Test]
+        public void Cone_Tabletop_UsesTabletopAngles()
+        {
+            AimAssist.Cone(true, 4f, 6f, 6f, 8f, out float acquire, out float release);
+            Assert.AreEqual(6f, acquire);
+            Assert.AreEqual(8f, release);
+        }
+
+        [Test]
+        public void Cone_AssistOff_StaysOffOnTabletop()
+        {
+            // The bot runs with assist 0; the tabletop must not switch it on.
+            AimAssist.Cone(true, 0f, 6f, 6f, 8f, out float acquire, out _);
+            Assert.AreEqual(0f, acquire);
+        }
     }
 }
