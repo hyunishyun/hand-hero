@@ -126,15 +126,5 @@ namespace HandHero.Tests
             Step(0.4f);
             Assert.IsTrue(Step(0.9f).FireTriggered);
         }
-
-        // Review finding 3: a closing fist reads as a pinch before the fist clutch
-        // (0.7) engages, so a fist strength above the ceiling already blocks the pinch.
-        [Test]
-        public void FistBlocks_ClutchOrStrengthAboveCeiling()
-        {
-            Assert.IsTrue(PinchTrigger.FistBlocks(clutchHeld: true, fistStrength: 0f, maxFistStrength: 0.45f));
-            Assert.IsTrue(PinchTrigger.FistBlocks(clutchHeld: false, fistStrength: 0.5f, maxFistStrength: 0.45f));
-            Assert.IsFalse(PinchTrigger.FistBlocks(clutchHeld: false, fistStrength: 0.3f, maxFistStrength: 0.45f));
-        }
     }
 }

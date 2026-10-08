@@ -30,10 +30,6 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     [SerializeField] private float pinchFireThreshold = 0.8f;
     [Tooltip("Pinch strength below this re-arms the next shot")]
     [SerializeField] private float pinchResetThreshold = 0.5f;
-    [Tooltip("Seconds after the aim-hand fist opens before a pinch can fire (a fist reads as a pinch)")]
-    [SerializeField] private float fistSuppressTime = 0.15f;
-    [Tooltip("Aim-hand fist strength above this blocks the pinch even before the fist clutch engages (closing a fist reads as a pinch)")]
-    [SerializeField] private float pinchMaxFistStrength = 0.45f;
 
     [Header("CURSOR trigger (index finger) with hysteresis")]
     [Tooltip("Index curl above this pulls the trigger (fires once, holding charges)")]
@@ -106,12 +102,13 @@ public class XRHandsInputSource : HandInputSourceBehaviour
 
         bool palmsCharging = SampleGestures(t, ref data);
 
-        // Pinch edge = normal shot, pinch level = charge hold. Ignored while the
-        // aim-hand fist is closed. Keeps stepping through a palms charge so a pinch
-        // held through it doesn't fire afterwards.
-        bool fistBlocks = PinchTrigger.FistBlocks(data.AimClutchHeld, aimHand.FistStrength, pinchMaxFistStrength);
+        // Pinch edge = normal shot, pinch level = charge hold (ASSIST aim; CURSOR fires
+        // with the index trigger). No fist block: pointing with the other fingers
+        // curled reads as a full fist and blocked every ASSIST pinch on device.
+        // Keeps stepping through a palms charge so a pinch held through it doesn't
+        // fire afterwards.
         PinchState pinch = _pinch.Step(aimHand.IsTracked, aimHand.PinchStrength, pinchFireThreshold,
-            pinchResetThreshold, fistBlocks, fistSuppressTime, Time.deltaTime);
+            pinchResetThreshold, false, 0f, Time.deltaTime);
 
         if (!aimHand.IsTracked)
             return data; // HasAim = false: reticle freezes at the last aim point

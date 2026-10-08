@@ -57,12 +57,5 @@ namespace HandHero.Core
             _gate.Reset();
             _mustReopen = true;
         }
-
-        // A closing fist brings thumb and index together before the fist clutch
-        // engages, so a fist strength above the ceiling already blocks the pinch.
-        public static bool FistBlocks(bool clutchHeld, float fistStrength, float maxFistStrength)
-        {
-            return clutchHeld || fistStrength > maxFistStrength;
-        }
     }
 }
