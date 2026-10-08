@@ -24,6 +24,7 @@ public class MatchDirector : MonoBehaviour
         SkipTutorial,
         ToggleViewMode,    // VR arena <-> passthrough tabletop, main menu only (T10)
         ToggleAimMode,     // ASSIST <-> CURSOR aim, main menu only
+        StartRun,          // RUN mode (R10); tutorial first like StartMatch
     }
 
     private const string TutorialSeenKey = "HandHero.TutorialSeen";
@@ -101,12 +102,13 @@ public class MatchDirector : MonoBehaviour
 
     public static bool TutorialSeen => PlayerPrefs.GetInt(TutorialSeenKey, 0) == 1;
 
-    // RUN mode (R8): RunDirector drives the islands; this keeps pause, focus
-    // loss and menu return. Returns false outside the main menu.
-    public bool StartRun()
+    // RUN mode (R8): RunDirector drives the islands once the match is in
+    // MatchPhase.Run; this keeps pause, focus loss and menu return. Returns
+    // false outside the main menu.
+    public bool StartRun(bool withTutorial = false)
     {
         _runFighting = false;
-        return _match.StartRun();
+        return _match.StartRun(withTutorial);
     }
 
     // RunDirector: the player's controls are live only while an island is fought.
@@ -133,6 +135,7 @@ public class MatchDirector : MonoBehaviour
             case MenuAction.SkipTutorial: CompleteTutorial(); break;
             case MenuAction.ToggleViewMode: ToggleViewMode(); break;
             case MenuAction.ToggleAimMode: ToggleAimMode(); break;
+            case MenuAction.StartRun: StartRun(withTutorial: !TutorialSeen); break;
         }
     }
 

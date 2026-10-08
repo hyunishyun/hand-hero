@@ -270,7 +270,7 @@ namespace HandHero.EditorTools
             TextMeshPro scoreLine = WorldText("HUD_Score", seatUI, seat + new Vector3(0f, 0.9f, 4f), 1.5f);
             TextMeshPro banner = WorldText("HUD_Banner", seatUI, seat + new Vector3(0f, 0.15f, 4f), 3.5f);
             var hud = match.AddComponent<MatchHud>();
-            SetRefs(hud, ("director", director), ("scoreLine", scoreLine), ("banner", banner));
+            SetRefs(hud, ("director", director), ("scoreLine", scoreLine), ("banner", banner), ("run", runDirector));
 
             // Hands-only menus (T7): point with the right hand + pinch; mouse stands in without a headset.
             var pointerRayGo = new GameObject("MenuPointerRay");
@@ -289,20 +289,21 @@ namespace HandHero.EditorTools
             // Panels sit 2.5 m ahead, about 11 degrees below eye level, under the banner.
             Vector3 panelPos = seat + new Vector3(0f, -0.5f, 2.5f);
             GameObject mainPanel = Panel("MainPanel", menuGo.transform, panelPos);
-            // Main menu is a 2x2 grid (0.15 m gaps): START / TUTORIAL on top, then the
-            // passthrough view (Arena_Main only, T10) and the aim mode.
-            const float gridX = 0.475f;
+            // Main menu is a 3x2 grid (0.15 m gaps, R10): QUICK MATCH / RUN / TUTORIAL
+            // on top, then the passthrough view (Arena_Main only, T10) and the aim mode.
+            const float gridX = 0.95f;
             const float gridY = 0.235f;
-            MenuButton(mainPanel.transform, "START", MatchDirector.MenuAction.StartMatch, -gridX, gridY,
+            MenuButton(mainPanel.transform, "QUICK MATCH", MatchDirector.MenuAction.StartMatch, -gridX, gridY,
                 director, buttonMat);
+            MenuButton(mainPanel.transform, "RUN", MatchDirector.MenuAction.StartRun, 0f, gridY, director, buttonMat);
             MenuButton(mainPanel.transform, "TUTORIAL", MatchDirector.MenuAction.StartWithTutorial, gridX, gridY,
                 director, buttonMat);
             HandMenuButton viewButton = xr
-                ? MenuButton(mainPanel.transform, "MR TABLE", MatchDirector.MenuAction.ToggleViewMode, -gridX, -gridY,
-                    director, buttonMat)
+                ? MenuButton(mainPanel.transform, "MR TABLE", MatchDirector.MenuAction.ToggleViewMode, -gridX * 0.5f,
+                    -gridY, director, buttonMat)
                 : null;
             HandMenuButton aimButton = MenuButton(mainPanel.transform, "AIM: ASSIST",
-                MatchDirector.MenuAction.ToggleAimMode, xr ? gridX : -gridX, -gridY, director, buttonMat);
+                MatchDirector.MenuAction.ToggleAimMode, xr ? gridX * 0.5f : 0f, -gridY, director, buttonMat);
             GameObject pausePanel = Panel("PausePanel", menuGo.transform, panelPos);
             MenuButton(pausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.5f, 0f, director, buttonMat);
             MenuButton(pausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.5f, 0f, director,
@@ -328,7 +329,7 @@ namespace HandHero.EditorTools
             var handMenu = menuGo.AddComponent<HandMenu>();
             SetRefs(handMenu, ("director", director), ("pointer", pointer), ("mainPanel", mainPanel),
                 ("pausePanel", pausePanel), ("tutorialPausePanel", tutorialPausePanel), ("matchEndPanel", endPanel),
-                ("runChoices", runChoices));
+                ("runChoices", runChoices), ("run", runDirector));
 
             // Wrist pause button: left palm toward the face, pinch that hand.
             var wristButton = new GameObject("WristButton");

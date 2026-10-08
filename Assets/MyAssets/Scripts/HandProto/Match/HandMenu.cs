@@ -3,10 +3,11 @@ using UnityEngine;
 
 // Shows the hands-only menu panel that fits the match state (T7) and turns the
 // point-and-pinch pointer on only while one is up:
-//   Menu      -> main panel (START / TUTORIAL)
+//   Menu      -> main panel (QUICK MATCH / RUN / TUTORIAL / view / aim)
 //   paused    -> pause panel (RESUME / MENU), in the tutorial (RESUME / SKIP / MENU)
 //   MatchEnd  -> end panel (MENU; the match also returns by itself)
-//   Run       -> RunChoiceMenu shows its own portal / chest / shop panels
+//   Run       -> RunChoiceMenu shows its own portal / chest / shop panels;
+//                VICTORY / DEFEAT -> end panel (MENU)
 // Panels are world-fixed in front of the seat, never head-locked.
 public class HandMenu : MonoBehaviour
 {
@@ -20,13 +21,16 @@ public class HandMenu : MonoBehaviour
     [SerializeField] private GameObject matchEndPanel;
     [Tooltip("Optional RUN choice panels (portal / chest / shop); the pointer is on while they show")]
     [SerializeField] private RunChoiceMenu runChoices;
+    [Tooltip("Optional. A finished run (VICTORY / DEFEAT) shows the end panel too")]
+    [SerializeField] private RunDirector run;
 
     private void LateUpdate()
     {
         MatchStateMachine m = director != null ? director.Match : null;
         bool paused = m != null && m.IsPaused;
         bool main = m != null && !paused && m.Phase == MatchPhase.Menu;
-        bool end = m != null && !paused && m.Phase == MatchPhase.MatchEnd;
+        bool runOver = m != null && m.Phase == MatchPhase.Run && run != null && run.IsOver;
+        bool end = m != null && !paused && (m.Phase == MatchPhase.MatchEnd || runOver);
         bool tutorial = m != null && m.Phase == MatchPhase.Tutorial;
 
         SetActive(mainPanel, main);

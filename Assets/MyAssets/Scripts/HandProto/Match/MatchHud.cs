@@ -13,6 +13,8 @@ public class MatchHud : MonoBehaviour
     [SerializeField] private TMP_Text scoreLine;
     [Tooltip("Big center text: menu, countdown, round and match results")]
     [SerializeField] private TMP_Text banner;
+    [Tooltip("Optional. RUN mode: island, objective, crystals and health on the score line (R10)")]
+    [SerializeField] private RunDirector run;
 
     [Header("Text")]
     [SerializeField] private string playerName = "YOU";
@@ -24,18 +26,21 @@ public class MatchHud : MonoBehaviour
     {
         if (director == null || director.Match == null) return;
         MatchStateMachine m = director.Match;
+        RunStateMachine r = m.Phase == MatchPhase.Run && run != null && run.IsRunning ? run.Run : null;
 
         if (scoreLine != null)
         {
             bool inMatch = m.Phase != MatchPhase.Menu && m.Phase != MatchPhase.Boot && m.Phase != MatchPhase.Tutorial
-                && m.Phase != MatchPhase.Run; // the run has its own HUD (R10)
-            scoreLine.gameObject.SetActive(inMatch);
+                && m.Phase != MatchPhase.Run;
+            bool inRun = r != null && r.Phase != RunPhase.Victory && r.Phase != RunPhase.Defeat;
+            scoreLine.gameObject.SetActive(inMatch || inRun);
             if (inMatch) scoreLine.text = ScoreText(m);
+            else if (inRun) scoreLine.text = RunStatusText(r);
         }
 
         if (banner != null)
         {
-            string text = BannerText(m);
+            string text = m.IsPaused ? "PAUSED" : r != null ? RunBannerText(r) : BannerText(m);
             banner.gameObject.SetActive(!string.IsNullOrEmpty(text));
             banner.text = text;
         }
@@ -48,14 +53,44 @@ public class MatchHud : MonoBehaviour
         return $"{playerName} {m.PlayerWins} - {m.OpponentWins} {opponentName}    R{m.Round}    {s / 60}:{s % 60:00}";
     }
 
+    private string RunStatusText(RunStateMachine r)
+    {
+        IslandSpec spec = r.Spec;
+        float hordeLeft = r.Phase == RunPhase.Island ? r.PhaseRemaining : r.Params.HordeTime;
+        string objective = r.Phase == RunPhase.Island || r.Phase == RunPhase.Intro
+            ? RunHudText.Objective(spec.Type, r.BotsRemaining, hordeLeft)
+            : "";
+        HeroHealth hp = run.PlayerHealth;
+        return RunHudText.Status(r.Island, spec.Type, objective, r.Crystals.Balance,
+            hp != null ? hp.CurrentHealth : 0f, hp != null ? hp.MaxHealth : 0f);
+    }
+
+    // Choice phases leave the banner empty: their panels carry the headers.
+    private string RunBannerText(RunStateMachine r)
+    {
+        switch (r.Phase)
+        {
+            case RunPhase.Intro:
+                return RunHudText.IntroBanner(r.Island, r.Spec.Type, r.PhaseRemaining);
+            case RunPhase.Island:
+                return r.PhaseTime < fightBannerTime ? "FIGHT!" : "";
+            case RunPhase.IslandCleared:
+                return "CLEARED";
+            case RunPhase.Victory:
+            case RunPhase.Defeat:
+                return RunHudText.EndBanner(r.Phase == RunPhase.Victory, r.IslandsCleared, r.Inventory.TotalLevels,
+                    r.RunTime);
+            default:
+                return "";
+        }
+    }
+
     private string BannerText(MatchStateMachine m)
     {
-        if (m.IsPaused) return "PAUSED";
-
         switch (m.Phase)
         {
             case MatchPhase.Menu:
-                return "HAND HERO\n<size=50%>point and pinch START</size>";
+                return "HAND HERO\n<size=50%>point and pinch to choose</size>";
             case MatchPhase.Countdown:
                 return $"ROUND {m.Round}\n{Mathf.CeilToInt(m.PhaseRemaining)}";
             case MatchPhase.Fight:

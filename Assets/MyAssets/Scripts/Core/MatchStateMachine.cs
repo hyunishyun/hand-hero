@@ -58,6 +58,7 @@ namespace HandHero.Core
     public class MatchStateMachine
     {
         private float _phaseTime;
+        private bool _runAfterTutorial;
 
         public MatchStateMachine(MatchParams p)
         {
@@ -89,6 +90,7 @@ namespace HandHero.Core
         {
             if (Phase != MatchPhase.Menu) return false;
 
+            _runAfterTutorial = false;
             Round = 0;
             PlayerWins = 0;
             OpponentWins = 0;
@@ -102,17 +104,24 @@ namespace HandHero.Core
 
         // RUN mode: the match only hosts pause and menu return; RunStateMachine
         // owns the islands, so Tick and ReportKO do nothing in this phase.
-        public bool StartRun()
+        // With the tutorial, the run starts when the tutorial completes (R10).
+        public bool StartRun(bool withTutorial = false)
         {
             if (Phase != MatchPhase.Menu) return false;
-            Enter(MatchPhase.Run);
+            _runAfterTutorial = withTutorial;
+            Enter(withTutorial ? MatchPhase.Tutorial : MatchPhase.Run);
             return true;
         }
 
         public bool CompleteTutorial()
         {
             if (Phase != MatchPhase.Tutorial) return false;
-            BeginRound();
+            if (_runAfterTutorial)
+            {
+                _runAfterTutorial = false;
+                Enter(MatchPhase.Run);
+            }
+            else BeginRound();
             return true;
         }
 

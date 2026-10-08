@@ -45,6 +45,9 @@ public class RunDirector : MonoBehaviour
     public RunStateMachine Run => _run;
     public bool IsRunning => _run != null && _run.Phase != RunPhase.Idle;
     public int BotsAlive => _bots.Count;
+    // VICTORY / DEFEAT showing; the run waits for MENU.
+    public bool IsOver => _run != null && (_run.Phase == RunPhase.Victory || _run.Phase == RunPhase.Defeat);
+    public HeroHealth PlayerHealth => playerHealth;
 
     private void Awake()
     {
@@ -62,17 +65,23 @@ public class RunDirector : MonoBehaviour
         if (playerHealth != null) playerHealth.Died -= OnPlayerDied;
     }
 
-    // Menu entry point (RUN button, debug key). Only from the main menu.
+    // Debug key entry point: straight into a run, no tutorial. Only from the main
+    // menu. The RUN button goes through MatchDirector (tutorial first) instead;
+    // Update begins the run once the match is in MatchPhase.Run.
     public bool StartRun()
     {
         if (IsRunning || match == null || !match.StartRun()) return false;
+        BeginRun();
+        return true;
+    }
 
+    private void BeginRun()
+    {
         _run.Params = rules;
         _run.StartRun();
         if (playerStats != null) playerStats.Bind(_run.Inventory);
         if (playerHealth != null) playerHealth.ResetHealth();
         SetHidden(true);
-        return true;
     }
 
     // Choice entry points for the run panels (R9) and debug keys (R11).
@@ -87,7 +96,12 @@ public class RunDirector : MonoBehaviour
     private void Update()
     {
         if (debugKeys) HandleDebugKeys();
-        if (!IsRunning) return;
+        if (!IsRunning)
+        {
+            // RUN button (after the tutorial on a first play): the match is in Run, the islands not yet.
+            if (match == null || match.Match == null || match.Match.Phase != MatchPhase.Run) return;
+            BeginRun();
+        }
 
         // Back in the menu (MENU button, Esc, end screen): the run is over.
         if (match == null || match.Match.Phase != MatchPhase.Run)

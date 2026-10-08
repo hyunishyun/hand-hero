@@ -344,5 +344,27 @@ namespace HandHero.Tests
             Assert.AreEqual(MatchPhase.Menu, m.Phase);
             Assert.IsFalse(m.IsPaused);
         }
+
+        // R10: the tutorial-first rule covers RUN too; finishing it starts the run.
+        [Test]
+        public void StartRun_WithTutorial_RunsAfterTheTutorial()
+        {
+            var m = InMenu();
+            Assert.IsTrue(m.StartRun(withTutorial: true));
+            Assert.AreEqual(MatchPhase.Tutorial, m.Phase);
+            Assert.IsTrue(m.CompleteTutorial());
+            Assert.AreEqual(MatchPhase.Run, m.Phase);
+        }
+
+        [Test]
+        public void StartRun_TutorialAbandoned_NextQuickMatchTutorialStillGoesToCountdown()
+        {
+            var m = InMenu();
+            m.StartRun(withTutorial: true);
+            m.ReturnToMenu();
+            m.StartMatch(withTutorial: true);
+            m.CompleteTutorial();
+            Assert.AreEqual(MatchPhase.Countdown, m.Phase);
+        }
     }
 }
