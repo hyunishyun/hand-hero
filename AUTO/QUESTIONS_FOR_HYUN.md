@@ -14,3 +14,9 @@
 - **R5 / Arena 동시 봇 수** — Arena 봇 3마리(섬 6–8)도 한 번에 최대 2마리만 나오고, 하나가 쓰러지면 다음이 나온다(Horde와 같은 상한 2). 이유: 앉아서 손으로만 하는 게임이라 3마리 동시 사격은 너무 버겁다. 되돌리려면: `RunParams.MaxAlive`.
 - **R5 / 적 스케일링 기준** — "1 + 0.15 × islandIndex"의 islandIndex를 0부터 셌다(섬 1 = ×1.0, 보스 섬 9 = ×2.2, 보스 체력 ×6 → 기본의 13.2배). 보스 데미지는 ×1(발사 간격만 ×0.7로 빠르게). 되돌리려면: `RunRules.Island`, `RunParams.BossFireIntervalMult`.
 - **R6 / 상점 가격의 섬 인덱스와 리롤** — 상점은 섬 5 앞에 있으므로 섬 5의 인덱스(4, 인플레이션 ×1.2)로 값을 매긴다(커먼 120, 첫 리롤 30). 리롤은 팔린 칸까지 4칸 전부 새로 뽑는다. 이자는 클리어 보상을 받기 전 잔액 기준이다. 처치·클리어 크리스탈은 반올림, 가격은 올림. 되돌리려면: `RunStateMachine.AfterChest`의 `new Shop(Inventory, Island, …)`, `Shop.Restock`, `Economy.ClearReward`.
+- **R7 / 런 도중 최대 체력이 바뀔 때** — 최대 체력이 오르면(Hull Plating) 오른 만큼 현재 체력도 채우고, 내리면(Glass Cannon) 현재 체력을 새 최대치로 자르기만 한다. 이유: 아이템을 고른 직후 체력 바가 비어 보이지 않게. 되돌리려면: `HeroHealthModel.ChangeMaxHealth`.
+- **R7 / 치명타 표시** — 치명타 빔은 노란색(`critBeamColor`)으로 나간다. 숫자 팝업은 없다. 되돌리려면: `PointingBeamController`의 `critBeamColor`를 `beamColor`와 같게.
+- **R8 / 런과 퀵 매치의 공존 방법** — `MatchPhase.Run`을 새로 넣어 `MatchDirector`가 일시정지·포커스 상실·메뉴 복귀를 그대로 맡고, 섬 진행은 `RunDirector`가 한다. 이유: 일시정지·헤드셋 벗기·메뉴 패널 로직을 두 번 만들지 않으려고. 되돌리려면: `MatchStateMachine.StartRun`과 `RunDirector`.
+- **R8 / 봇 재등장 간격** — 봇이 쓰러지면 1.5초 뒤 다음 봇이 나온다(Horde, Arena 3마리 섬). 섬 시작 때는 바로 나온다. 되돌리려면: `RunDirector.respawnInterval`.
+- **R8 / 부활·섬 시작 위치** — Second Wind 부활은 그 자리에서 바로(출발점으로 이동, 최대 체력 50%). 매 섬 카운트다운 때 플레이어 히어로를 출발점으로 돌려보낸다(체력은 유지). 되돌리려면: `RunDirector.OnPlayerDied` / `OnRunPhaseChanged`의 Intro 분기.
+- **R8 / Spiked 상자 대가 시점** — 상자가 열릴 때(카드가 뜰 때) 최대 체력 33%를 깎는다(최소 1). 선택지가 없어 상자를 건너뛰면 깎지 않는다. 되돌리려면: `RunDirector.OnRunPhaseChanged`의 OpenChest 분기.
