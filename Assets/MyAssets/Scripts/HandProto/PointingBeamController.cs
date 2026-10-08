@@ -161,6 +161,10 @@ public class PointingBeamController : MonoBehaviour
         AimMode mode = Mode;
         ApplyModeVisuals(mode);
 
+        // The lock is re-checked only while aiming; a target that died meanwhile
+        // (aim hand out of view) must not keep the ring on its hidden body.
+        if (_assistTarget != null && !_assistTarget.IsTargetable) SetAssistTarget(null);
+
         // CURSOR: the gun grip drags the marker. ASSIST: a lost aiming hand
         // arrives as HasAim = false and the reticle freezes at the last aim point.
         if (mode == AimMode.Cursor) UpdateCursor(input);
