@@ -35,3 +35,7 @@
 - T10 / 전환 위치 / 메인 메뉴 세 번째 버튼 **MR TABLE / VR ARENA**, 메뉴에서만 전환(경기 중 시점 점프 없음), 마지막 선택 기억(PlayerPrefs `HandHero.Tabletop`), 첫 실행은 VR 아레나 / Q6 "토글, 기본 꺼짐" / `ArenaViewMode.rememberChoice`.
 - T10 / 패키지 / **Unity OpenXR Meta 2.6.1**(에디터 권장 버전) 추가, Android OpenXR에서 Meta Session·Camera(Passthrough) 기능 켬. 매니페스트에 `com.oculus.feature.PASSTHROUGH required=true`가 들어감(Quest 2 이후 전 기종 지원) / Q5 승인 / 문제가 되면 manifest.json에서 빼고 BuildScript의 RequiredFeatures 두 줄 삭제.
 - T10 / 빌드 경고 "Passthrough requires Camera clear flags solid color alpha 0" / 무시: VR 아레나가 기본이라 스카이박스를 쓰고, 테이블탑으로 바꿀 때 `ArenaViewMode`가 런타임에 투명으로 바꿈.
+- T11 / Fusion 네트워크 입력에서 클러치를 델타로 보낼까 절대 위치로 보낼까? / **절대 위치**(좌석 로컬 손바닥 위치) + 시뮬레이션이 이전 값과의 차이로 델타 계산 / Fusion은 빠진 입력을 직전 입력으로 반복하므로 델타를 보내면 두 번 적용돼 히어로가 튐 / `AUTO/FUSION_PORT_PLAN.md` 2.1절.
+- T11 / 멀티에서 싱글도 Fusion `GameMode.Single`로 통일할까? / 아니오, 지금 싱글 경로 그대로 / 검증된 경로(EditMode 117개)를 마감 전에 흔들지 않기 위해. 규칙은 Core 공유라 갈라지지 않음 / 문서 4절.
+- T12 / 히어로 구분 / 색 + 모양(플레이어 날개, 봇 V자 꼬리) / 색맹 대응, 멀리서 작은 실루엣 / 씬 빌더 `Hero(..., isBot)`.
+- T12 / 거리감 보조로 히어로 아래 바닥 원판 + 수직선을 넣음 / 넣음(심사 "FoV·공간 인지") / 텅 빈 35m 박스에서 날아다니는 물체의 거리 판단이 어려움 / 싫으면 씬에서 `*_GroundMarker` 두 개를 끄거나 씬 빌더의 `GroundMarker(...)` 두 줄 삭제.
