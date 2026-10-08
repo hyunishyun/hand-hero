@@ -18,7 +18,7 @@
 - 표시: `HeroGroundMarker.cs`(임의의 Transform도 따라가게)
 - 메뉴·흐름: `MatchDirector.cs`(`ToggleAimMode`), `HandMenuButton`/씬 빌더(AIM 버튼, 2×2 배치)
 - 튜토리얼: `TutorialDirector.cs`(모드별 문구, 조준 판정을 "조준점이 타겟에 있나"로 변경)
-- 봇: `BotDifficulty`/`BotInputSource`(봇 보정 원뿔 값)
+- 봇: 씬 빌더가 봇 컨트롤러의 보정 원뿔을 0으로 설정
 - 테스트: 새 EditMode 테스트 3개 파일
 
 **결정**
@@ -30,12 +30,12 @@
 - **D4 커서 감도**: 60(왼손과 같음). `cursorPositionScale`로 따로 조절할 수 있다.
 - **D5 커서 보정**: 커서 반경 2.5m 안의 적에게 붙고, 3.5m 밖으로 나가야 떨어진다(히스테리시스). 0이면 끈다.
 - **D6 브랜치**: `hyun/aim-modes`.
-- **D7 메뉴 텍스트 겹침 버그**: 이 브랜치에서 고친다. 원인은 스크린샷을 받은 뒤 별도 디버깅으로 확정한다. 이 문서의 메뉴 변경(2×2 배치)과는 독립이다.
+- **D7 메뉴 텍스트 겹침 버그**: **나중에 따로 처리한다(Hyun, 2026-10-08).** 이 문서의 범위가 아니다. 메뉴 변경(2×2 배치)과는 독립이다.
 - **D8 ASSIST 원뿔**: 8°에 붙고, 11°를 넘으면 떨어진다. 인스펙터에서 조절한다.
 - **D9 두 손 모으기**: 코드는 남기고 기본값만 끈다(`palmsTogetherCharges = false`). 나중에 재활용한다.
 - **D10 봇 보정 (Q4에서 바뀜)**: 봇도 같은 코드 경로를 쓴다. 다만 **봇 보정 원뿔의 기본값은 0°(끔)**이다.
   - 이유: 봇은 발사 0.6초 전에 조준점을 고정하고 예고선을 그린다. 발사 순간 보정이 적의 "현재 위치"로 다시 붙으면, 예고선을 보고 피해도 맞게 된다. 그러면 Hyun이 좋다고 한 "예고선 → 왼손으로 피하기" 루프가 깨진다.
-  - 봇의 정확도는 기존 조준 오차 4°로 이미 조절되고 있다. 값을 올리고 싶으면 `BotDifficulty.assistAngle`로 바꾼다.
+  - 봇의 정확도는 기존 조준 오차 4°로 이미 조절되고 있다. 값을 올리고 싶으면 봇 히어로 `PointingBeamController.assistAngle`로 바꾼다.
 - **D11 모드 저장**: PlayerPrefs `HandHero.AimMode`. 처음 실행하면 ASSIST. 메인 메뉴에서만 바꿀 수 있다.
 - **D12 커서 시작 위치**: 매 라운드 시작과 리스폰 때 아레나 중앙으로 돌아간다.
 
@@ -162,8 +162,8 @@ Scene side:
     target's position (smoothed as today) and the reticle switches to `lockedReticleColor`;
   - the fire ray still goes from the hero to the aim point, so a locked shot at an unobstructed
     target hits.
-- Defaults live on the controller; the bot's controller gets `assistAngle` from
-  `BotDifficulty.assistAngle` (default **0** = off, D10) through `BotInputSource`.
+- Defaults live on the controller. The scene builder sets the bot's controller `assistAngle` to
+  **0** (off, D10); it stays tunable in that controller's inspector.
 
 ### 5. CURSOR mode (`AimCursorModel`, Core, new)
 
@@ -179,8 +179,8 @@ Scene side:
     (release 3.5 m);
   - the reticle and the shoulder ray visual are hidden, and the marker is tinted
     `lockedReticleColor` while magnetized;
-  - the cursor resets to the arena center on round start (`MatchDirector` → controller
-    `ResetAim()`) and on the hero's respawn.
+  - the cursor resets to the arena center on the hero's `HeroHealth.Respawned` event. Round
+    start calls `ResetHealth()`, which raises `Respawned` too, so one hook covers both.
 - `HeroGroundMarker` gains an optional `follow` Transform. When set, the marker sits under that
   transform and uses `character` only for bounds and visibility. The scene builder adds an orange
   disc + drop line for the cursor (visible only in CURSOR mode, and only while the cursor is
