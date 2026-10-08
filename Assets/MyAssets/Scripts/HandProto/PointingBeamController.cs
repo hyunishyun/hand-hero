@@ -83,7 +83,7 @@ public class PointingBeamController : MonoBehaviour
 
     private Vector3 _aimPoint;
     private IHandInputSource _sourceOverride;
-    private float _lastFireTime = -999f;
+    private readonly ShotCooldown _shots = new ShotCooldown();
     private float _beamTimer;
     private readonly ChargeShotModel _charge = new ChargeShotModel();
 
@@ -196,7 +196,10 @@ public class PointingBeamController : MonoBehaviour
         }
 
         // The press edge of a pinch fires a normal shot; holding on only charges.
-        if (input.HasAim && input.FireTriggered && character.IsAlive) TryFire();
+        // A pull during the cooldown is buffered and fires when it ends; losing the
+        // aim hand or the hero drops the buffered shot.
+        if (!input.HasAim || !character.IsAlive) _shots.ClearPending();
+        else if (_shots.Step(input.FireTriggered, Time.time, fireCooldown)) Fire(damage, 1f);
     }
 
     private void OnDisable()
@@ -307,15 +310,10 @@ public class PointingBeamController : MonoBehaviour
         else lockOnRing.Hide();
     }
 
-    private void TryFire()
-    {
-        if (Time.time - _lastFireTime < fireCooldown) return;
-        Fire(damage, 1f);
-    }
 
     private void Fire(float shotDamage, float widthMultiplier)
     {
-        _lastFireTime = Time.time;
+        _shots.MarkFired(Time.time);
 
         Vector3 origin = character.transform.position;
 
