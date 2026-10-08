@@ -25,7 +25,9 @@ public class PointingBeamController : MonoBehaviour
     [Tooltip("Health removed from a hero (HeroHealth) per beam hit")]
     [SerializeField] private float damage = 20f;
 
-    [Header("Charge Shot (both palms together, fires on release)")]
+    [Header("Charge Shot (held pinch: press fires a normal shot, holding charges, release fires)")]
+    [Tooltip("Max speed multiplier while charging (the left hand can still fly the hero)")]
+    [SerializeField] private float chargeMoveSpeedMultiplier = 0.6f;
     [Tooltip("Min/max charge seconds; shorter holds fire nothing")]
     [SerializeField] private ChargeParams charge = ChargeParams.Default;
     [Tooltip("Damage of a charge shot released right at the min charge time")]
@@ -97,12 +99,16 @@ public class PointingBeamController : MonoBehaviour
         // the last aim point and normal shots don't fire.
         if (input.HasAim) UpdateAim(input.AimRay);
 
-        // Charge shot: releases at the last aim point even if the aiming hand
-        // dropped out while the hands were together.
-        bool charging = input.Has(HandGestures.ChargeHeld);
-        if (!character.IsAlive) _charge.Cancel();
-        ChargeStep step = _charge.Step(charging && character.IsAlive, Time.deltaTime, charge);
+        // Charge shot: a held pinch charges, release fires. Losing the aim hand or
+        // a switched-off source (pause) cancels without firing (ChargeInputRule).
+        ChargeInputAction action = ChargeInputRule.Decide(input, character.IsAlive);
+        ChargeStep step = default;
+        if (action == ChargeInputAction.Cancel) _charge.Cancel();
+        else step = _charge.Step(action == ChargeInputAction.Hold, Time.deltaTime, charge);
+
         UpdateChargeIndicator(step);
+        character.SetChargeSpeedMultiplier(step.Charging ? chargeMoveSpeedMultiplier : 1f);
+
         if (step.Released && _aimPoint != Vector3.zero)
         {
             Fire(Mathf.Lerp(chargeMinDamage, chargeMaxDamage, step.Power),
@@ -110,7 +116,15 @@ public class PointingBeamController : MonoBehaviour
             return;
         }
 
-        if (input.HasAim && input.FireTriggered && !charging && character.IsAlive) TryFire();
+        // The press edge of a pinch fires a normal shot; holding on only charges.
+        if (input.HasAim && input.FireTriggered && character.IsAlive) TryFire();
+    }
+
+    private void OnDisable()
+    {
+        _charge.Cancel();
+        UpdateChargeIndicator(default);
+        if (character != null) character.SetChargeSpeedMultiplier(1f);
     }
 
     private void UpdateChargeIndicator(ChargeStep step)

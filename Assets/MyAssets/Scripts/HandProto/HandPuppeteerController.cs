@@ -33,8 +33,6 @@ public class HandPuppeteerController : MonoBehaviour
     // Relative mapping (unit-tested in HandHero.Core).
     private readonly ClutchMapper _clutch = new ClutchMapper();
     private IHandInputSource _sourceOverride;
-    private bool _rooted;
-    private Vector3 _rootPosition;
 
     public float PositionScale => positionScale;
 
@@ -61,30 +59,12 @@ public class HandPuppeteerController : MonoBehaviour
         {
             if (_clutch.IsClutched) OnRelease();
             _clutch.Reset();
-            _rooted = false;
             return;
         }
 
-        // Charging (both palms together) roots the hero where it is — the risk
-        // side of the charge shot (T5). The clutch regrabs from there afterwards.
+        // Charging no longer roots the hero: the charge shot is a right-hand pinch
+        // hold, so the left hand keeps flying it, slowed by PointingBeamController.
         HandInputData input = source.Current;
-        if (input.Has(HandGestures.ChargeHeld))
-        {
-            if (!_rooted)
-            {
-                _rooted = true;
-                _rootPosition = character.transform.position;
-                if (_clutch.IsClutched) OnRelease();
-                _clutch.Reset();
-            }
-            character.SetTarget(_rootPosition);
-            return;
-        }
-        if (_rooted)
-        {
-            _rooted = false;
-            character.ClearTarget();
-        }
 
         // A lost hand arrives as ClutchHeld = false, so the character glides
         // instead of teleporting when the hand comes back somewhere else.

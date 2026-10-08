@@ -39,6 +39,7 @@ public class FlyingCharacter : MonoBehaviour
     private bool _hasTarget;
     private bool _alive = true;
     private float _speedMultiplier = 1f;
+    private float _chargeSpeedMultiplier = 1f;
 
     // Called by HandPuppeteerController while the clutch (fist) is held.
     public void SetTarget(Vector3 worldPosition)
@@ -54,11 +55,19 @@ public class FlyingCharacter : MonoBehaviour
         _speedMultiplier = Mathf.Clamp01(multiplier);
     }
 
+    // Charge-shot slow (PointingBeamController). Separate channel from the hit
+    // slow, which HeroHealth sets every frame; the two multiply.
+    public void SetChargeSpeedMultiplier(float multiplier)
+    {
+        _chargeSpeedMultiplier = Mathf.Clamp01(multiplier);
+    }
+
     public void Kill()
     {
         _alive = false;
         _hasTarget = false;
         _velocity = Vector3.zero;
+        _chargeSpeedMultiplier = 1f;
     }
 
     // Teleports the hero (never the player's rig) and gives control back.
@@ -68,6 +77,7 @@ public class FlyingCharacter : MonoBehaviour
         _velocity = Vector3.zero;
         _hasTarget = false;
         _speedMultiplier = 1f;
+        _chargeSpeedMultiplier = 1f;
         _alive = true;
     }
 
@@ -89,7 +99,7 @@ public class FlyingCharacter : MonoBehaviour
         {
             Stiffness = stiffness,
             Damping = damping,
-            MaxSpeed = maxSpeed * _speedMultiplier,
+            MaxSpeed = maxSpeed * _speedMultiplier * _chargeSpeedMultiplier,
             GlideDrag = glideDrag,
         };
         var state = new FlightState { Position = transform.position, Velocity = _velocity };
