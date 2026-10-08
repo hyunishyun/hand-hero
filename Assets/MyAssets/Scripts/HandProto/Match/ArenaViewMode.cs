@@ -22,6 +22,8 @@ public class ArenaViewMode : MonoBehaviour
     [SerializeField] private Camera viewCamera;
     [Tooltip("Enabled only in the tabletop mode: AR Session + AR Camera Manager (Meta passthrough)")]
     [SerializeField] private Behaviour[] passthroughOnly;
+    [Tooltip("Hidden in the tabletop mode: the back wall rises above eye level on the table and hides the menu and prompts behind it")]
+    [SerializeField] private GameObject[] arenaOnly;
     [Tooltip("Optional. Menu button label, names the mode the button switches to")]
     [SerializeField] private TMP_Text toggleLabel;
 
@@ -85,6 +87,10 @@ public class ArenaViewMode : MonoBehaviour
         if (passthroughOnly != null)
             foreach (Behaviour b in passthroughOnly)
                 if (b != null) b.enabled = IsTabletop;
+
+        if (arenaOnly != null)
+            foreach (GameObject go in arenaOnly)
+                if (go != null) go.SetActive(!IsTabletop);
 
         if (viewCamera != null)
         {

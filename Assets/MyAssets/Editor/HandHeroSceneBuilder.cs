@@ -447,6 +447,8 @@ namespace HandHero.EditorTools
             SetRefs(viewMode, ("origin", cam.GetComponentInParent<XROrigin>()), ("arenaCenter", arena),
                 ("viewCamera", cam), ("toggleLabel", viewButton != null ? viewButton.GetComponentInChildren<TextMeshPro>() : null));
             SetArray(viewMode, "passthroughOnly", session, cameraManager);
+            Transform backWall = arena.Find("BackWall");
+            if (backWall != null) SetArray(viewMode, "arenaOnly", backWall.gameObject);
             var so = new SerializedObject(viewMode);
             so.FindProperty("eyeHeight").floatValue = SeatEyeHeight;
             so.FindProperty("arenaWidth").floatValue = ArenaSize.x;
