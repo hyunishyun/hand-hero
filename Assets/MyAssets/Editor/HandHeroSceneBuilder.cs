@@ -22,6 +22,8 @@ namespace HandHero.EditorTools
         public const string SandboxScenePath = SceneDir + "/HandHero_Sandbox.unity";
         public const string ArenaMainScenePath = SceneDir + "/Arena_Main.unity";
         public const string BotDifficultyPath = BotDir + "/BotDifficulty_Normal.asset";
+        private const string FxDir = "Assets/MyAssets/Generated/FX";
+        public const string ImpactPrefabPath = FxDir + "/BeamImpact.prefab";
 
         // Heroes stay on the Default layer: PointingBeamController skips its own
         // hero's colliders, so player and bot can hit each other without a
@@ -94,6 +96,10 @@ namespace HandHero.EditorTools
             Material buttonMat = UnlitMaterial("MenuButton", new Color(0.15f, 0.2f, 0.3f));
             Material tutorialTargetMat = LitMaterial("TutorialTarget", new Color(0.3f, 1f, 0.45f));
             Material ghostMat = UnlitMaterial("GhostHand", new Color(0.85f, 0.95f, 1f));
+            Material heroMarkerMat = UnlitMaterial("GroundMarker_Player", new Color(0.15f, 0.3f, 0.55f));
+            Material botMarkerMat = UnlitMaterial("GroundMarker_Bot", new Color(0.5f, 0.12f, 0.15f));
+            Material impactMat = UnlitMaterial("BeamImpact", new Color(1f, 0.95f, 0.7f));
+            GameObject impactPrefab = GetOrCreateImpactPrefab(impactMat);
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -137,7 +143,8 @@ namespace HandHero.EditorTools
                 target.AddComponent<PrototypeTarget>();
             }
 
-            var flying = Hero("PlayerHero", arena.transform, Vector3.zero, heroMat, noseMat, barMat);
+            var flying = Hero("PlayerHero", arena.transform, Vector3.zero, heroMat, noseMat, barMat, isBot: false);
+            GroundMarker(flying, heroMarkerMat, beamMat, new Color(0.4f, 0.7f, 1f, 0.5f));
 
             // Aim feedback: reticle without collider (else the aim ray hits it and jitters).
             GameObject reticle = Primitive(PrimitiveType.Sphere, "Reticle", null, ArenaCenter, Vector3.one * 0.4f, reticleMat);
@@ -169,7 +176,8 @@ namespace HandHero.EditorTools
             GameObject chargeOrb = Primitive(PrimitiveType.Sphere, "ChargeOrb", null, ArenaCenter, Vector3.one, chargeMat);
             var pointing = controllers.AddComponent<PointingBeamController>();
             SetRefs(pointing, ("character", flying), ("reticle", reticle.transform), ("beam", beam),
-                ("inputSource", playerInput), ("chargeIndicator", chargeOrb.transform));
+                ("inputSource", playerInput), ("chargeIndicator", chargeOrb.transform),
+                ("hitEffectPrefab", impactPrefab), ("audioSource", flying.GetComponent<AudioSource>()));
 
             // Palm push shockwave (T5): stuns the bot when it is within reach.
             var ringGo = new GameObject("ShockwaveRingRenderer");
@@ -181,7 +189,9 @@ namespace HandHero.EditorTools
 
             // Bot opponent: same hero, same controllers, input from BotInputSource.
             BotDifficulty difficulty = GetOrCreateBotDifficulty();
-            var botFlying = Hero("BotHero", arena.transform, new Vector3(6f, 3f, 12f), botMat, noseMat, barMat);
+            var botFlying = Hero("BotHero", arena.transform, new Vector3(6f, 3f, 12f), botMat, noseMat, barMat,
+                isBot: true);
+            GroundMarker(botFlying, botMarkerMat, beamMat, new Color(1f, 0.4f, 0.4f, 0.5f));
 
             var botBeamGo = new GameObject("BotBeamRenderer");
             var botBeam = botBeamGo.AddComponent<LineRenderer>();
@@ -193,7 +203,8 @@ namespace HandHero.EditorTools
             var botPuppeteer = bot.AddComponent<HandPuppeteerController>();
             SetRefs(botPuppeteer, ("character", botFlying), ("inputSource", botInput));
             var botPointing = bot.AddComponent<PointingBeamController>();
-            SetRefs(botPointing, ("character", botFlying), ("beam", botBeam), ("inputSource", botInput));
+            SetRefs(botPointing, ("character", botFlying), ("beam", botBeam), ("inputSource", botInput),
+                ("hitEffectPrefab", impactPrefab), ("audioSource", botFlying.GetComponent<AudioSource>()));
             var beamSo = new SerializedObject(botPointing);
             beamSo.FindProperty("beamColor").colorValue = new Color(1f, 0.25f, 0.2f);
             beamSo.ApplyModifiedPropertiesWithoutUndo();
@@ -406,8 +417,11 @@ namespace HandHero.EditorTools
 
         // Greybox hero: collider + BeamHitReceiver + HeroHealth on the root (beams
         // hit it), visual pivot rotated by FlyingCharacter for facing/banking only.
+        // The two heroes differ in shape as well as color (T12), so they stay apart
+        // for color-blind players and as small far-away silhouettes: the player has
+        // flat wings, the bot a raised V tail.
         private static FlyingCharacter Hero(string name, Transform arena, Vector3 localPos, Material bodyMat,
-            Material noseMat, Material barMat)
+            Material noseMat, Material barMat, bool isBot)
         {
             var hero = new GameObject(name);
             hero.transform.SetParent(arena, false);
@@ -422,6 +436,25 @@ namespace HandHero.EditorTools
             body.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             Primitive(PrimitiveType.Sphere, "Nose", visual.transform,
                 new Vector3(0f, 0f, 0.9f), Vector3.one * 0.35f, noseMat);
+            if (isBot)
+            {
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    GameObject fin = Primitive(PrimitiveType.Cube, side < 0 ? "Fin_L" : "Fin_R", visual.transform,
+                        new Vector3(side * 0.3f, 0.45f, -0.45f), new Vector3(0.08f, 0.8f, 0.5f), bodyMat);
+                    fin.transform.localRotation = Quaternion.Euler(0f, 0f, -side * 30f);
+                }
+            }
+            else
+            {
+                Primitive(PrimitiveType.Cube, "Wings", visual.transform,
+                    new Vector3(0f, 0f, -0.1f), new Vector3(2.2f, 0.08f, 0.5f), bodyMat);
+            }
+
+            // Audio hook (T12): beam fire sounds play here once a clip is assigned.
+            var audio = hero.AddComponent<AudioSource>();
+            audio.playOnAwake = false;
+            audio.spatialBlend = 1f;
 
             var flying = hero.AddComponent<FlyingCharacter>();
             SetRefs(flying, ("arenaCenter", arena), ("visual", visual.transform));
@@ -481,6 +514,36 @@ namespace HandHero.EditorTools
             asset = ScriptableObject.CreateInstance<BotDifficulty>();
             AssetDatabase.CreateAsset(asset, BotDifficultyPath);
             return asset;
+        }
+
+        // Floor disc + drop line under a hero (depth cue, T12). Lives outside the
+        // hero so HeroHealth's hit flash and death hiding leave it alone.
+        private static void GroundMarker(FlyingCharacter hero, Material discMat, Material lineMat, Color lineColor)
+        {
+            var go = new GameObject(hero.name + "_GroundMarker");
+            GameObject disc = Primitive(PrimitiveType.Cylinder, "Disc", go.transform, Vector3.zero,
+                new Vector3(2f, 0.01f, 2f), discMat);
+            var line = go.AddComponent<LineRenderer>();
+            line.sharedMaterial = lineMat;
+            line.useWorldSpace = true;
+            line.widthMultiplier = 0.03f;
+            line.startColor = line.endColor = lineColor;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var marker = go.AddComponent<HeroGroundMarker>();
+            SetRefs(marker, ("character", hero), ("disc", disc.transform), ("dropLine", line));
+        }
+
+        // Beam hit effect prefab (T12): a sphere that pops and shrinks. Rewritten
+        // on every build so the generated asset always matches this code.
+        private static GameObject GetOrCreateImpactPrefab(Material mat)
+        {
+            EnsureFolder(FxDir);
+            GameObject temp = Primitive(PrimitiveType.Sphere, "BeamImpact", null, Vector3.zero, Vector3.one, mat);
+            temp.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            temp.AddComponent<ImpactFlash>();
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(temp, ImpactPrefabPath);
+            Object.DestroyImmediate(temp);
+            return prefab;
         }
 
         private static GameObject Cube(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat)
