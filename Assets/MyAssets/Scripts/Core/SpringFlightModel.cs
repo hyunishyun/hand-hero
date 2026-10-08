@@ -40,6 +40,37 @@ namespace HandHero.Core
             local.z = Mathf.Clamp(local.z, -half.z, half.z);
             return Center + local;
         }
+
+        // Where an aim ray that hit nothing should point: where it leaves the arena
+        // box, or the nearest arena point if it misses the box. Keeps the reticle
+        // (and the beam's aim) inside the arena instead of far behind it, which in
+        // the small tabletop view looked like the aim jumping off the table.
+        public Vector3 AimFallback(Ray ray, float farDistance = 80f)
+        {
+            Vector3 far = ray.GetPoint(farDistance);
+            if (!Enabled) return far;
+
+            Vector3 min = Center - Size * 0.5f;
+            Vector3 max = Center + Size * 0.5f;
+            float tNear = float.NegativeInfinity;
+            float tFar = float.PositiveInfinity;
+            for (int axis = 0; axis < 3; axis++)
+            {
+                float o = ray.origin[axis];
+                float d = ray.direction[axis];
+                if (Mathf.Abs(d) < 1e-6f)
+                {
+                    if (o < min[axis] || o > max[axis]) return Clamp(far);
+                    continue;
+                }
+                float t1 = (min[axis] - o) / d;
+                float t2 = (max[axis] - o) / d;
+                tNear = Mathf.Max(tNear, Mathf.Min(t1, t2));
+                tFar = Mathf.Min(tFar, Mathf.Max(t1, t2));
+            }
+
+            return tFar >= Mathf.Max(tNear, 0f) ? ray.GetPoint(tFar) : Clamp(far);
+        }
     }
 
     // Speed-capped spring toward a target point, gliding with drag when there is

@@ -235,9 +235,10 @@ public class PointingBeamController : MonoBehaviour
         // The reticle always shows where the hand points (smoothed against jitter):
         // snapped onto a target it would sit inside the hero mesh and vanish. The
         // lock-on ring shows the snap instead.
+        // Nothing hit: where the ray leaves the arena, never far behind it.
         Vector3 raw = RaycastIgnoringSelf(ray, maxAimDistance, out RaycastHit hit)
             ? hit.point
-            : ray.GetPoint(maxAimDistance);
+            : character.Bounds.AimFallback(ray, maxAimDistance);
         float t = 1f - Mathf.Exp(-reticleSmoothing * Time.deltaTime);
         _rawAimPoint = _rawAimPoint == Vector3.zero ? raw : Vector3.Lerp(_rawAimPoint, raw, t);
 
