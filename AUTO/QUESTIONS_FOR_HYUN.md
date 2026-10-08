@@ -13,3 +13,4 @@
 - **R5 / 상점 위치·보스 앞** — 섬 4의 상자 다음에 상점, 상점을 나오면 섬 5 포털을 고른다. 섬 8 다음에는 포털 없이 바로 보스. 보스를 깨면 상자 없이 Victory. 되돌리려면: `RunStateMachine.AfterChest` / `OfferPortals`.
 - **R5 / Arena 동시 봇 수** — Arena 봇 3마리(섬 6–8)도 한 번에 최대 2마리만 나오고, 하나가 쓰러지면 다음이 나온다(Horde와 같은 상한 2). 이유: 앉아서 손으로만 하는 게임이라 3마리 동시 사격은 너무 버겁다. 되돌리려면: `RunParams.MaxAlive`.
 - **R5 / 적 스케일링 기준** — "1 + 0.15 × islandIndex"의 islandIndex를 0부터 셌다(섬 1 = ×1.0, 보스 섬 9 = ×2.2, 보스 체력 ×6 → 기본의 13.2배). 보스 데미지는 ×1(발사 간격만 ×0.7로 빠르게). 되돌리려면: `RunRules.Island`, `RunParams.BossFireIntervalMult`.
+- **R6 / 상점 가격의 섬 인덱스와 리롤** — 상점은 섬 5 앞에 있으므로 섬 5의 인덱스(4, 인플레이션 ×1.2)로 값을 매긴다(커먼 120, 첫 리롤 30). 리롤은 팔린 칸까지 4칸 전부 새로 뽑는다. 이자는 클리어 보상을 받기 전 잔액 기준이다. 처치·클리어 크리스탈은 반올림, 가격은 올림. 되돌리려면: `RunStateMachine.AfterChest`의 `new Shop(Inventory, Island, …)`, `Shop.Restock`, `Economy.ClearReward`.
