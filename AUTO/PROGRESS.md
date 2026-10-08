@@ -12,8 +12,8 @@
 | R6 경제·상점 (Core) | DONE | `34589b2`. `Economy`(기준 가격 100, 등급 배수 1/3/8/2, 인플레이션 1+0.05×섬 인덱스, 리롤 25×인플레이션×1.5^n, 처치 10×`CrystalGainMult`, 클리어 25+`CrystalPerClear`+이자, Spiked = 최대 체력 33%·HP 하한 1), `CrystalWallet`, `Shop`(Random 풀에서 4칸, 구매 = 레벨업, 리롤 = 4칸 전부 새로). 런에 연결: 처치·클리어 때 크리스탈, 섬 4 상자 뒤 `CurrentShop`, `BuyShopItem`/`RerollShop`. `ChestRoller.Roll`에 개수 지정 오버로드 추가. 테스트 14개, 283/283 통과. Spiked 체력 차감은 R8(RunDirector)이 `Economy.SpikedHealthAfter`로 적용해야 한다. |
 | R7 스탯을 전투에 연결 | DONE | `dc4bac4`. 순수 로직 `CombatMath`(데미지·치명타·차지 데미지/시간·쿨다운·받는 피해·최대 체력·속도·쇼크웨이브 반경/스턴) + `HeroHealthModel.ChangeMaxHealth`(최대 체력이 오르면 오른 만큼 회복, 내리면 잘라냄)·`Heal`·`SetHealth`(최소 1). `RunHeroStats`(플레이어 히어로에 붙여 런 인벤토리를 `Bind`)를 4개 컨트롤러가 읽는다. 연결 안 됨/없음 = 중립이라 퀵 매치·봇은 그대로(치명타 확률 0이면 난수도 뽑지 않음). 치명타 빔은 노란색. 테스트 15개, 298/298 통과. **R8이 할 일**: 런 시작 때 `Bind(run.Inventory)`, 런이 끝나면 `Unbind()`. 씬에 `RunHeroStats` 추가는 R11. |
 | R8 섬·봇 런타임 (RunDirector) | DONE | `b3ddd35`. `MatchPhase.Run` 추가(메뉴에서만 시작, 시간·KO 무시, 일시정지·메뉴 복귀는 그대로 — 테스트 3개, 301/301 통과). `RunDirector`가 `RunStateMachine`을 돌린다: 빌더가 만드는 `Generated/Bot/RunBot.prefab`에서 봇 생성(체력·데미지·발사 간격 스케일), 처치 → 크리스탈, 클리어 때 회복, Spiked 상자 체력 차감, 부활/패배, 섬마다 플레이어를 출발점으로. 런 중에는 퀵 매치 봇을 숨긴다. 씬 배선(RunDirector·`RunHeroStats`·스폰 지점 3개)과 디버그 키 R·1–3·B·N도 미리 넣었다(R11 일부). **헤드셋·플레이 모드 확인은 아직 없음**(컴파일·씬 빌드·테스트만). 알려진 점: 봇 빔이 다른 봇에 맞으면 그 처치도 플레이어 처치로 센다. |
-| R9 선택 UI (포털·상자·상점) | TODO | |
-| R10 HUD·메뉴 | TODO | |
+| R9 선택 UI (포털·상자·상점) | DONE | `f2cbc5e`. 메뉴 자리에 포털(2–3개)·상자(카드 3–4장, 이름·`Lv n`·등급 단어·설명, 등급 색)·상점(2×2 + REROLL·LEAVE, 가격·잔액, 살 수 없으면 어둡게) 패널. `HandMenuButton`에 `SetCustomAction`/`SetLabel`/`SetIdleColor` 추가(기존 메뉴 버튼은 그대로), `HandMenu`가 선택 패널이 뜨면 포인터를 켠다. 글자·배치는 순수 로직 `RunChoiceText` + 테스트 12개, 313/313 통과. 씬 재생성 완료(배선 오류 없음). **플레이 모드·헤드셋 확인 없음**: 카드 글자 크기와 패널 폭(3개 = 약 ±29°)을 기기에서 볼 것. |
+| R10 HUD·메뉴 | IN_PROGRESS | |
 | R11 씬·디버그 키·APK | TODO | |
 | R12 최종 리뷰·리포트 | TODO | |
 

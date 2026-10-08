@@ -20,3 +20,7 @@
 - **R8 / 봇 재등장 간격** — 봇이 쓰러지면 1.5초 뒤 다음 봇이 나온다(Horde, Arena 3마리 섬). 섬 시작 때는 바로 나온다. 되돌리려면: `RunDirector.respawnInterval`.
 - **R8 / 부활·섬 시작 위치** — Second Wind 부활은 그 자리에서 바로(출발점으로 이동, 최대 체력 50%). 매 섬 카운트다운 때 플레이어 히어로를 출발점으로 돌려보낸다(체력은 유지). 되돌리려면: `RunDirector.OnPlayerDied` / `OnRunPhaseChanged`의 Intro 분기.
 - **R8 / Spiked 상자 대가 시점** — 상자가 열릴 때(카드가 뜰 때) 최대 체력 33%를 깎는다(최소 1). 선택지가 없어 상자를 건너뛰면 깎지 않는다. 되돌리려면: `RunDirector.OnRunPhaseChanged`의 OpenChest 분기.
+- **R9 / 카드 글자 줄바꿈** — 메뉴 버튼은 한 줄(NoWrap)+자동 크기지만, 아이템 카드·상점 칸은 설명(최대 약 42자)이 있어 줄바꿈(Normal)+자동 크기(최소 0.5)로 했다. 이유: 한 줄로 두면 글자가 2.5 m 거리에서 4 cm 정도로 작아진다. 포털·REROLL·LEAVE·제목은 한 줄 그대로. 되돌리려면: 빌더 `RunChoicePanels`에서 `wrap: true`를 지우면 된다.
+- **R9 / 화살표 대신 두 줄** — 포털 버튼은 "ARENA → DAMAGE CHEST" 대신 "ARENA" 아래 작은 글씨 "DAMAGE CHEST" 두 줄로 했다. 이유: 기본 TMP 폰트 아틀라스에 → 글자가 있는지 확인할 수 없어 ASCII만 썼다. 되돌리려면: `RunChoiceText.PortalLabel`.
+- **R9 / 새 패널 입력 지연 0.4초** — 상자 카드를 고르자마자 같은 자리에 포털 패널이 뜨므로, 새 패널은 0.4초 동안 핀치를 무시한다. 이유: 빠른 두 번째 핀치로 읽지도 않은 포털이 골라지는 것을 막으려고. 되돌리려면: `RunChoiceMenu.armDelay`를 0으로.
+- **R9 / 카드 4장(Big Chests)** — 선택지가 4개면 한 줄로 늘이지 않고 2×2로 놓는다. 카드에는 등급 색과 함께 등급 단어(COMMON/EPIC/…)도 쓴다(색약 대비). 살 수 없는 상점 칸(돈 부족·SOLD·OWNED)은 색을 어둡게 한다. 되돌리려면: `RunChoiceText.Layout` / `ItemCard` / `Dimmed`.
