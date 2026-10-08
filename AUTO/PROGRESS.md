@@ -7,8 +7,8 @@
 | T0 작업 기반 | DONE | Phase 0에서 완료: git·브랜치·태그·`.gitignore`·`AUTO/`·`Networking~`·`compile_check.ps1`. Unity 6000.6.4f1 업그레이드 후 `compile_check.ps1` → `RESULT: OK`. 첫 배치 실행 이후 컴파일 체크 1회는 약 1–2분. |
 | T1 순수 로직 어셈블리 + 테스트 | DONE | `Scripts/Core/` + `HandHero.Core.asmdef`(참조 없음): `HysteresisGate`(임계값을 매 스텝 받아 인스펙터 실시간 튜닝 유지), `SpringFlightModel.Step` + `ArenaBounds`, `ClutchMapper`. FlyingCharacter·HandPuppeteerController·PointingBeamController가 Core를 호출하고 인스펙터 필드명·기본값은 그대로. `Tests/EditMode/` 19개 통과(원래 FlyingCharacter 수식과 1스텝 일치 테스트 포함). 에디터 재직렬화 변경은 별도 커밋 `a519806`. |
 | T2 입력 추상화 | DONE | Core: `HandInputData`(+`HandGestures` 플래그, T5용 ChargeHeld/Shockwave 예약), `IHandInputSource`, `HandClutchSampler`(입력 쪽 히스테리시스+델타), `ClutchMapper`(시뮬레이션 쪽 상대 매핑으로 분리), `ScriptedHandInputSource`. 씬용: `HandProto/Input/`의 `XRHandsInputSource`·`DebugKeyboardMouseInputSource`(우클릭 드래그/WASDQE=클러치, 휠=깊이, 커서=조준, 좌클릭·Space=발사). **주먹·핀치 임계값 4개는 같은 이름·기본값으로 XRHandsInputSource로 옮겼다**(이 컴포넌트를 쓰는 씬이 없어 잃은 값 없음). `HandHeroSceneBuilder.BuildAll` → `Assets/MyAssets/Scenes/HandHero_Sandbox.unity` 생성(배치모드 OK). EditMode 24/24. **에디터 Play로 마우스 비행·발사를 실제로 눌러 본 확인은 헤드리스라 못 함 → Hyun 확인 필요.** |
-| T3 봇 상대 | IN_PROGRESS | |
-| T4 전투 규칙 | TODO | |
+| T3 봇 상대 | DONE | Core `BotBrain`(+`BotParams`, 상태 Idle/Approach/Strafe/Evade): 클러치를 계속 쥔 채 ClutchMapper 목표를 따라 하며 손 델타를 내보내므로 **플레이어와 같은 퍼펫티어·비행 모델·속도 상한**을 쓴다(손 속도 상한 1.5m/s). 반응 지연, 조준 오차 원뿔, 발사 간격+지터, **0.6초 조준 고정 예고 후 발사**(`IsTelegraphing`/`TelegraphProgress`/`LockedAimPoint` 공개 → T4 예고선용), 피격 시 회피·예고 취소. 씬용 `BotInputSource`, `BotDifficulty`(SO), `BeamHitReceiver`(빔 피격 이벤트 → T4 체력이 구독). `PointingBeamController`는 자기 히어로만 건너뛰는 레이캐스트로 바뀜(레이어 트릭 제거). 샌드박스 씬에 빨간 BotHero 추가. EditMode 37/37. **에디터 Play로 봇이 실제로 날며 쏘는지는 헤드리스라 못 봄 → Hyun 확인 필요.** |
+| T4 전투 규칙 | IN_PROGRESS | |
 | T5 제스처 2개 | TODO | |
 | T6 매치 루프 | TODO | |
 | T7 손 전용 UI + 일시정지 | TODO | |
