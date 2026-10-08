@@ -32,6 +32,13 @@ namespace HandHero.Core
 
         // True for exactly one frame per pinch (edge, already hysteresis-gated).
         public bool FireTriggered;
+        // Aim-hand pinch is closed (level): the charge shot hold. FireTriggered is the edge.
+        public bool PinchHeld;
+
+        // Aim-hand fist clutch (CURSOR aim): drags the 3D aim marker. Delta in
+        // tracking-space meters since the previous frame, zero when open.
+        public bool AimClutchHeld;
+        public Vector3 AimClutchDelta;
 
         public HandGestures Gestures;
 

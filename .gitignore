@@ -51,3 +51,6 @@ desktop.ini
 
 # Unity 6.6 temp
 .utmp/
+
+# Superpowers plan workspaces
+/.superpowers/
