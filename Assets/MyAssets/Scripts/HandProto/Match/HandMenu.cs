@@ -3,8 +3,8 @@ using UnityEngine;
 
 // Shows the hands-only menu panel that fits the match state (T7) and turns the
 // point-and-pinch pointer on only while one is up:
-//   Menu      -> main panel (START)
-//   paused    -> pause panel (RESUME / MENU)
+//   Menu      -> main panel (START / TUTORIAL)
+//   paused    -> pause panel (RESUME / MENU), in the tutorial (RESUME / SKIP / MENU)
 //   MatchEnd  -> end panel (MENU; the match also returns by itself)
 // Panels are world-fixed in front of the seat, never head-locked.
 public class HandMenu : MonoBehaviour
@@ -15,6 +15,7 @@ public class HandMenu : MonoBehaviour
     [Header("Panels")]
     [SerializeField] private GameObject mainPanel;
     [SerializeField] private GameObject pausePanel;
+    [SerializeField] private GameObject tutorialPausePanel;
     [SerializeField] private GameObject matchEndPanel;
 
     private void LateUpdate()
@@ -23,9 +24,11 @@ public class HandMenu : MonoBehaviour
         bool paused = m != null && m.IsPaused;
         bool main = m != null && !paused && m.Phase == MatchPhase.Menu;
         bool end = m != null && !paused && m.Phase == MatchPhase.MatchEnd;
+        bool tutorial = m != null && m.Phase == MatchPhase.Tutorial;
 
         SetActive(mainPanel, main);
-        SetActive(pausePanel, paused);
+        SetActive(pausePanel, paused && !tutorial);
+        SetActive(tutorialPausePanel, paused && tutorial);
         SetActive(matchEndPanel, end);
         if (pointer != null) pointer.enabled = main || paused || end;
     }

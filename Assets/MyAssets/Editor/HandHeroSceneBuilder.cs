@@ -51,6 +51,8 @@ namespace HandHero.EditorTools
             Material chargeMat = UnlitMaterial("ChargeOrb", new Color(0.55f, 0.95f, 1f));
             Material beamMat = BeamMaterial("Beam");
             Material buttonMat = UnlitMaterial("MenuButton", new Color(0.15f, 0.2f, 0.3f));
+            Material tutorialTargetMat = LitMaterial("TutorialTarget", new Color(0.3f, 1f, 0.45f));
+            Material ghostMat = UnlitMaterial("GhostHand", new Color(0.85f, 0.95f, 1f));
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -162,7 +164,8 @@ namespace HandHero.EditorTools
             var director = match.AddComponent<MatchDirector>();
             SetRefs(director, ("playerHealth", flying.GetComponent<HeroHealth>()),
                 ("opponentHealth", botFlying.GetComponent<HeroHealth>()));
-            SetArray(director, "fightOnly", debugInput, xrInput, botInput);
+            SetArray(director, "fightOnly", debugInput, xrInput);
+            SetArray(director, "opponentOnly", botInput);
 
             Vector3 seat = camGo.transform.position;
             TextMeshPro scoreLine = WorldText("HUD_Score", match.transform, seat + new Vector3(0f, 0.9f, 4f), 1.5f);
@@ -187,16 +190,25 @@ namespace HandHero.EditorTools
             // Panels sit 2.5 m ahead, about 11 degrees below eye level, under the banner.
             Vector3 panelPos = seat + new Vector3(0f, -0.5f, 2.5f);
             GameObject mainPanel = Panel("MainPanel", menuGo.transform, panelPos);
-            MenuButton(mainPanel.transform, "START", MatchDirector.MenuAction.StartMatch, 0f, director, buttonMat);
+            MenuButton(mainPanel.transform, "START", MatchDirector.MenuAction.StartMatch, -0.5f, director, buttonMat);
+            MenuButton(mainPanel.transform, "TUTORIAL", MatchDirector.MenuAction.StartWithTutorial, 0.5f, director,
+                buttonMat);
             GameObject pausePanel = Panel("PausePanel", menuGo.transform, panelPos);
             MenuButton(pausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.5f, director, buttonMat);
             MenuButton(pausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.5f, director, buttonMat);
+            GameObject tutorialPausePanel = Panel("TutorialPausePanel", menuGo.transform, panelPos);
+            MenuButton(tutorialPausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.95f, director,
+                buttonMat);
+            MenuButton(tutorialPausePanel.transform, "SKIP", MatchDirector.MenuAction.SkipTutorial, 0f, director,
+                buttonMat);
+            MenuButton(tutorialPausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.95f, director,
+                buttonMat);
             GameObject endPanel = Panel("MatchEndPanel", menuGo.transform, panelPos);
             MenuButton(endPanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0f, director, buttonMat);
 
             var handMenu = menuGo.AddComponent<HandMenu>();
             SetRefs(handMenu, ("director", director), ("pointer", pointer), ("mainPanel", mainPanel),
-                ("pausePanel", pausePanel), ("matchEndPanel", endPanel));
+                ("pausePanel", pausePanel), ("tutorialPausePanel", tutorialPausePanel), ("matchEndPanel", endPanel));
 
             // Wrist pause button: left palm toward the face, pinch that hand.
             var wristButton = new GameObject("WristButton");
@@ -210,6 +222,56 @@ namespace HandHero.EditorTools
             var wrist = match.AddComponent<WristMenu>();
             SetRefs(wrist, ("director", director), ("tracker", tracker), ("head", camGo.transform),
                 ("button", wristButton.transform), ("label", wristLabel));
+
+            // 30-second tutorial (T8): ring, practice target, practice telegraph beam, prompt, ghost hand.
+            var tutorialGo = new GameObject("Tutorial");
+            tutorialGo.transform.SetParent(match.transform, false);
+            var tutorialRoot = new GameObject("TutorialObjects");
+            tutorialRoot.transform.SetParent(tutorialGo.transform, false);
+
+            const float ringRadius = 2f;
+            var ringGoal = new GameObject("GoalRing");
+            ringGoal.transform.SetParent(tutorialRoot.transform, false);
+            ringGoal.transform.position = ArenaCenter + new Vector3(6f, 2f, -5f);
+            LineRenderer ringLine = ringGoal.AddComponent<LineRenderer>();
+            ringLine.sharedMaterial = beamMat;
+            ringLine.useWorldSpace = false;
+            ringLine.loop = true;
+            ringLine.widthMultiplier = 0.08f;
+            ringLine.startColor = ringLine.endColor = new Color(0.4f, 1f, 0.5f, 0.9f);
+            const int ringSegments = 48;
+            ringLine.positionCount = ringSegments;
+            for (int i = 0; i < ringSegments; i++)
+            {
+                float a = i * Mathf.PI * 2f / ringSegments;
+                ringLine.SetPosition(i, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * ringRadius);
+            }
+
+            GameObject practiceTarget = Primitive(PrimitiveType.Sphere, "PracticeTarget", tutorialRoot.transform,
+                Vector3.zero, Vector3.one * 2f, tutorialTargetMat, keepCollider: true);
+            practiceTarget.transform.position = ArenaCenter + new Vector3(-6f, 1f, 2f);
+            var practiceReceiver = practiceTarget.AddComponent<BeamHitReceiver>();
+
+            var telegraphOrigin = new GameObject("PracticeBeamOrigin");
+            telegraphOrigin.transform.SetParent(tutorialRoot.transform, false);
+            telegraphOrigin.transform.position = ArenaCenter + new Vector3(0f, 6f, 14f);
+            var practiceBeam = telegraphOrigin.AddComponent<LineRenderer>();
+            practiceBeam.sharedMaterial = beamMat;
+            practiceBeam.enabled = false;
+
+            TextMeshPro tutorialPrompt = WorldText("Prompt", tutorialRoot.transform, seat + new Vector3(0f, 0.6f, 4f), 2.5f);
+            GameObject ghost = Primitive(PrimitiveType.Sphere, "GhostHand", tutorialRoot.transform,
+                seat + new Vector3(-0.2f, -0.35f, 0.4f), Vector3.one * 0.05f, ghostMat);
+            tutorialRoot.SetActive(false);
+
+            var tutorial = tutorialGo.AddComponent<TutorialDirector>();
+            SetRefs(tutorial, ("director", director), ("playerHero", flying), ("playerInput", debugInput),
+                ("head", camGo.transform), ("tutorialRoot", tutorialRoot), ("ring", ringGoal.transform),
+                ("target", practiceReceiver), ("telegraphOrigin", telegraphOrigin.transform),
+                ("telegraph", practiceBeam), ("prompt", tutorialPrompt), ("ghostHand", ghost.transform));
+            var tutorialSo = new SerializedObject(tutorial);
+            tutorialSo.FindProperty("ringRadius").floatValue = ringRadius;
+            tutorialSo.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.SaveScene(scene, SandboxScenePath);
             AssetDatabase.SaveAssets();

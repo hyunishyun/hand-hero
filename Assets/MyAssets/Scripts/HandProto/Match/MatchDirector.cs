@@ -16,20 +16,25 @@ public class MatchDirector : MonoBehaviour
 {
     public enum MenuAction
     {
-        StartMatch,
+        StartMatch,        // runs the tutorial first until it has been completed or skipped once
         StartWithTutorial,
         Resume,
         TogglePause,
         ReturnToMenu,
+        SkipTutorial,
     }
+
+    private const string TutorialSeenKey = "HandHero.TutorialSeen";
 
     [Header("Heroes")]
     [SerializeField] private HeroHealth playerHealth;
     [SerializeField] private HeroHealth opponentHealth;
 
     [Header("Control gating")]
-    [Tooltip("Enabled only while fighting (and in the tutorial): input sources, the bot, ability controllers")]
+    [Tooltip("Enabled only while fighting (and in the tutorial): the player's input sources")]
     [SerializeField] private Behaviour[] fightOnly;
+    [Tooltip("Enabled only while fighting, not in the tutorial: the bot")]
+    [SerializeField] private Behaviour[] opponentOnly;
 
     [Header("Rules")]
     [SerializeField] private MatchParams rules = MatchParams.Default;
@@ -41,7 +46,7 @@ public class MatchDirector : MonoBehaviour
     [SerializeField] private bool pauseOnHeadsetRemoved = true;
 
     [Header("Debug keys (editor / desktop)")]
-    [Tooltip("Enter = start from the menu or skip the result screen, Esc = back to the menu, P = pause/resume")]
+    [Tooltip("Enter = start from the menu / skip the tutorial or result screen, T = tutorial, Esc = back to the menu, P = pause/resume")]
     [SerializeField] private bool debugKeys = true;
 
     private MatchStateMachine _match;
@@ -74,7 +79,18 @@ public class MatchDirector : MonoBehaviour
 
     // Menu entry points: hand menu buttons, the wrist button and debug keys.
     public void StartMatch(bool withTutorial = false) => _match.StartMatch(withTutorial);
-    public void CompleteTutorial() => _match.CompleteTutorial();
+
+    // Completing or skipping both count as having seen the tutorial.
+    public void CompleteTutorial()
+    {
+        if (_match.Phase != MatchPhase.Tutorial) return;
+        _match.Resume(); // skipped from the pause panel
+        _match.CompleteTutorial();
+        PlayerPrefs.SetInt(TutorialSeenKey, 1);
+        PlayerPrefs.Save();
+    }
+
+    public static bool TutorialSeen => PlayerPrefs.GetInt(TutorialSeenKey, 0) == 1;
     public void ReturnToMenu() => _match.ReturnToMenu();
     public void Pause() => _match.Pause();
     public void Resume() => _match.Resume();
@@ -84,11 +100,12 @@ public class MatchDirector : MonoBehaviour
     {
         switch (action)
         {
-            case MenuAction.StartMatch: StartMatch(); break;
+            case MenuAction.StartMatch: StartMatch(withTutorial: !TutorialSeen); break;
             case MenuAction.StartWithTutorial: StartMatch(withTutorial: true); break;
             case MenuAction.Resume: Resume(); break;
             case MenuAction.TogglePause: TogglePause(); break;
             case MenuAction.ReturnToMenu: ReturnToMenu(); break;
+            case MenuAction.SkipTutorial: CompleteTutorial(); break;
         }
     }
 
@@ -119,7 +136,12 @@ public class MatchDirector : MonoBehaviour
         if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
         {
             if (_match.Phase == MatchPhase.Menu) StartMatch();
+            else if (_match.Phase == MatchPhase.Tutorial) CompleteTutorial();
             else if (_match.Phase == MatchPhase.MatchEnd) ReturnToMenu();
+        }
+        else if (keyboard.tKey.wasPressedThisFrame && _match.Phase == MatchPhase.Menu)
+        {
+            StartMatch(withTutorial: true);
         }
         else if (keyboard.escapeKey.wasPressedThisFrame && _match.Phase != MatchPhase.Menu)
         {
@@ -164,19 +186,27 @@ public class MatchDirector : MonoBehaviour
 
     private void ApplyControlGating()
     {
-        bool acting = _match.Phase == MatchPhase.Fight || _match.Phase == MatchPhase.Tutorial;
-        SetFightControls(acting && !_match.IsPaused);
+        bool fighting = _match.Phase == MatchPhase.Fight && !_match.IsPaused;
+        bool practicing = _match.Phase == MatchPhase.Tutorial && !_match.IsPaused;
+        SetEnabled(fightOnly, fighting || practicing);
+        SetEnabled(opponentOnly, fighting);
     }
 
     private void OnPlayerDied() => _match.ReportKO(MatchSide.Player);
     private void OnOpponentDied() => _match.ReportKO(MatchSide.Opponent);
 
-    // Disabling an input source zeroes its HandInputData, so the puppeteer lets
-    // go and the hero glides to a stop; the bot brain resets when re-enabled.
     private void SetFightControls(bool on)
     {
-        if (fightOnly == null) return;
-        foreach (Behaviour b in fightOnly)
+        SetEnabled(fightOnly, on);
+        SetEnabled(opponentOnly, on);
+    }
+
+    // Disabling an input source zeroes its HandInputData, so the puppeteer lets
+    // go and the hero glides to a stop; the bot brain resets when re-enabled.
+    private static void SetEnabled(Behaviour[] behaviours, bool on)
+    {
+        if (behaviours == null) return;
+        foreach (Behaviour b in behaviours)
             if (b != null) b.enabled = on;
     }
 
