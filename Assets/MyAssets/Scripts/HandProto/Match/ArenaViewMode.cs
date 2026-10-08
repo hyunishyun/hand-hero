@@ -33,8 +33,9 @@ public class ArenaViewMode : MonoBehaviour
     [SerializeField] private TabletopParams tabletop = TabletopParams.Default;
 
     [Header("Behaviour")]
-    [Tooltip("Start in the mode chosen last time (the first launch is always the VR arena)")]
-    [SerializeField] private bool rememberChoice = true;
+    [Tooltip("Start in the mode chosen last time. Off (default): every launch starts in the VR arena, " +
+             "so an accidental MR TABLE press never sticks across runs")]
+    [SerializeField] private bool rememberChoice = false;
     [SerializeField] private string toTabletopText = "MR TABLE";
     [SerializeField] private string toArenaText = "VR ARENA";
 

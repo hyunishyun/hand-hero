@@ -63,12 +63,7 @@ public class HandMenuPointer : MonoBehaviour
 
         HandMenuButton hit = null;
         float distance = idleRayLength * _scale;
-        if (hasRay && Physics.Raycast(r, out RaycastHit info, maxDistance * _scale, ~0,
-                QueryTriggerInteraction.Collide))
-        {
-            hit = info.collider.GetComponent<HandMenuButton>();
-            if (hit != null) distance = info.distance;
-        }
+        if (hasRay) hit = NearestButton(r, maxDistance * _scale, ref distance);
 
         Hover(hit);
         if (pressed && hit != null) hit.Press();
@@ -86,6 +81,28 @@ public class HandMenuPointer : MonoBehaviour
                 ray.SetPosition(1, r.GetPoint(distance));
             }
         }
+    }
+
+    private static readonly RaycastHit[] HitBuffer = new RaycastHit[32];
+
+    // Nearest menu button along the ray, looking through everything else: in the
+    // tabletop view the miniature arena sits between the seat and the menu, and a
+    // plain first-hit raycast stopped on its walls and heroes.
+    private static HandMenuButton NearestButton(Ray r, float maxDistance, ref float distance)
+    {
+        int count = Physics.RaycastNonAlloc(r, HitBuffer, maxDistance, ~0, QueryTriggerInteraction.Collide);
+        HandMenuButton best = null;
+        float bestDistance = float.MaxValue;
+        for (int i = 0; i < count; i++)
+        {
+            if (HitBuffer[i].distance >= bestDistance) continue;
+            var button = HitBuffer[i].collider.GetComponent<HandMenuButton>();
+            if (button == null) continue;
+            best = button;
+            bestDistance = HitBuffer[i].distance;
+        }
+        if (best != null) distance = bestDistance;
+        return best;
     }
 
     private bool TryGetRay(HandGestureTracker t, out Ray r, out bool pressed, out bool fromHand)
