@@ -323,7 +323,7 @@ namespace HandHero.EditorTools
                 new Vector3(0.12f, 0.05f, 0.005f), buttonMat);
             TextMeshPro wristLabel = WorldText("Label", wristButton.transform, Vector3.zero, 0.25f);
             wristLabel.rectTransform.sizeDelta = new Vector2(0.12f, 0.05f);
-            wristLabel.transform.localPosition = new Vector3(0f, 0f, -0.004f);
+            PlaceLocal(wristLabel, new Vector3(0f, 0f, -0.004f));
             wristButton.SetActive(false);
             var wrist = match.AddComponent<WristMenu>();
             SetRefs(wrist, ("director", director), ("tracker", tracker), ("head", camGo.transform),
@@ -525,7 +525,7 @@ namespace HandHero.EditorTools
             GameObject bg = Primitive(PrimitiveType.Cube, "Background", go.transform, Vector3.zero, size, mat);
             TextMeshPro label = WorldText("Label", go.transform, Vector3.zero, 1.6f);
             label.rectTransform.sizeDelta = new Vector2(size.x, size.y);
-            label.transform.localPosition = new Vector3(0f, 0f, -size.z * 0.5f - 0.005f);
+            PlaceLocal(label, new Vector3(0f, 0f, -size.z * 0.5f - 0.005f));
             label.text = text;
 
             var button = go.AddComponent<HandMenuButton>();
@@ -613,6 +613,16 @@ namespace HandHero.EditorTools
             text.color = Color.white;
             text.text = "";
             return text;
+        }
+
+        // A RectTransform under a plain Transform serializes anchoredPosition separately
+        // and applies it on load; setting only localPosition left the menu labels at
+        // their creation point (world origin, on the floor ahead), all stacked together.
+        private static void PlaceLocal(TextMeshPro text, Vector3 localPosition)
+        {
+            RectTransform rt = text.rectTransform;
+            rt.anchoredPosition = new Vector2(localPosition.x, localPosition.y);
+            rt.localPosition = localPosition;
         }
 
         private static void SetArray(Object target, string field, params Object[] values)
