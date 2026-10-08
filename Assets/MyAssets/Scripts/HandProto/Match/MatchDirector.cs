@@ -23,6 +23,7 @@ public class MatchDirector : MonoBehaviour
         ReturnToMenu,
         SkipTutorial,
         ToggleViewMode,    // VR arena <-> passthrough tabletop, main menu only (T10)
+        ToggleAimMode,     // ASSIST <-> CURSOR aim, main menu only
     }
 
     private const string TutorialSeenKey = "HandHero.TutorialSeen";
@@ -43,6 +44,8 @@ public class MatchDirector : MonoBehaviour
     [Header("View")]
     [Tooltip("Optional. VR arena / passthrough tabletop switch (Arena_Main only)")]
     [SerializeField] private ArenaViewMode viewMode;
+    [Tooltip("Optional. Player aim mode (ASSIST / CURSOR)")]
+    [SerializeField] private AimModeSetting aimMode;
 
     [Header("Auto pause")]
     [Tooltip("Pause when the app loses focus or is suspended (system menu, headset off, Meta button)")]
@@ -51,7 +54,7 @@ public class MatchDirector : MonoBehaviour
     [SerializeField] private bool pauseOnHeadsetRemoved = true;
 
     [Header("Debug keys (editor / desktop)")]
-    [Tooltip("Enter = start from the menu / skip the tutorial or result screen, T = tutorial, Esc = back to the menu, P = pause/resume")]
+    [Tooltip("Enter = start from the menu / skip the tutorial or result screen, T = tutorial, M = aim mode (menu), Esc = back to the menu, P = pause/resume")]
     [SerializeField] private bool debugKeys = true;
 
     private MatchStateMachine _match;
@@ -112,7 +115,14 @@ public class MatchDirector : MonoBehaviour
             case MenuAction.ReturnToMenu: ReturnToMenu(); break;
             case MenuAction.SkipTutorial: CompleteTutorial(); break;
             case MenuAction.ToggleViewMode: ToggleViewMode(); break;
+            case MenuAction.ToggleAimMode: ToggleAimMode(); break;
         }
+    }
+
+    // Like the view, the aim mode only changes in the main menu.
+    public void ToggleAimMode()
+    {
+        if (aimMode != null && _match.Phase == MatchPhase.Menu) aimMode.Toggle();
     }
 
     // The view only changes in the main menu, never mid-match (no view jumps while playing).
@@ -154,6 +164,10 @@ public class MatchDirector : MonoBehaviour
         else if (keyboard.tKey.wasPressedThisFrame && _match.Phase == MatchPhase.Menu)
         {
             StartMatch(withTutorial: true);
+        }
+        else if (keyboard.mKey.wasPressedThisFrame)
+        {
+            ToggleAimMode();
         }
         else if (keyboard.escapeKey.wasPressedThisFrame && _match.Phase != MatchPhase.Menu)
         {

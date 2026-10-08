@@ -31,6 +31,28 @@ public class PointingBeamController : MonoBehaviour
     [Tooltip("Optional. Reticle renderer, tinted while snapped")]
     [SerializeField] private Renderer reticleRenderer;
 
+    [Header("Aim Mode")]
+    [Tooltip("Player's ASSIST / CURSOR setting. Empty = always ASSIST (the bot)")]
+    [SerializeField] private AimModeSetting aimModeSetting;
+    [Tooltip("Optional. This hero's health: the cursor returns to the arena center on (re)spawn and round start")]
+    [SerializeField] private HeroHealth health;
+    [Tooltip("Shown only in ASSIST mode (the reticle)")]
+    [SerializeField] private GameObject[] assistOnlyVisuals;
+    [Tooltip("Shown only in CURSOR mode (the marker and its floor disc)")]
+    [SerializeField] private GameObject[] cursorOnlyVisuals;
+
+    [Header("Cursor (CURSOR mode: right fist drags a 3D aim marker)")]
+    [SerializeField] private Transform cursorMarker;
+    [Tooltip("Optional. Marker renderer, tinted while snapped")]
+    [SerializeField] private Renderer cursorRenderer;
+    [Tooltip("World meters the marker moves per meter of right-hand movement (same idea as the puppeteer's positionScale)")]
+    [SerializeField] private float cursorPositionScale = 60f;
+    [Tooltip("The aim snaps to a target this close to the marker (meters); 0 = off")]
+    [SerializeField] private float cursorAssistRadius = 2.5f;
+    [Tooltip("The snap holds until the target is this far from the marker (meters, larger = no flicker)")]
+    [SerializeField] private float cursorAssistReleaseRadius = 3.5f;
+    [SerializeField] private Color cursorColor = new Color(1f, 0.6f, 0.15f);
+
     [Header("Firing")]
     [SerializeField] private float fireCooldown = 0.35f;
     [Tooltip("Health removed from a hero (HeroHealth) per beam hit")]
@@ -77,10 +99,33 @@ public class PointingBeamController : MonoBehaviour
     private MaterialPropertyBlock _tintBlock;
     private Color _reticleIdleColor = Color.white;
     private bool _reticleColorRead;
+    private readonly AimCursorModel _cursor = new AimCursorModel();
+    private bool _visualsApplied;
+    private AimMode _visualsMode;
 
     // Where the hero fires: the reticle point (ASSIST) or the cursor marker (CURSOR).
     public Vector3 AimPoint => _aimPoint;
     public AimAssistTarget AssistTarget => _assistTarget;
+    public AimMode Mode => aimModeSetting != null ? aimModeSetting.Mode : AimMode.Assist;
+
+    // Cursor back to the arena center, assist lock dropped.
+    public void ResetAim()
+    {
+        _assistTarget = null;
+        if (character == null) return;
+        _cursor.Reset(character.Bounds.Center);
+        if (Mode == AimMode.Cursor) _aimPoint = _cursor.Position;
+    }
+
+    private void Start()
+    {
+        ResetAim();
+    }
+
+    private void OnEnable()
+    {
+        if (health != null) health.Respawned += ResetAim;
+    }
 
     private void Awake()
     {
@@ -119,9 +164,13 @@ public class PointingBeamController : MonoBehaviour
 
         UpdateBeamTimer();
 
-        // A lost aiming hand arrives as HasAim = false: the reticle freezes at
-        // the last aim point and normal shots don't fire.
-        if (input.HasAim) UpdateAim(input.AimRay);
+        AimMode mode = Mode;
+        ApplyModeVisuals(mode);
+
+        // CURSOR: the aim-hand fist drags the marker. ASSIST: a lost aiming hand
+        // arrives as HasAim = false and the reticle freezes at the last aim point.
+        if (mode == AimMode.Cursor) UpdateCursor(input);
+        else if (input.HasAim) UpdateAim(input.AimRay);
 
         // Charge shot: a held pinch charges, release fires. Losing the aim hand or
         // a switched-off source (pause) cancels without firing (ChargeInputRule).
@@ -146,6 +195,7 @@ public class PointingBeamController : MonoBehaviour
 
     private void OnDisable()
     {
+        if (health != null) health.Respawned -= ResetAim;
         _charge.Cancel();
         UpdateChargeIndicator(default);
         if (character != null) character.SetChargeSpeedMultiplier(1f);
@@ -193,6 +243,41 @@ public class PointingBeamController : MonoBehaviour
             float dist = Vector3.Distance(Camera.main != null ? Camera.main.transform.position : ray.origin, _aimPoint);
             reticle.localScale = Vector3.one * Mathf.Max(0.1f, dist * 0.02f);
         }
+    }
+
+    private void UpdateCursor(HandInputData input)
+    {
+        Vector3 cursor = _cursor.Step(input.AimClutchHeld, input.AimClutchDelta, cursorPositionScale, character.Bounds);
+        if (cursorMarker != null) cursorMarker.position = cursor;
+
+        CollectCandidates();
+        int current = _assistTarget != null ? _candidateTargets.IndexOf(_assistTarget) : -1;
+        int pick = AimAssist.SelectByRadius(cursor, _candidatePositions, current, cursorAssistRadius,
+            cursorAssistReleaseRadius);
+        _assistTarget = pick >= 0 ? _candidateTargets[pick] : null;
+        Tint(cursorRenderer, _assistTarget != null ? lockedReticleColor : cursorColor);
+
+        // The clutch already smooths the marker; a snapped aim sits on the target.
+        _aimPoint = pick >= 0 ? _candidatePositions[pick] : cursor;
+    }
+
+    private void ApplyModeVisuals(AimMode mode)
+    {
+        if (_visualsApplied && _visualsMode == mode) return;
+        _visualsApplied = true;
+        _visualsMode = mode;
+        _assistTarget = null; // a lock never carries over between modes
+
+        SetActive(assistOnlyVisuals, mode == AimMode.Assist);
+        SetActive(cursorOnlyVisuals, mode == AimMode.Cursor);
+        if (mode == AimMode.Cursor) _aimPoint = _cursor.Position;
+    }
+
+    private static void SetActive(GameObject[] objects, bool on)
+    {
+        if (objects == null) return;
+        foreach (GameObject go in objects)
+            if (go != null && go.activeSelf != on) go.SetActive(on);
     }
 
     // Targetable heroes and practice targets, excluding this controller's own hero.
