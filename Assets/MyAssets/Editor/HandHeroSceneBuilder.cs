@@ -187,6 +187,17 @@ namespace HandHero.EditorTools
                 ("inputSource", playerInput), ("chargeIndicator", chargeOrb.transform),
                 ("hitEffectPrefab", impactPrefab), ("audioSource", flying.GetComponent<AudioSource>()),
                 ("health", flying.GetComponent<HeroHealth>()), ("cursorMarker", cursorMarker.transform));
+            // Lock-on ring around the target the player's aim snapped to (the bot has none).
+            var lockOnGo = new GameObject("LockOnRing");
+            var lockOnLine = lockOnGo.AddComponent<LineRenderer>();
+            lockOnLine.sharedMaterial = beamMat;
+            lockOnLine.useWorldSpace = false;
+            lockOnLine.loop = true;
+            lockOnLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lockOnLine.enabled = false;
+            var lockOnRing = lockOnGo.AddComponent<LockOnRing>();
+            SetRefs(lockOnRing, ("line", lockOnLine));
+            SetRefs(pointing, ("lockOnRing", lockOnRing));
             SetArray(pointing, "assistOnlyVisuals", reticle);
             SetArray(pointing, "cursorOnlyVisuals", cursorMarker, cursorGround);
 

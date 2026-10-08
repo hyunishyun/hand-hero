@@ -158,6 +158,8 @@ public class TutorialDirector : MonoBehaviour
         UpdateGhostHand(step);
     }
 
+    private bool CursorMode => aimModeSetting != null && aimModeSetting.Mode == AimMode.Cursor;
+
     private string PromptText(TutorialStep step)
     {
         if (_sequencer.IsCelebrating) return "NICE!";
@@ -168,10 +170,11 @@ public class TutorialDirector : MonoBehaviour
             case TutorialStep.DragToRing: return "Keep the fist and drag your hero into the ring";
             case TutorialStep.Glide: return "Open your hand - let it glide";
             case TutorialStep.Aim:
-                return aimModeSetting != null && aimModeSetting.Mode == AimMode.Cursor
-                    ? "Make a RIGHT fist and drag the orange marker onto the target"
+                return CursorMode
+                    ? "Grip with your RIGHT middle, ring and little fingers and drag the orange marker onto the target"
                     : "Point at the target with your RIGHT hand";
-            case TutorialStep.Shoot: return "Pinch to shoot";
+            case TutorialStep.Shoot:
+                return CursorMode ? "Pull your RIGHT index finger to shoot" : "Pinch to shoot";
             case TutorialStep.Dodge:
                 return Time.time - _lastShotHitTime < 1.5f
                     ? "Hit! Drag away when the line turns red"
