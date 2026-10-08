@@ -65,6 +65,7 @@ namespace HandHero.Core
         }
 
         public event Action<MatchPhase> PhaseChanged;
+        public event Action<bool> PausedChanged;
 
         public MatchParams Params { get; set; }
         public MatchPhase Phase { get; private set; }
@@ -73,6 +74,9 @@ namespace HandHero.Core
         public int OpponentWins { get; private set; }
         public MatchSide RoundWinner { get; private set; }
         public MatchSide MatchWinner { get; private set; }
+
+        // Paused: timers stop and KOs are ignored until Resume (T7).
+        public bool IsPaused { get; private set; }
 
         // Seconds spent in the current phase.
         public float PhaseTime => _phaseTime;
@@ -105,19 +109,38 @@ namespace HandHero.Core
         // A hero was knocked out. Only the first KO of a fight counts.
         public bool ReportKO(MatchSide loser)
         {
-            if (Phase != MatchPhase.Fight || loser == MatchSide.None) return false;
+            if (Phase != MatchPhase.Fight || IsPaused || loser == MatchSide.None) return false;
             EndRound(loser == MatchSide.Player ? MatchSide.Opponent : MatchSide.Player);
             return true;
         }
 
         public void ReturnToMenu()
         {
+            SetPaused(false);
             Enter(MatchPhase.Menu);
         }
+
+        // Pausing only makes sense once a match is under way. Returns true if the state changed.
+        public bool Pause()
+        {
+            if (IsPaused || Phase == MatchPhase.Boot || Phase == MatchPhase.Menu) return false;
+            SetPaused(true);
+            return true;
+        }
+
+        public bool Resume()
+        {
+            if (!IsPaused) return false;
+            SetPaused(false);
+            return true;
+        }
+
+        public bool TogglePause() => IsPaused ? Resume() : Pause();
 
         // Health values are 0..1 and only matter at time-up.
         public void Tick(float dt, float playerHealth01, float opponentHealth01)
         {
+            if (IsPaused) return;
             _phaseTime += dt;
 
             switch (Phase)
@@ -192,6 +215,13 @@ namespace HandHero.Core
                 case MatchPhase.MatchEnd: return Params.MatchEndTime;
                 default: return 0f;
             }
+        }
+
+        private void SetPaused(bool paused)
+        {
+            if (IsPaused == paused) return;
+            IsPaused = paused;
+            PausedChanged?.Invoke(paused);
         }
 
         private void Enter(MatchPhase phase)

@@ -50,6 +50,7 @@ namespace HandHero.EditorTools
             Material barMat = UnlitMaterial("HealthBar", new Color(0.3f, 1f, 0.4f));
             Material chargeMat = UnlitMaterial("ChargeOrb", new Color(0.55f, 0.95f, 1f));
             Material beamMat = BeamMaterial("Beam");
+            Material buttonMat = UnlitMaterial("MenuButton", new Color(0.15f, 0.2f, 0.3f));
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -169,6 +170,47 @@ namespace HandHero.EditorTools
             var hud = match.AddComponent<MatchHud>();
             SetRefs(hud, ("director", director), ("scoreLine", scoreLine), ("banner", banner));
 
+            // Hands-only menus (T7): point with the right hand + pinch; mouse stands in without a headset.
+            var pointerRayGo = new GameObject("MenuPointerRay");
+            var pointerRay = pointerRayGo.AddComponent<LineRenderer>();
+            pointerRay.sharedMaterial = beamMat;
+            pointerRay.widthMultiplier = 0.01f;
+            pointerRay.startColor = new Color(1f, 1f, 1f, 0.15f);
+            pointerRay.endColor = new Color(1f, 1f, 1f, 0.8f);
+            pointerRay.enabled = false;
+
+            var menuGo = new GameObject("HandMenu");
+            menuGo.transform.SetParent(match.transform, false);
+            var pointer = menuGo.AddComponent<HandMenuPointer>();
+            SetRefs(pointer, ("tracker", tracker), ("viewCamera", cam), ("ray", pointerRay));
+
+            // Panels sit 2.5 m ahead, about 11 degrees below eye level, under the banner.
+            Vector3 panelPos = seat + new Vector3(0f, -0.5f, 2.5f);
+            GameObject mainPanel = Panel("MainPanel", menuGo.transform, panelPos);
+            MenuButton(mainPanel.transform, "START", MatchDirector.MenuAction.StartMatch, 0f, director, buttonMat);
+            GameObject pausePanel = Panel("PausePanel", menuGo.transform, panelPos);
+            MenuButton(pausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.5f, director, buttonMat);
+            MenuButton(pausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.5f, director, buttonMat);
+            GameObject endPanel = Panel("MatchEndPanel", menuGo.transform, panelPos);
+            MenuButton(endPanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0f, director, buttonMat);
+
+            var handMenu = menuGo.AddComponent<HandMenu>();
+            SetRefs(handMenu, ("director", director), ("pointer", pointer), ("mainPanel", mainPanel),
+                ("pausePanel", pausePanel), ("matchEndPanel", endPanel));
+
+            // Wrist pause button: left palm toward the face, pinch that hand.
+            var wristButton = new GameObject("WristButton");
+            wristButton.transform.SetParent(match.transform, false);
+            Primitive(PrimitiveType.Cube, "Background", wristButton.transform, Vector3.zero,
+                new Vector3(0.12f, 0.05f, 0.005f), buttonMat);
+            TextMeshPro wristLabel = WorldText("Label", wristButton.transform, Vector3.zero, 0.25f);
+            wristLabel.rectTransform.sizeDelta = new Vector2(0.12f, 0.05f);
+            wristLabel.transform.localPosition = new Vector3(0f, 0f, -0.004f);
+            wristButton.SetActive(false);
+            var wrist = match.AddComponent<WristMenu>();
+            SetRefs(wrist, ("director", director), ("tracker", tracker), ("head", camGo.transform),
+                ("button", wristButton.transform), ("label", wristLabel));
+
             EditorSceneManager.SaveScene(scene, SandboxScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log($"[HandHeroSceneBuilder] Built {SandboxScenePath}");
@@ -203,6 +245,42 @@ namespace HandHero.EditorTools
             SetRefs(health, ("character", flying), ("hitReceiver", hero.GetComponent<BeamHitReceiver>()),
                 ("healthBarFill", bar.transform));
             return flying;
+        }
+
+        private static GameObject Panel(string name, Transform parent, Vector3 worldPos)
+        {
+            var panel = new GameObject(name);
+            panel.transform.SetParent(parent, false);
+            panel.transform.position = worldPos;
+            panel.SetActive(false);
+            return panel;
+        }
+
+        // Big pinch target (0.8 x 0.32 m at 2.5 m, about 18 x 7 degrees). The trigger
+        // collider is on the root so the hover scale applies to the label too.
+        private static HandMenuButton MenuButton(Transform panel, string text, MatchDirector.MenuAction action,
+            float x, MatchDirector director, Material mat)
+        {
+            var size = new Vector3(0.8f, 0.32f, 0.04f);
+            var go = new GameObject($"Button_{text}");
+            go.transform.SetParent(panel, false);
+            go.transform.localPosition = new Vector3(x, 0f, 0f);
+            var box = go.AddComponent<BoxCollider>();
+            box.size = size;
+            box.isTrigger = true;
+
+            GameObject bg = Primitive(PrimitiveType.Cube, "Background", go.transform, Vector3.zero, size, mat);
+            TextMeshPro label = WorldText("Label", go.transform, Vector3.zero, 1.6f);
+            label.rectTransform.sizeDelta = new Vector2(size.x, size.y);
+            label.transform.localPosition = new Vector3(0f, 0f, -size.z * 0.5f - 0.005f);
+            label.text = text;
+
+            var button = go.AddComponent<HandMenuButton>();
+            SetRefs(button, ("director", director), ("background", bg.GetComponent<Renderer>()), ("label", label));
+            var so = new SerializedObject(button);
+            so.FindProperty("action").enumValueIndex = (int)action;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            return button;
         }
 
         // Kept if it already exists so tuning done in the editor survives rebuilds.

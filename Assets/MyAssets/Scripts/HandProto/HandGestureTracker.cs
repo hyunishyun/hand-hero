@@ -123,8 +123,9 @@ public class HandGestureTracker : MonoBehaviour
         Vector3 palmWorld = xrOrigin != null ? xrOrigin.TransformPoint(palmPose.position) : palmPose.position;
         Quaternion palmRotWorld = xrOrigin != null ? xrOrigin.rotation * palmPose.rotation : palmPose.rotation;
 
-        float posT = 1f - Mathf.Exp(-positionSmoothing * Time.deltaTime);
-        float valT = 1f - Mathf.Exp(-valueSmoothing * Time.deltaTime);
+        // Unscaled: hands (and the pause menu) keep working while the game is paused (timeScale 0).
+        float posT = 1f - Mathf.Exp(-positionSmoothing * Time.unscaledDeltaTime);
+        float valT = 1f - Mathf.Exp(-valueSmoothing * Time.unscaledDeltaTime);
 
         state.PalmPosition = Vector3.Lerp(state.PalmPosition, palmWorld, posT);
         state.PalmRotation = Quaternion.Slerp(state.PalmRotation, palmRotWorld, posT);

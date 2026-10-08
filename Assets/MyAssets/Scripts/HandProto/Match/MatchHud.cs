@@ -49,10 +49,12 @@ public class MatchHud : MonoBehaviour
 
     private string BannerText(MatchStateMachine m)
     {
+        if (m.IsPaused) return "PAUSED";
+
         switch (m.Phase)
         {
             case MatchPhase.Menu:
-                return "HAND HERO\n<size=50%>Enter: start</size>";
+                return "HAND HERO\n<size=50%>point and pinch START</size>";
             case MatchPhase.Countdown:
                 return $"ROUND {m.Round}\n{Mathf.CeilToInt(m.PhaseRemaining)}";
             case MatchPhase.Fight:

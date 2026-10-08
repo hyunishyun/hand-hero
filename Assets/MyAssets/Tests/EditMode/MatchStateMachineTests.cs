@@ -214,5 +214,96 @@ namespace HandHero.Tests
             m.Tick(1f, 1f, 1f);
             Assert.AreEqual(P.CountdownTime - 1f, m.PhaseRemaining, 1e-4f);
         }
+
+        // T7: pause / resume.
+
+        [Test]
+        public void Pause_FreezesTheRoundTimer()
+        {
+            var m = InFight();
+            Run(m, 10f);
+            float remaining = m.PhaseRemaining;
+
+            Assert.IsTrue(m.Pause());
+            Assert.IsTrue(m.IsPaused);
+            Run(m, P.RoundTime * 2f);
+            Assert.AreEqual(MatchPhase.Fight, m.Phase);
+            Assert.AreEqual(remaining, m.PhaseRemaining, 1e-4f);
+
+            Assert.IsTrue(m.Resume());
+            Assert.IsFalse(m.IsPaused);
+            Run(m, 1f);
+            Assert.Less(m.PhaseRemaining, remaining);
+        }
+
+        [Test]
+        public void Pause_IgnoresKOs()
+        {
+            var m = InFight();
+            m.Pause();
+            Assert.IsFalse(m.ReportKO(MatchSide.Player));
+            Assert.AreEqual(MatchPhase.Fight, m.Phase);
+        }
+
+        [Test]
+        public void Pause_NotAllowedInMenu()
+        {
+            var m = InMenu();
+            Assert.IsFalse(m.Pause());
+            Assert.IsFalse(m.IsPaused);
+        }
+
+        [Test]
+        public void Pause_And_Resume_AreIdempotent()
+        {
+            var m = InFight();
+            var seen = new System.Collections.Generic.List<bool>();
+            m.PausedChanged += seen.Add;
+
+            Assert.IsTrue(m.Pause());
+            Assert.IsFalse(m.Pause());
+            Assert.IsTrue(m.Resume());
+            Assert.IsFalse(m.Resume());
+
+            CollectionAssert.AreEqual(new[] { true, false }, seen);
+        }
+
+        [Test]
+        public void TogglePause_FlipsState()
+        {
+            var m = InFight();
+            Assert.IsTrue(m.TogglePause());
+            Assert.IsTrue(m.IsPaused);
+            Assert.IsTrue(m.TogglePause());
+            Assert.IsFalse(m.IsPaused);
+        }
+
+        [Test]
+        public void ReturnToMenu_WhilePaused_Unpauses()
+        {
+            var m = InFight();
+            var seen = new System.Collections.Generic.List<bool>();
+            m.PausedChanged += seen.Add;
+            m.Pause();
+
+            m.ReturnToMenu();
+
+            Assert.AreEqual(MatchPhase.Menu, m.Phase);
+            Assert.IsFalse(m.IsPaused);
+            CollectionAssert.AreEqual(new[] { true, false }, seen);
+        }
+
+        [Test]
+        public void Pause_DuringCountdown_HoldsTheCountdown()
+        {
+            var m = InMenu();
+            m.StartMatch(false);
+            m.Pause();
+            Run(m, P.CountdownTime * 3f);
+            Assert.AreEqual(MatchPhase.Countdown, m.Phase);
+            m.Resume();
+            Run(m, P.CountdownTime + 0.2f);
+            Assert.AreEqual(MatchPhase.Fight, m.Phase);
+        }
     }
 }
