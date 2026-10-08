@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using HandHero.Core;
 using UnityEngine;
 
@@ -19,6 +20,16 @@ public class PointingBeamController : MonoBehaviour
     [SerializeField] private LayerMask aimMask = -1;
     [SerializeField] private float maxAimDistance = 80f;
     [SerializeField] private float reticleSmoothing = 20f;
+
+    [Header("Aim Assist (ASSIST mode)")]
+    [Tooltip("Reticle snaps to a target within this cone around the aim ray (degrees); 0 = off")]
+    [SerializeField] private float assistAngle = 8f;
+    [Tooltip("The snap holds until the target leaves this cone (degrees, wider than assistAngle = no flicker)")]
+    [SerializeField] private float assistReleaseAngle = 11f;
+    [Tooltip("Reticle / cursor marker color while snapped to a target")]
+    [SerializeField] private Color lockedReticleColor = new Color(1f, 0.55f, 0.1f);
+    [Tooltip("Optional. Reticle renderer, tinted while snapped")]
+    [SerializeField] private Renderer reticleRenderer;
 
     [Header("Firing")]
     [SerializeField] private float fireCooldown = 0.35f;
@@ -57,6 +68,19 @@ public class PointingBeamController : MonoBehaviour
     private float _lastFireTime = -999f;
     private float _beamTimer;
     private readonly ChargeShotModel _charge = new ChargeShotModel();
+
+    // Assist candidates, rebuilt each frame. The current pick is remembered as the
+    // target object, not an index, so list changes never jump the lock elsewhere.
+    private readonly List<Vector3> _candidatePositions = new List<Vector3>();
+    private readonly List<AimAssistTarget> _candidateTargets = new List<AimAssistTarget>();
+    private AimAssistTarget _assistTarget;
+    private MaterialPropertyBlock _tintBlock;
+    private Color _reticleIdleColor = Color.white;
+    private bool _reticleColorRead;
+
+    // Where the hero fires: the reticle point (ASSIST) or the cursor marker (CURSOR).
+    public Vector3 AimPoint => _aimPoint;
+    public AimAssistTarget AssistTarget => _assistTarget;
 
     private void Awake()
     {
@@ -143,12 +167,24 @@ public class PointingBeamController : MonoBehaviour
     {
         if (ray.direction == Vector3.zero) return;
 
-        Vector3 point = RaycastIgnoringSelf(ray, maxAimDistance, out RaycastHit hit)
-            ? hit.point
-            : ray.GetPoint(maxAimDistance);
+        CollectCandidates();
+        int current = _assistTarget != null ? _candidateTargets.IndexOf(_assistTarget) : -1;
+        int pick = AimAssist.SelectByAngle(ray, _candidatePositions, current, assistAngle, assistReleaseAngle);
+        _assistTarget = pick >= 0 ? _candidateTargets[pick] : null;
+        Tint(reticleRenderer, _assistTarget != null ? lockedReticleColor : ReticleIdleColor());
 
+        Vector3 point;
+        if (pick >= 0)
+            point = _candidatePositions[pick];
+        else
+            point = RaycastIgnoringSelf(ray, maxAimDistance, out RaycastHit hit)
+                ? hit.point
+                : ray.GetPoint(maxAimDistance);
+
+        // Snapped: sit exactly on the target (a smoothed point would trail a fast
+        // hero and miss). Free aim keeps the smoothing that hides hand jitter.
         float t = 1f - Mathf.Exp(-reticleSmoothing * Time.deltaTime);
-        _aimPoint = _aimPoint == Vector3.zero ? point : Vector3.Lerp(_aimPoint, point, t);
+        _aimPoint = pick >= 0 || _aimPoint == Vector3.zero ? point : Vector3.Lerp(_aimPoint, point, t);
 
         if (reticle != null)
         {
@@ -157,6 +193,40 @@ public class PointingBeamController : MonoBehaviour
             float dist = Vector3.Distance(Camera.main != null ? Camera.main.transform.position : ray.origin, _aimPoint);
             reticle.localScale = Vector3.one * Mathf.Max(0.1f, dist * 0.02f);
         }
+    }
+
+    // Targetable heroes and practice targets, excluding this controller's own hero.
+    private void CollectCandidates()
+    {
+        _candidatePositions.Clear();
+        _candidateTargets.Clear();
+        Transform self = character.transform;
+        foreach (AimAssistTarget t in AimAssistTarget.All)
+        {
+            if (t == null || !t.IsTargetable || t.transform.IsChildOf(self)) continue;
+            _candidateTargets.Add(t);
+            _candidatePositions.Add(t.transform.position);
+        }
+    }
+
+    private Color ReticleIdleColor()
+    {
+        if (!_reticleColorRead && reticleRenderer != null && reticleRenderer.sharedMaterial != null)
+        {
+            Material m = reticleRenderer.sharedMaterial;
+            _reticleIdleColor = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : m.color;
+            _reticleColorRead = true;
+        }
+        return _reticleIdleColor;
+    }
+
+    private void Tint(Renderer r, Color c)
+    {
+        if (r == null) return;
+        _tintBlock ??= new MaterialPropertyBlock();
+        _tintBlock.SetColor("_BaseColor", c);
+        _tintBlock.SetColor("_Color", c);
+        r.SetPropertyBlock(_tintBlock);
     }
 
     private void TryFire()
