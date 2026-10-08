@@ -1,90 +1,89 @@
+using HandHero.Core;
 using UnityEngine;
 
-// Left-hand puppeteer with a fist clutch and RELATIVE (mouse-style) mapping.
-// While the fist is closed, hand movement deltas drive the character's target:
+// Puppeteer with a clutch and RELATIVE (mouse-style) mapping.
+// While the clutch (fist) is held, hand movement deltas drive the character's target:
 //   target += handDelta * positionScale
-// Opening the fist releases the character to glide and lets the hand return
-// to a comfortable position — exactly like lifting a mouse to reposition it.
+// Releasing lets the character glide and the hand return to a comfortable
+// position — exactly like lifting a mouse to reposition it.
 //
 // Relative mapping (instead of absolute hand->box mapping) was chosen because:
 //  - no calibration of a neutral point is needed,
 //  - a tracking glitch moves the character a little, not to a glitch position,
 //  - the reachable arena is unlimited: clutch, drag, release, repeat.
+//
+// Input comes only as HandInputData (ADR 9): hands, debug keyboard/mouse, a bot
+// or a test script drive this the same way. Fist thresholds live in XRHandsInputSource.
 public class HandPuppeteerController : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private FlyingCharacter character;
-
-    [Header("Hand")]
-    [SerializeField] private bool useLeftHand = true;
+    [Tooltip("Where this hero's input comes from (XR hands, debug keyboard/mouse, ...)")]
+    [SerializeField] private HandInputSourceBehaviour inputSource;
 
     [Header("Mapping")]
     [Tooltip("World meters the character target moves per meter of hand movement")]
     [SerializeField] private float positionScale = 60f;
-
-    [Header("Clutch (fist) thresholds with hysteresis")]
-    [Tooltip("Fist strength above this grabs the character")]
-    [SerializeField] private float grabThreshold = 0.7f;
-    [Tooltip("Fist strength below this releases it (lower than grab = no flicker)")]
-    [SerializeField] private float releaseThreshold = 0.45f;
 
     [Header("Feedback (optional)")]
     [SerializeField] private Renderer clutchIndicator; // tinted while clutched
     [SerializeField] private Color clutchedColor = new Color(0.3f, 1f, 0.5f);
     [SerializeField] private Color releasedColor = new Color(1f, 1f, 1f, 0.4f);
 
-    private bool _clutched;
-    private Vector3 _lastHandPosition;
-    private Vector3 _targetPosition;
+    // Relative mapping (unit-tested in HandHero.Core).
+    private readonly ClutchMapper _clutch = new ClutchMapper();
+    private IHandInputSource _sourceOverride;
+
+    public float PositionScale => positionScale;
+
+    // Code-assigned source (bot, test). Takes priority over the inspector field.
+    public void SetInputSource(IHandInputSource source)
+    {
+        _sourceOverride = source;
+    }
+
+    private IHandInputSource Source()
+    {
+        if (_sourceOverride != null) return _sourceOverride;
+        return inputSource != null ? inputSource : null;
+    }
 
     private void Update()
     {
-        var tracker = HandGestureTracker.Instance;
-        if (tracker == null || character == null) return;
+        IHandInputSource source = Source();
+        if (source == null || character == null) return;
 
-        HandGestureTracker.HandState hand = useLeftHand ? tracker.Left : tracker.Right;
-
-        // Tracking loss releases the clutch — the character glides instead of
-        // teleporting when the hand comes back somewhere else.
-        if (!hand.IsTracked)
+        // Dead hero: drop the clutch so a fist still closed at respawn regrabs
+        // from the spawn point instead of dragging toward the old target.
+        if (!character.IsAlive)
         {
-            if (_clutched) Release();
+            if (_clutch.IsClutched) OnRelease();
+            _clutch.Reset();
             return;
         }
 
-        if (!_clutched && hand.FistStrength >= grabThreshold)
-        {
-            Grab(hand.PalmPosition);
-        }
-        else if (_clutched && hand.FistStrength <= releaseThreshold)
-        {
-            Release();
-        }
+        // Charging no longer roots the hero: the charge shot is a right-hand pinch
+        // hold, so the left hand keeps flying it, slowed by PointingBeamController.
+        HandInputData input = source.Current;
 
-        if (_clutched)
-        {
-            Vector3 delta = hand.PalmPosition - _lastHandPosition;
-            _lastHandPosition = hand.PalmPosition;
+        // A lost hand arrives as ClutchHeld = false, so the character glides
+        // instead of teleporting when the hand comes back somewhere else.
+        // Grabbing starts from where the character currently is — no snap.
+        ClutchResult clutch = _clutch.Step(input, character.transform.position, positionScale);
 
-            _targetPosition += delta * positionScale;
-            character.SetTarget(_targetPosition);
-        }
+        if (clutch.JustGrabbed) OnGrab();
+        if (clutch.JustReleased) OnRelease();
+        if (clutch.Clutched) character.SetTarget(clutch.Target);
     }
 
-    private void Grab(Vector3 handPosition)
+    private void OnGrab()
     {
-        _clutched = true;
-        _lastHandPosition = handPosition;
-        // Start dragging from where the character currently is — no snap.
-        _targetPosition = character.transform.position;
-
         if (clutchIndicator != null)
             clutchIndicator.material.color = clutchedColor;
     }
 
-    private void Release()
+    private void OnRelease()
     {
-        _clutched = false;
         character.ClearTarget();
 
         if (clutchIndicator != null)

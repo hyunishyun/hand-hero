@@ -1,3 +1,4 @@
+using HandHero.Core;
 using UnityEngine;
 
 // Greybox flying hero for the arena prototype.
@@ -17,6 +18,10 @@ public class FlyingCharacter : MonoBehaviour
     [Tooltip("Drag while released (gliding). Lower = longer glide")]
     [SerializeField] private float glideDrag = 0.8f;
 
+    [Header("Run Items")]
+    [Tooltip("Optional. Run items (SpeedMult); empty = one on this object, none = neutral")]
+    [SerializeField] private RunHeroStats runStats;
+
     [Header("Arena Bounds")]
     [SerializeField] private Transform arenaCenter;
     [SerializeField] private Vector3 arenaSize = new Vector3(35f, 20f, 35f);
@@ -29,16 +34,66 @@ public class FlyingCharacter : MonoBehaviour
 
     public Vector3 Velocity => _velocity;
     public bool IsClutched => _hasTarget;
+    public ArenaBounds Bounds => GetArenaBounds();
+    // False between death and respawn (HeroHealth): no flight, no control, no firing.
+    public bool IsAlive => _alive;
 
     private Vector3 _velocity;
     private Vector3 _target;
     private bool _hasTarget;
+    private bool _alive = true;
+    private float _speedMultiplier = 1f;
+    private float _chargeSpeedMultiplier = 1f;
+
+    private void Awake()
+    {
+        runStats = RunHeroStats.Find(runStats, this);
+    }
+
+    // Run bots are spawned from a prefab, which can't reference the scene's arena.
+    public void SetArenaCenter(Transform center)
+    {
+        arenaCenter = center;
+    }
 
     // Called by HandPuppeteerController while the clutch (fist) is held.
     public void SetTarget(Vector3 worldPosition)
     {
-        _target = ClampToArena(worldPosition);
+        if (!_alive) return;
+        _target = GetArenaBounds().Clamp(worldPosition);
         _hasTarget = true;
+    }
+
+    // Hit slow (ADR 3): scales maxSpeed only, the spring feel stays the same.
+    public void SetSpeedMultiplier(float multiplier)
+    {
+        _speedMultiplier = Mathf.Clamp01(multiplier);
+    }
+
+    // Charge-shot slow (PointingBeamController). Separate channel from the hit
+    // slow, which HeroHealth sets every frame; the two multiply.
+    public void SetChargeSpeedMultiplier(float multiplier)
+    {
+        _chargeSpeedMultiplier = Mathf.Clamp01(multiplier);
+    }
+
+    public void Kill()
+    {
+        _alive = false;
+        _hasTarget = false;
+        _velocity = Vector3.zero;
+        _chargeSpeedMultiplier = 1f;
+    }
+
+    // Teleports the hero (never the player's rig) and gives control back.
+    public void Respawn(Vector3 worldPosition)
+    {
+        transform.position = GetArenaBounds().Clamp(worldPosition);
+        _velocity = Vector3.zero;
+        _hasTarget = false;
+        _speedMultiplier = 1f;
+        _chargeSpeedMultiplier = 1f;
+        _alive = true;
     }
 
     // Called when the fist opens: the character keeps its momentum and glides.
@@ -49,36 +104,32 @@ public class FlyingCharacter : MonoBehaviour
 
     private void Update()
     {
+        if (!_alive) return;
+
         float dt = Time.deltaTime;
 
-        if (_hasTarget)
+        // Pure flight math lives in HandHero.Core (unit-tested, reusable by the
+        // future Fusion FixedUpdateNetwork). This component only feeds it.
+        var flightParams = new FlightParams
         {
-            // Critically-damped-ish spring toward the target.
-            Vector3 toTarget = _target - transform.position;
-            _velocity += toTarget * (stiffness * dt);
-            _velocity -= _velocity * (damping * dt);
-        }
-        else
-        {
-            // Glide: momentum with gentle drag, no gravity (hero flight).
-            _velocity -= _velocity * (glideDrag * dt);
-        }
+            Stiffness = stiffness,
+            Damping = damping,
+            MaxSpeed = maxSpeed * _speedMultiplier * _chargeSpeedMultiplier
+                * CombatMath.SpeedMultiplier(RunHeroStats.StatsOf(runStats)),
+            GlideDrag = glideDrag,
+        };
+        var state = new FlightState { Position = transform.position, Velocity = _velocity };
+        state = SpringFlightModel.Step(state, _hasTarget, _target, flightParams, GetArenaBounds(), dt);
 
-        _velocity = Vector3.ClampMagnitude(_velocity, maxSpeed);
-        transform.position = ClampToArena(transform.position + _velocity * dt);
+        _velocity = state.Velocity;
+        transform.position = state.Position;
 
         UpdateVisual(dt);
     }
 
-    private Vector3 ClampToArena(Vector3 p)
+    private ArenaBounds GetArenaBounds()
     {
-        if (arenaCenter == null) return p;
-        Vector3 half = arenaSize * 0.5f;
-        Vector3 local = p - arenaCenter.position;
-        local.x = Mathf.Clamp(local.x, -half.x, half.x);
-        local.y = Mathf.Clamp(local.y, -half.y, half.y);
-        local.z = Mathf.Clamp(local.z, -half.z, half.z);
-        return arenaCenter.position + local;
+        return arenaCenter != null ? new ArenaBounds(arenaCenter.position, arenaSize) : default;
     }
 
     private void UpdateVisual(float dt)

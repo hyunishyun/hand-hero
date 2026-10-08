@@ -7,6 +7,7 @@ using UnityEngine.XR.Hands;
 // the gameplay scripts consume:
 //   FistStrength  (0..1) -> puppeteer clutch (left hand)
 //   PinchStrength (0..1) -> fire trigger (right hand)
+//   GripStrength / IndexCurl (0..1) -> CURSOR aim: gun grip drags the marker, index fires
 //   AimRay               -> shoulder-anchored pointing ray (stable while pinching)
 // All poses are converted to WORLD space via the XR Origin transform,
 // because XRHandSubsystem reports joints in XR Origin (session) space.
@@ -18,14 +19,17 @@ public class HandGestureTracker : MonoBehaviour
     {
         public bool IsTracked;
         public Vector3 PalmPosition;    // world space
+        public Vector3 TrackingPalmPosition; // tracking space: physical meters, unaffected by the tabletop scale
         public Quaternion PalmRotation; // world space
         public float FistStrength;      // 0 = open hand, 1 = closed fist
+        public float GripStrength;      // middle/ring/little only (CURSOR gun grip), 0..1
+        public float IndexCurl;         // index finger alone (CURSOR trigger), 0..1
         public float PinchStrength;     // 0 = apart, 1 = thumb+index pinched
         public Ray AimRay;              // world space pointing ray
     }
 
     [Header("References")]
-    [SerializeField] private Transform xrOrigin;   // XR Origin root transform
+    [SerializeField] private Transform xrOrigin;   // XR tracking space: the XR Origin's Camera Offset
     [SerializeField] private Transform headCamera; // Main Camera under the XR Origin
 
     [Header("Fist Detection (tip-to-palm distance, meters)")]
@@ -45,6 +49,11 @@ public class HandGestureTracker : MonoBehaviour
     [Header("Smoothing")]
     [SerializeField] private float positionSmoothing = 25f;
     [SerializeField] private float valueSmoothing = 18f;
+
+    // Uniform scale of the tracking space (1 in the VR arena, about 35 in the
+    // passthrough tabletop). World-space hand distances are this many times the
+    // physical ones, so physical thresholds use TrackingPalmPosition instead.
+    public float WorldScale => xrOrigin != null ? xrOrigin.lossyScale.x : 1f;
 
     public HandState Left => _left;
     public HandState Right => _right;
@@ -79,15 +88,25 @@ public class HandGestureTracker : MonoBehaviour
         if (_subsystem == null || !_subsystem.running)
         {
             FindSubsystem();
-            if (_subsystem == null) return;
+            if (_subsystem == null)
+            {
+                // A stopped subsystem's joint arrays are disposed; reading them throws.
+                // Treat "no running subsystem" exactly like tracking loss.
+                _left.IsTracked = false;
+                _right.IsTracked = false;
+                return;
+            }
         }
 
         UpdateHand(_subsystem.leftHand, ref _left, isLeft: true);
         UpdateHand(_subsystem.rightHand, ref _right, isLeft: false);
     }
 
+    private string _lastSubsystemReport;
+
     private void FindSubsystem()
     {
+        _subsystem = null;
         var subsystems = new List<XRHandSubsystem>();
         SubsystemManager.GetSubsystems(subsystems);
         foreach (var s in subsystems)
@@ -95,10 +114,31 @@ public class HandGestureTracker : MonoBehaviour
             if (s.running)
             {
                 _subsystem = s;
-                return;
+                break;
             }
         }
-        if (subsystems.Count > 0) _subsystem = subsystems[0];
+        ReportSubsystems(subsystems);
+    }
+
+    // Diagnostic: logs once per change so a missing/stopped hand subsystem is visible in the Console.
+    private void ReportSubsystems(List<XRHandSubsystem> subsystems)
+    {
+        string report;
+        if (subsystems.Count == 0)
+        {
+            report = "no XRHandSubsystem exists (OpenXR Hand Tracking feature off for this platform, or XR not initialized)";
+        }
+        else
+        {
+            var parts = new List<string>();
+            foreach (var s in subsystems)
+                parts.Add($"{s.subsystemDescriptor.id} running={s.running}");
+            report = string.Join(", ", parts);
+        }
+
+        if (report == _lastSubsystemReport) return;
+        _lastSubsystemReport = report;
+        Debug.Log($"[HandGestureTracker] hand subsystems: {report}");
     }
 
     private void UpdateHand(XRHand hand, ref HandState state, bool isLeft)
@@ -123,21 +163,38 @@ public class HandGestureTracker : MonoBehaviour
         Vector3 palmWorld = xrOrigin != null ? xrOrigin.TransformPoint(palmPose.position) : palmPose.position;
         Quaternion palmRotWorld = xrOrigin != null ? xrOrigin.rotation * palmPose.rotation : palmPose.rotation;
 
-        float posT = 1f - Mathf.Exp(-positionSmoothing * Time.deltaTime);
-        float valT = 1f - Mathf.Exp(-valueSmoothing * Time.deltaTime);
+        // Unscaled: hands (and the pause menu) keep working while the game is paused (timeScale 0).
+        float posT = 1f - Mathf.Exp(-positionSmoothing * Time.unscaledDeltaTime);
+        float valT = 1f - Mathf.Exp(-valueSmoothing * Time.unscaledDeltaTime);
 
         state.PalmPosition = Vector3.Lerp(state.PalmPosition, palmWorld, posT);
+        state.TrackingPalmPosition = Vector3.Lerp(state.TrackingPalmPosition, palmPose.position, posT);
         state.PalmRotation = Quaternion.Slerp(state.PalmRotation, palmRotWorld, posT);
 
         // ---- Fist strength: average fingertip-to-palm distance ----
+        // Also split into the index alone (trigger) and the other three (grip):
+        // measured on Quest, they read independently in a gun grip.
         float total = 0f;
         int counted = 0;
+        float gripTotal = 0f;
+        int gripCounted = 0;
+        float indexDistance = -1f;
         foreach (var tipId in FingerTips)
         {
             if (hand.GetJoint(tipId).TryGetPose(out Pose tipPose))
             {
-                total += Vector3.Distance(tipPose.position, palmPose.position);
+                float d = Vector3.Distance(tipPose.position, palmPose.position);
+                total += d;
                 counted++;
+                if (tipId == XRHandJointID.IndexTip)
+                {
+                    indexDistance = d;
+                }
+                else
+                {
+                    gripTotal += d;
+                    gripCounted++;
+                }
             }
         }
         if (counted > 0)
@@ -145,6 +202,16 @@ public class HandGestureTracker : MonoBehaviour
             float avg = total / counted;
             float rawFist = Mathf.InverseLerp(fingerOpenDistance, fingerClosedDistance, avg);
             state.FistStrength = Mathf.Lerp(state.FistStrength, Mathf.Clamp01(rawFist), valT);
+        }
+        if (gripCounted > 0)
+        {
+            float rawGrip = Mathf.InverseLerp(fingerOpenDistance, fingerClosedDistance, gripTotal / gripCounted);
+            state.GripStrength = Mathf.Lerp(state.GripStrength, Mathf.Clamp01(rawGrip), valT);
+        }
+        if (indexDistance >= 0f)
+        {
+            float rawIndex = Mathf.InverseLerp(fingerOpenDistance, fingerClosedDistance, indexDistance);
+            state.IndexCurl = Mathf.Lerp(state.IndexCurl, Mathf.Clamp01(rawIndex), valT);
         }
 
         // ---- Pinch strength: thumb tip to index tip ----
@@ -166,7 +233,7 @@ public class HandGestureTracker : MonoBehaviour
         {
             Vector3 offset = shoulderOffset;
             if (isLeft) offset.x = -offset.x;
-            Vector3 shoulder = headCamera.position + headCamera.rotation * offset;
+            Vector3 shoulder = headCamera.position + headCamera.rotation * (offset * WorldScale);
 
             Vector3 knuckleWorld = xrOrigin != null ? xrOrigin.TransformPoint(knucklePose.position) : knucklePose.position;
             Vector3 dir = (knuckleWorld - shoulder).normalized;

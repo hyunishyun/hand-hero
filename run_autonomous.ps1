@@ -21,6 +21,9 @@ param(
 
 $ErrorActionPreference = "Continue"
 Set-Location $ProjectPath
+# Decode claude's UTF-8 output correctly (Korean text in session logs).
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 $autoDir  = Join-Path $ProjectPath "AUTO"
 $logDir   = Join-Path $autoDir "logs"
@@ -32,7 +35,9 @@ $deadline  = (Get-Date).AddHours($Hours)
 function Log($msg) {
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg
     Write-Host $line
-    Add-Content -Path $runnerLog -Value $line
+    # Never let a locked log file (indexer, antivirus, editor) break the loop.
+    try { [System.IO.File]::AppendAllText($runnerLog, $line + "`r`n") }
+    catch { Write-Host "  (runner.log busy, line not written)" }
 }
 
 # --- Keep the PC awake (no sleep / no display-off) while this script runs ---
@@ -40,14 +45,20 @@ Add-Type -Namespace Win32 -Name Power -MemberDefinition @"
 [System.Runtime.InteropServices.DllImport("kernel32.dll")]
 public static extern uint SetThreadExecutionState(uint esFlags);
 "@
-# ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
-[Win32.Power]::SetThreadExecutionState(0x80000000 -bor 0x00000001 -bor 0x00000002) | Out-Null
+# ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED = 0x80000003.
+# Decimal [uint32] literals: in PS 5.1 hex 0x80000000 is a negative Int32 and fails the uint conversion.
+$ES_CONTINUOUS = [uint32]2147483648
+$ES_AWAKE      = [uint32]2147483651
+[Win32.Power]::SetThreadExecutionState($ES_AWAKE) | Out-Null
 
+# Keep this prompt ASCII: Windows PowerShell 5.1 reads BOM-less UTF-8 scripts as ANSI,
+# which turned the original Korean prompt into mojibake on the claude command line.
 $prompt = @"
-너는 무인 모드(Phase A)로 실행 중이다. 아무도 질문에 답하지 않는다.
-프로젝트 루트의 CLAUDE_AUTONOMOUS_PLAN.md를 처음부터 끝까지 읽고, 섹션 2 '무인 세션 프로토콜'을 그대로 따라라.
-AUTO/PROGRESS.md, AUTO/DECISIONS.md, AUTO/BLOCKERS.md, git log를 확인한 뒤 다음 태스크를 진행하라.
-이번 세션에서는 태스크를 최대 2개 끝내고, PROGRESS.md를 최신화·커밋한 뒤 종료하라.
+You are running in UNATTENDED mode (Phase A). Nobody will answer questions.
+Read CLAUDE_AUTONOMOUS_PLAN.md in the project root from start to finish and follow section 2 (the unattended session protocol) exactly.
+Check AUTO/PROGRESS.md, AUTO/DECISIONS.md, AUTO/BLOCKERS.md and git log, then continue with the next task.
+Finish at most 2 tasks in this session, update and commit PROGRESS.md, then exit.
+Write logs and reports in Korean as the plan says; code comments in English.
 "@
 
 $limitPattern   = '(usage limit|limit reached|limit will reset|resets? at|rate.?limit|429|overloaded)'
@@ -108,5 +119,5 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 20
 }
 
-[Win32.Power]::SetThreadExecutionState(0x80000000) | Out-Null
+[Win32.Power]::SetThreadExecutionState($ES_CONTINUOUS) | Out-Null
 Log "=== Autonomous run finished. See AUTO/REPORT_FOR_HYUN.md ==="

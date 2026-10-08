@@ -15,6 +15,7 @@
 .idea/
 *.csproj
 *.sln
+*.slnx
 *.suo
 *.user
 *.userprefs
@@ -47,3 +48,9 @@ desktop.ini
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Unity 6.6 temp
+.utmp/
+
+# Superpowers plan workspaces
+/.superpowers/

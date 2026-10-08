@@ -5,13 +5,16 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
+  - enabled: 1
+    path: Assets/MyAssets/Scenes/Arena_Main.unity
+    guid: c48daafe1d8a8f943a9b40b263be69a5
   - enabled: 0
     path: Assets/Scenes/SampleScene.unity
     guid: 55daccc09a3b69647bbab145b54a3ab3
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/A4/LobbyScene.unity
     guid: d84789d962e690140b3d52ad7d9ced02
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/A4/MainLevel.unity
     guid: 689b57d938a4acc47be324f933a58b28
   m_configObjects:
@@ -23,4 +26,3 @@ EditorBuildSettings:
     com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: 5dcc2603f77432c4b8f783205c89bc27, type: 2}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 1a4c68ca72a83449f938d669337cb305, type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: a9a6963505ddf7f4d886008c6dc86122, type: 2}
-  m_UseUCBPForAssetBundles: 0
