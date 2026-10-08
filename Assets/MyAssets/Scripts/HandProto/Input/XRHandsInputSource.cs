@@ -35,6 +35,14 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     [Tooltip("Aim-hand fist strength above this blocks the pinch even before the fist clutch engages (closing a fist reads as a pinch)")]
     [SerializeField] private float pinchMaxFistStrength = 0.45f;
 
+    [Header("CURSOR trigger (index finger) with hysteresis")]
+    [Tooltip("Index curl above this pulls the trigger (fires once, holding charges)")]
+    [SerializeField] private float triggerPullThreshold = 0.7f;
+    [Tooltip("Index curl below this re-arms the trigger")]
+    [SerializeField] private float triggerReleaseThreshold = 0.45f;
+    [Tooltip("A pull within this many seconds of the grip (middle/ring/little) changing is ignored: a full fist closes both at once")]
+    [SerializeField] private float gripSettleTime = 0.15f;
+
     [Header("Charge shot (both palms together) with hysteresis")]
     [Tooltip("Legacy charge gesture (both palms together). Off: the charge shot is a held right-hand pinch")]
     [SerializeField] private bool palmsTogetherCharges = false;
@@ -56,15 +64,17 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     private readonly HandClutchSampler _clutch = new HandClutchSampler();
     private readonly HandClutchSampler _aimClutch = new HandClutchSampler();
     private readonly PinchTrigger _pinch = new PinchTrigger();
+    private readonly TriggerGesture _trigger = new TriggerGesture();
     private readonly PalmsTogetherRecognizer _palmsTogether = new PalmsTogetherRecognizer();
     private readonly PalmPushRecognizer _leftPush = new PalmPushRecognizer();
     private readonly PalmPushRecognizer _rightPush = new PalmPushRecognizer();
 
     // Switched back on (resume from pause, round start): the pinch that pressed
-    // RESUME is still closed and must open before it fires or charges.
+    // RESUME (or a pulled trigger) is still closed and must open before it fires or charges.
     private void OnEnable()
     {
         _pinch.RequireReopen();
+        _trigger.RequireReopen();
     }
 
     protected override HandInputData Sample()
@@ -82,10 +92,17 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         data.ClutchHeld = _clutch.Step(clutchHand.IsTracked, clutchHand.FistStrength, clutchHand.TrackingPalmPosition,
             grabThreshold, releaseThreshold, out data.ClutchDelta);
 
-        // Aim-hand fist = CURSOR aim drag (same thresholds as the puppeteer fist).
+        // Aim-hand gun grip (middle/ring/little) = CURSOR aim drag, with the
+        // puppeteer's fist thresholds; the index stays free as the trigger.
         // Sampled before the tracking check so a lost hand opens it.
-        data.AimClutchHeld = _aimClutch.Step(aimHand.IsTracked, aimHand.FistStrength, aimHand.TrackingPalmPosition,
+        data.AimClutchHeld = _aimClutch.Step(aimHand.IsTracked, aimHand.GripStrength, aimHand.TrackingPalmPosition,
             grabThreshold, releaseThreshold, out data.AimClutchDelta);
+
+        TriggerState trigger = _trigger.Step(aimHand.IsTracked, aimHand.IndexCurl, aimHand.GripStrength,
+            triggerPullThreshold, triggerReleaseThreshold, grabThreshold, releaseThreshold, gripSettleTime,
+            Time.deltaTime);
+        data.TriggerFired = trigger.Fired;
+        data.TriggerHeld = trigger.Held;
 
         bool palmsCharging = SampleGestures(t, ref data);
 

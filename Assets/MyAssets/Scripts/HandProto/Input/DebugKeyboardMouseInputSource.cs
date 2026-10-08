@@ -103,6 +103,10 @@ public class DebugKeyboardMouseInputSource : HandInputSourceBehaviour
                 data.Gestures |= HandGestures.Shockwave;
         }
 
+        // Same keys pull the CURSOR trigger, so both aim modes fire alike here.
+        data.TriggerFired = data.FireTriggered;
+        data.TriggerHeld = data.PinchHeld;
+
         return data;
     }
 

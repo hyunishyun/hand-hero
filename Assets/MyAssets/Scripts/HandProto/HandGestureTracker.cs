@@ -7,6 +7,7 @@ using UnityEngine.XR.Hands;
 // the gameplay scripts consume:
 //   FistStrength  (0..1) -> puppeteer clutch (left hand)
 //   PinchStrength (0..1) -> fire trigger (right hand)
+//   GripStrength / IndexCurl (0..1) -> CURSOR aim: gun grip drags the marker, index fires
 //   AimRay               -> shoulder-anchored pointing ray (stable while pinching)
 // All poses are converted to WORLD space via the XR Origin transform,
 // because XRHandSubsystem reports joints in XR Origin (session) space.
@@ -21,6 +22,8 @@ public class HandGestureTracker : MonoBehaviour
         public Vector3 TrackingPalmPosition; // tracking space: physical meters, unaffected by the tabletop scale
         public Quaternion PalmRotation; // world space
         public float FistStrength;      // 0 = open hand, 1 = closed fist
+        public float GripStrength;      // middle/ring/little only (CURSOR gun grip), 0..1
+        public float IndexCurl;         // index finger alone (CURSOR trigger), 0..1
         public float PinchStrength;     // 0 = apart, 1 = thumb+index pinched
         public Ray AimRay;              // world space pointing ray
     }
@@ -169,14 +172,29 @@ public class HandGestureTracker : MonoBehaviour
         state.PalmRotation = Quaternion.Slerp(state.PalmRotation, palmRotWorld, posT);
 
         // ---- Fist strength: average fingertip-to-palm distance ----
+        // Also split into the index alone (trigger) and the other three (grip):
+        // measured on Quest, they read independently in a gun grip.
         float total = 0f;
         int counted = 0;
+        float gripTotal = 0f;
+        int gripCounted = 0;
+        float indexDistance = -1f;
         foreach (var tipId in FingerTips)
         {
             if (hand.GetJoint(tipId).TryGetPose(out Pose tipPose))
             {
-                total += Vector3.Distance(tipPose.position, palmPose.position);
+                float d = Vector3.Distance(tipPose.position, palmPose.position);
+                total += d;
                 counted++;
+                if (tipId == XRHandJointID.IndexTip)
+                {
+                    indexDistance = d;
+                }
+                else
+                {
+                    gripTotal += d;
+                    gripCounted++;
+                }
             }
         }
         if (counted > 0)
@@ -184,6 +202,16 @@ public class HandGestureTracker : MonoBehaviour
             float avg = total / counted;
             float rawFist = Mathf.InverseLerp(fingerOpenDistance, fingerClosedDistance, avg);
             state.FistStrength = Mathf.Lerp(state.FistStrength, Mathf.Clamp01(rawFist), valT);
+        }
+        if (gripCounted > 0)
+        {
+            float rawGrip = Mathf.InverseLerp(fingerOpenDistance, fingerClosedDistance, gripTotal / gripCounted);
+            state.GripStrength = Mathf.Lerp(state.GripStrength, Mathf.Clamp01(rawGrip), valT);
+        }
+        if (indexDistance >= 0f)
+        {
+            float rawIndex = Mathf.InverseLerp(fingerOpenDistance, fingerClosedDistance, indexDistance);
+            state.IndexCurl = Mathf.Lerp(state.IndexCurl, Mathf.Clamp01(rawIndex), valT);
         }
 
         // ---- Pinch strength: thumb tip to index tip ----
