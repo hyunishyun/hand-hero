@@ -1,3 +1,5 @@
+STATUS: ALL_DONE
+
 # PROGRESS — Round 2 (RUN mode)
 
 상태 값: TODO / IN_PROGRESS / DONE / BLOCKED(<이유>)
@@ -15,7 +17,7 @@
 | R9 선택 UI (포털·상자·상점) | DONE | `f2cbc5e`. 메뉴 자리에 포털(2–3개)·상자(카드 3–4장, 이름·`Lv n`·등급 단어·설명, 등급 색)·상점(2×2 + REROLL·LEAVE, 가격·잔액, 살 수 없으면 어둡게) 패널. `HandMenuButton`에 `SetCustomAction`/`SetLabel`/`SetIdleColor` 추가(기존 메뉴 버튼은 그대로), `HandMenu`가 선택 패널이 뜨면 포인터를 켠다. 글자·배치는 순수 로직 `RunChoiceText` + 테스트 12개, 313/313 통과. 씬 재생성 완료(배선 오류 없음). **플레이 모드·헤드셋 확인 없음**: 카드 글자 크기와 패널 폭(3개 = 약 ±29°)을 기기에서 볼 것. |
 | R10 HUD·메뉴 | DONE | `e3da4a4`. 메인 메뉴 3열×2행(QUICK MATCH·RUN·TUTORIAL / MR TABLE·AIM), START → QUICK MATCH. RUN도 튜토리얼 우선(`MatchStateMachine.StartRun(withTutorial)` — 튜토리얼이 끝나면 Run으로, 테스트 2개). `RunDirector`는 매치가 Run 단계에 들어오면 런을 시작한다. 런 HUD(섬 n/9·종류·목표·HP·크리스탈)와 카운트다운·FIGHT!·CLEARED·VICTORY/DEFEAT(섬 수·아이템 수·런 시간) 배너는 `MatchHud`가 `RunHudText`(테스트 6개)로 쓴다. 런이 끝나면 기존 MENU 끝 패널이 뜬다. 321/321 통과, 씬 재생성(배선 오류 없음). **플레이 모드·헤드셋 확인 없음.** |
 | R11 씬·디버그 키·APK | DONE | `9b38020`. 두 씬 모두 RunDirector·`RunHeroStats`·스폰 지점·선택 패널·런 HUD 배선 확인(R8–R10에서 이미 들어감, 배선 오류 0). 디버그 키 R·1–3·B·N은 `RunDirector`에 있고 두 씬 모두 켜져 있다(기기에는 키보드가 없어 영향 없음). 테스트 321/321, 씬 재생성(fileID만 바뀜), APK `MetaAwards\Build\HandHero_20261008.apk`(약 55 MB, 2.9분) 빌드 성공. **헤드셋 확인 없음.** |
-| R12 최종 리뷰·리포트 | IN_PROGRESS | |
+| R12 최종 리뷰·리포트 | DONE | 코드 리뷰 서브에이전트 1회(`33f3204..HEAD`, `.unity` 제외): Critical·Important 0건, Minor 6건은 `REPORT_FOR_HYUN.md` 7장에 기록만 함(가장 눈에 띄는 것: 런 중 자동 리스폰 때문에 DEFEAT 뒤 히어로가 다시 나타남). 코드 변경 없음. 보고서 `AUTO/REPORT_FOR_HYUN.md` 작성. |
 
 ## 세션 로그
 
@@ -25,6 +27,7 @@
 - 2026-10-08 무인 세션 3: R5, R6 완료(테스트 251 → 283, 모두 통과). 결정 5건 추가(`QUESTIONS_FOR_HYUN.md`). 다음 세션은 R7(스탯을 전투에 연결)부터.
 - 2026-10-08 무인 세션 4: R7, R8 완료(테스트 283 → 301, 모두 통과). 씬 재생성·RunBot 프리팹 커밋. 결정 6건 추가(`QUESTIONS_FOR_HYUN.md`). 다음 세션은 R9(선택 UI)부터. R11에서는 이미 들어간 디버그 키·RunDirector 배선을 다시 만들지 말고 확인만 할 것.
 - 2026-10-08 무인 세션 5: R9, R10 완료(테스트 301 → 321, 모두 통과). 씬 재생성 커밋. 결정 7건 추가(`QUESTIONS_FOR_HYUN.md`). 다음 세션은 R11(씬·디버그 키·APK)부터 — 씬 배선(선택 패널·HUD·메뉴)과 디버그 키는 이미 들어가 있으니 확인 후 APK 빌드가 주 작업이다.
+- 2026-10-08 무인 세션 6: R11, R12 완료. 테스트 321/321, 씬 재생성, APK `HandHero_20261008.apk` 빌드 성공. 최종 리뷰 Critical·Important 0건. 모든 태스크 DONE → `STATUS: ALL_DONE`, 보고서는 `AUTO/REPORT_FOR_HYUN.md`.
 
 ## R5 시간 추정 (헤드셋 없이 계산한 값)
 
