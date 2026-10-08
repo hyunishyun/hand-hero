@@ -18,6 +18,10 @@ public class FlyingCharacter : MonoBehaviour
     [Tooltip("Drag while released (gliding). Lower = longer glide")]
     [SerializeField] private float glideDrag = 0.8f;
 
+    [Header("Run Items")]
+    [Tooltip("Optional. Run items (SpeedMult); empty = one on this object, none = neutral")]
+    [SerializeField] private RunHeroStats runStats;
+
     [Header("Arena Bounds")]
     [SerializeField] private Transform arenaCenter;
     [SerializeField] private Vector3 arenaSize = new Vector3(35f, 20f, 35f);
@@ -40,6 +44,11 @@ public class FlyingCharacter : MonoBehaviour
     private bool _alive = true;
     private float _speedMultiplier = 1f;
     private float _chargeSpeedMultiplier = 1f;
+
+    private void Awake()
+    {
+        runStats = RunHeroStats.Find(runStats, this);
+    }
 
     // Called by HandPuppeteerController while the clutch (fist) is held.
     public void SetTarget(Vector3 worldPosition)
@@ -99,7 +108,8 @@ public class FlyingCharacter : MonoBehaviour
         {
             Stiffness = stiffness,
             Damping = damping,
-            MaxSpeed = maxSpeed * _speedMultiplier * _chargeSpeedMultiplier,
+            MaxSpeed = maxSpeed * _speedMultiplier * _chargeSpeedMultiplier
+                * CombatMath.SpeedMultiplier(RunHeroStats.StatsOf(runStats)),
             GlideDrag = glideDrag,
         };
         var state = new FlightState { Position = transform.position, Velocity = _velocity };

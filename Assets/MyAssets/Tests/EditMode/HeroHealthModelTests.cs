@@ -146,5 +146,67 @@ namespace HandHero.Tests
             m.ApplyDamage(25f);
             Assert.AreEqual(0.75f, m.Normalized, 1e-6f);
         }
+
+        // Run items (R7): a higher max also heals by the gain; a lower max clamps.
+        [Test]
+        public void ChangeMaxHealth_GainHealsByTheDelta()
+        {
+            var m = NewModel();
+            m.ApplyDamage(50f);
+            m.ChangeMaxHealth(120f);
+            Assert.AreEqual(120f, m.Params.MaxHealth);
+            Assert.AreEqual(70f, m.CurrentHealth, 1e-4f);
+        }
+
+        [Test]
+        public void ChangeMaxHealth_LossClampsCurrent()
+        {
+            var full = NewModel();
+            full.ChangeMaxHealth(70f);
+            Assert.AreEqual(70f, full.CurrentHealth, 1e-4f);
+
+            var hurt = NewModel();
+            hurt.ApplyDamage(50f);
+            hurt.ChangeMaxHealth(70f);
+            Assert.AreEqual(50f, hurt.CurrentHealth, 1e-4f, "below the new max: unchanged");
+        }
+
+        [Test]
+        public void ChangeMaxHealth_WhileDead_StaysDead()
+        {
+            var m = NewModel();
+            m.ApplyDamage(100f);
+            m.ChangeMaxHealth(120f);
+            Assert.IsTrue(m.IsDead);
+            Assert.AreEqual(0f, m.CurrentHealth);
+        }
+
+        [Test]
+        public void Heal_CapsAtMax_AndIgnoresTheDead()
+        {
+            var m = NewModel();
+            m.ApplyDamage(30f);
+            m.Heal(10f);
+            Assert.AreEqual(80f, m.CurrentHealth, 1e-4f);
+            m.Heal(500f);
+            Assert.AreEqual(100f, m.CurrentHealth, 1e-4f);
+
+            var dead = NewModel();
+            dead.ApplyDamage(100f);
+            dead.Heal(50f);
+            Assert.AreEqual(0f, dead.CurrentHealth);
+        }
+
+        [Test]
+        public void SetHealth_ClampsToOneAndMax_WhileAlive()
+        {
+            var m = NewModel();
+            m.SetHealth(40f);
+            Assert.AreEqual(40f, m.CurrentHealth, 1e-4f);
+            m.SetHealth(0f);
+            Assert.AreEqual(1f, m.CurrentHealth, 1e-4f, "setting health never kills");
+            m.SetHealth(999f);
+            Assert.AreEqual(100f, m.CurrentHealth, 1e-4f);
+        }
     }
 }

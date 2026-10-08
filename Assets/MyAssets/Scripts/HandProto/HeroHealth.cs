@@ -22,6 +22,8 @@ public class HeroHealth : MonoBehaviour
     [SerializeField] private Transform spawnPoint;
     [Tooltip("Optional bar scaled on X by remaining health")]
     [SerializeField] private Transform healthBarFill;
+    [Tooltip("Optional. Run items (max health, damage taken); empty = one on this object, none = neutral")]
+    [SerializeField] private RunHeroStats runStats;
 
     [Header("Health Settings")]
     [SerializeField] private float maxHealth = 100f;
@@ -45,7 +47,8 @@ public class HeroHealth : MonoBehaviour
     public event Action Respawned;
 
     public float CurrentHealth => _model.CurrentHealth;
-    public float MaxHealth => maxHealth;
+    // With run items applied (base maxHealth when there are none).
+    public float MaxHealth => _model != null ? _model.Params.MaxHealth : maxHealth;
     public bool IsDead => _model.IsDead;
     public float SpeedMultiplier => _model.SpeedMultiplier;
     public bool IsStunned => _model.IsStunned;
@@ -63,6 +66,7 @@ public class HeroHealth : MonoBehaviour
     {
         if (character == null) character = GetComponent<FlyingCharacter>();
         if (hitReceiver == null) hitReceiver = GetComponent<BeamHitReceiver>();
+        runStats = RunHeroStats.Find(runStats, this);
 
         _model = new HeroHealthModel(CurrentParams());
         _spawnPosition = transform.position;
@@ -89,7 +93,7 @@ public class HeroHealth : MonoBehaviour
 
     public void ApplyDamage(float damage)
     {
-        HitOutcome outcome = _model.ApplyDamage(damage);
+        HitOutcome outcome = _model.ApplyDamage(CombatMath.DamageTaken(damage, RunHeroStats.StatsOf(runStats)));
         if (outcome == HitOutcome.Ignored) return;
 
         _flashTimer = flashDuration;
@@ -111,8 +115,24 @@ public class HeroHealth : MonoBehaviour
     // Full health, alive, at the spawn point (round start).
     public void ResetHealth()
     {
+        SyncMaxHealth();
         _model.Reset();
         Respawn();
+    }
+
+    // Run (R8): heal on island clear. Capped at max, ignored while dead.
+    public void Heal(float amount)
+    {
+        _model.Heal(amount);
+        UpdateBar();
+    }
+
+    // Run (R8): health carry-over and the spiked chest. Never kills (min 1).
+    public void SetHealth(float health)
+    {
+        SyncMaxHealth();
+        _model.SetHealth(health);
+        UpdateBar();
     }
 
     private void OnBeamHit(BeamHit hit)
@@ -122,6 +142,7 @@ public class HeroHealth : MonoBehaviour
 
     private void Update()
     {
+        SyncMaxHealth();
         _model.Params = CurrentParams();
         if (_model.Tick(Time.deltaTime)) Respawn();
 
@@ -166,11 +187,22 @@ public class HeroHealth : MonoBehaviour
         Respawned?.Invoke();
     }
 
+    private float EffectiveMaxHealth() => CombatMath.MaxHealth(maxHealth, RunHeroStats.StatsOf(runStats));
+
+    // A max-health item mid-run: a gain heals by the gain, a loss clamps (HeroHealthModel).
+    private void SyncMaxHealth()
+    {
+        float max = EffectiveMaxHealth();
+        if (Mathf.Approximately(max, _model.Params.MaxHealth)) return;
+        _model.ChangeMaxHealth(max);
+        UpdateBar();
+    }
+
     private HealthParams CurrentParams()
     {
         return new HealthParams
         {
-            MaxHealth = maxHealth,
+            MaxHealth = EffectiveMaxHealth(),
             SlowDuration = slowDuration,
             SlowMultiplier = slowMultiplier,
             RespawnDelay = respawnDelay,

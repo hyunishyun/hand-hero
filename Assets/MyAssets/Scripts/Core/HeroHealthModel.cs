@@ -103,6 +103,32 @@ namespace HandHero.Core
             return HitOutcome.Killed;
         }
 
+        // Run items (R7) change the max mid-run: a gain also heals by the gain,
+        // a loss only clamps. The dead stay dead (and at 0).
+        public void ChangeMaxHealth(float newMax)
+        {
+            HealthParams p = Params;
+            float gain = newMax - p.MaxHealth;
+            p.MaxHealth = newMax;
+            Params = p;
+            if (IsDead) return;
+            CurrentHealth = Mathf.Min(newMax, CurrentHealth + Mathf.Max(0f, gain));
+        }
+
+        // Heal on island clear (R5/R8). Capped at max; ignored while dead.
+        public void Heal(float amount)
+        {
+            if (IsDead || amount <= 0f) return;
+            CurrentHealth = Mathf.Min(Params.MaxHealth, CurrentHealth + amount);
+        }
+
+        // Carry-over and the spiked chest (R8): sets health without ever killing.
+        public void SetHealth(float health)
+        {
+            if (IsDead) return;
+            CurrentHealth = Mathf.Clamp(health, 1f, Params.MaxHealth);
+        }
+
         // Advances timers. Returns true on the tick the hero respawns.
         public bool Tick(float dt)
         {

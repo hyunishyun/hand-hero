@@ -14,6 +14,8 @@ public class ShockwaveController : MonoBehaviour
     [SerializeField] private HandInputSourceBehaviour inputSource;
     [Tooltip("Optional ring that expands from the hero when the shockwave fires")]
     [SerializeField] private LineRenderer ring;
+    [Tooltip("Optional. Run items (radius, stun length); empty = one on the hero, none = neutral")]
+    [SerializeField] private RunHeroStats runStats;
 
     [Header("Shockwave")]
     [Tooltip("Heroes within this many meters of this hero are stunned")]
@@ -37,11 +39,13 @@ public class ShockwaveController : MonoBehaviour
     private float _lastFireTime = -999f;
     private float _ringTimer;
 
-    public float Radius => radius;
+    // With run items applied (the tuned radius when there are none).
+    public float Radius => CombatMath.ShockwaveRadius(radius, RunHeroStats.StatsOf(runStats));
     public bool IsReady => Time.time - _lastFireTime >= cooldown;
 
     private void Awake()
     {
+        runStats = RunHeroStats.Find(runStats, character);
         if (ring != null)
         {
             ring.useWorldSpace = true;
@@ -79,9 +83,11 @@ public class ShockwaveController : MonoBehaviour
     {
         _lastFireTime = Time.time;
         Vector3 center = character.transform.position;
+        HeroStats stats = RunHeroStats.StatsOf(runStats);
+        float stun = CombatMath.StunDuration(stunDuration, stats);
 
         _stunnedThisWave.Clear();
-        int count = Physics.OverlapSphereNonAlloc(center, radius, OverlapBuffer);
+        int count = Physics.OverlapSphereNonAlloc(center, Radius, OverlapBuffer);
         for (int i = 0; i < count; i++)
         {
             Collider c = OverlapBuffer[i];
@@ -89,7 +95,7 @@ public class ShockwaveController : MonoBehaviour
 
             HeroHealth hero = c.GetComponentInParent<HeroHealth>();
             if (hero == null || !_stunnedThisWave.Add(hero)) continue;
-            hero.ApplyStun(stunDuration, stunMultiplier);
+            hero.ApplyStun(stun, stunMultiplier);
         }
 
         if (ring != null)
@@ -112,7 +118,7 @@ public class ShockwaveController : MonoBehaviour
         }
 
         float t = 1f - _ringTimer / ringDuration;
-        float r = Mathf.Lerp(0.5f, radius, t);
+        float r = Mathf.Lerp(0.5f, Radius, t);
         Vector3 center = character != null ? character.transform.position : transform.position;
         for (int i = 0; i < ringSegments; i++)
         {

@@ -15,6 +15,8 @@ public class PointingBeamController : MonoBehaviour
     [SerializeField] private LineRenderer beam;   // world-space line renderer
     [Tooltip("Where this hero's input comes from (XR hands, debug keyboard/mouse, ...)")]
     [SerializeField] private HandInputSourceBehaviour inputSource;
+    [Tooltip("Optional. Run items (damage, crit, cooldown, charge); empty = one on the hero, none = neutral")]
+    [SerializeField] private RunHeroStats runStats;
 
     [Header("Aiming")]
     [SerializeField] private LayerMask aimMask = -1;
@@ -79,6 +81,8 @@ public class PointingBeamController : MonoBehaviour
     [SerializeField] private float beamDuration = 0.12f;
     [SerializeField] private float beamWidth = 0.06f;
     [SerializeField] private Color beamColor = new Color(0.4f, 0.9f, 1f);
+    [Tooltip("Beam color of a critical hit (run item Focus Lens)")]
+    [SerializeField] private Color critBeamColor = new Color(1f, 0.85f, 0.2f);
 
     [Header("Effects (optional)")]
     [SerializeField] private GameObject hitEffectPrefab;
@@ -129,6 +133,7 @@ public class PointingBeamController : MonoBehaviour
 
     private void Awake()
     {
+        runStats = RunHeroStats.Find(runStats, character);
         if (chargeIndicator != null) chargeIndicator.gameObject.SetActive(false);
 
         if (beam != null)
@@ -186,17 +191,20 @@ public class PointingBeamController : MonoBehaviour
 
         // Charge shot: a held pinch charges, release fires. Losing the aim hand or
         // a switched-off source (pause) cancels without firing (ChargeInputRule).
+        // Run items scale the numbers; no items (Quick Match, the bot) = the tuned values.
+        HeroStats stats = RunHeroStats.StatsOf(runStats);
+
         ChargeInputAction action = ChargeInputRule.Decide(input, character.IsAlive);
         ChargeStep step = default;
         if (action == ChargeInputAction.Cancel) _charge.Cancel();
-        else step = _charge.Step(action == ChargeInputAction.Hold, Time.deltaTime, charge);
+        else step = _charge.Step(action == ChargeInputAction.Hold, Time.deltaTime, CombatMath.Charge(charge, stats));
 
         UpdateChargeIndicator(step);
         character.SetChargeSpeedMultiplier(step.Charging ? chargeMoveSpeedMultiplier : 1f);
 
         if (step.Released && _aimPoint != Vector3.zero)
         {
-            Fire(Mathf.Lerp(chargeMinDamage, chargeMaxDamage, step.Power),
+            Fire(CombatMath.Shot(Mathf.Lerp(chargeMinDamage, chargeMaxDamage, step.Power), true, stats, CritRoll(stats)),
                 Mathf.Lerp(1.5f, chargeMaxWidthMultiplier, step.Power));
             return;
         }
@@ -205,7 +213,8 @@ public class PointingBeamController : MonoBehaviour
         // A pull during the cooldown is buffered and fires when it ends; losing the
         // aim hand or the hero drops the buffered shot.
         if (!input.HasAim || !character.IsAlive) _shots.ClearPending();
-        else if (_shots.Step(input.FireTriggered, Time.time, fireCooldown)) Fire(damage, 1f);
+        else if (_shots.Step(input.FireTriggered, Time.time, CombatMath.FireCooldown(fireCooldown, stats)))
+            Fire(CombatMath.Shot(damage, false, stats, CritRoll(stats)), 1f);
     }
 
     private void OnDisable()
@@ -322,8 +331,13 @@ public class PointingBeamController : MonoBehaviour
     }
 
 
-    private void Fire(float shotDamage, float widthMultiplier)
+    // Draws from Unity's RNG only when a crit is possible, so heroes without
+    // crit items (Quick Match, the bot) leave the random sequence untouched.
+    private static double CritRoll(HeroStats stats) => stats.CritChance > 0f ? Random.value : 1.0;
+
+    private void Fire(ShotDamage shot, float widthMultiplier)
     {
+        float shotDamage = shot.Damage;
         _shots.MarkFired(Time.time);
 
         Vector3 origin = character.transform.position;
@@ -356,6 +370,9 @@ public class PointingBeamController : MonoBehaviour
         {
             beam.startWidth = beamWidth * widthMultiplier;
             beam.endWidth = beamWidth * 0.5f * widthMultiplier;
+            Color color = shot.Crit ? critBeamColor : beamColor;
+            beam.startColor = color;
+            beam.endColor = color;
             beam.SetPosition(0, origin);
             beam.SetPosition(1, end);
             beam.enabled = true;
