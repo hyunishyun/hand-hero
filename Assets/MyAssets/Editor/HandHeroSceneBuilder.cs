@@ -537,6 +537,12 @@ namespace HandHero.EditorTools
             label.rectTransform.sizeDelta = new Vector2(size.x, size.y);
             PlaceLocal(label, new Vector3(0f, 0f, -size.z * 0.5f - 0.005f));
             label.text = text;
+            // One line that shrinks to fit the button ("AIM: CURSOR" is wider than 0.8 m at 1.6).
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.enableAutoSizing = true;
+            label.fontSizeMax = 1.6f;
+            label.fontSizeMin = 0.8f;
+            label.margin = new Vector4(0.04f, 0f, 0.04f, 0f);
 
             var button = go.AddComponent<HandMenuButton>();
             SetRefs(button, ("director", director), ("background", bg.GetComponent<Renderer>()), ("label", label));
