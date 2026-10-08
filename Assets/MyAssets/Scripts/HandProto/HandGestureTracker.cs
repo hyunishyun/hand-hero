@@ -85,15 +85,25 @@ public class HandGestureTracker : MonoBehaviour
         if (_subsystem == null || !_subsystem.running)
         {
             FindSubsystem();
-            if (_subsystem == null) return;
+            if (_subsystem == null)
+            {
+                // A stopped subsystem's joint arrays are disposed; reading them throws.
+                // Treat "no running subsystem" exactly like tracking loss.
+                _left.IsTracked = false;
+                _right.IsTracked = false;
+                return;
+            }
         }
 
         UpdateHand(_subsystem.leftHand, ref _left, isLeft: true);
         UpdateHand(_subsystem.rightHand, ref _right, isLeft: false);
     }
 
+    private string _lastSubsystemReport;
+
     private void FindSubsystem()
     {
+        _subsystem = null;
         var subsystems = new List<XRHandSubsystem>();
         SubsystemManager.GetSubsystems(subsystems);
         foreach (var s in subsystems)
@@ -101,10 +111,31 @@ public class HandGestureTracker : MonoBehaviour
             if (s.running)
             {
                 _subsystem = s;
-                return;
+                break;
             }
         }
-        if (subsystems.Count > 0) _subsystem = subsystems[0];
+        ReportSubsystems(subsystems);
+    }
+
+    // Diagnostic: logs once per change so a missing/stopped hand subsystem is visible in the Console.
+    private void ReportSubsystems(List<XRHandSubsystem> subsystems)
+    {
+        string report;
+        if (subsystems.Count == 0)
+        {
+            report = "no XRHandSubsystem exists (OpenXR Hand Tracking feature off for this platform, or XR not initialized)";
+        }
+        else
+        {
+            var parts = new List<string>();
+            foreach (var s in subsystems)
+                parts.Add($"{s.subsystemDescriptor.id} running={s.running}");
+            report = string.Join(", ", parts);
+        }
+
+        if (report == _lastSubsystemReport) return;
+        _lastSubsystemReport = report;
+        Debug.Log($"[HandGestureTracker] hand subsystems: {report}");
     }
 
     private void UpdateHand(XRHand hand, ref HandState state, bool isLeft)
