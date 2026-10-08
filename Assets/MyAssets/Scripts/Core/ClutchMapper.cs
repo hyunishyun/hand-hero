@@ -21,6 +21,13 @@ namespace HandHero.Core
 
         public bool IsClutched => _clutched;
 
+        // Drops the clutch without a release edge (hero died / respawned): a
+        // still-closed fist regrabs from the hero's new position on the next Step.
+        public void Reset()
+        {
+            _clutched = false;
+        }
+
         public ClutchResult Step(bool clutchHeld, Vector3 clutchDelta, Vector3 characterPosition, float positionScale)
         {
             var result = new ClutchResult();

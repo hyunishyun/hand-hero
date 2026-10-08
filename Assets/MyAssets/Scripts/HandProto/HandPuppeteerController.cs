@@ -53,6 +53,15 @@ public class HandPuppeteerController : MonoBehaviour
         IHandInputSource source = Source();
         if (source == null || character == null) return;
 
+        // Dead hero: drop the clutch so a fist still closed at respawn regrabs
+        // from the spawn point instead of dragging toward the old target.
+        if (!character.IsAlive)
+        {
+            if (_clutch.IsClutched) OnRelease();
+            _clutch.Reset();
+            return;
+        }
+
         // A lost hand arrives as ClutchHeld = false, so the character glides
         // instead of teleporting when the hand comes back somewhere else.
         // Grabbing starts from where the character currently is — no snap.

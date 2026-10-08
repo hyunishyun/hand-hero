@@ -114,6 +114,21 @@ namespace HandHero.Tests
         }
 
         [Test]
+        public void Reset_HeldFistRegrabsFromNewPosition()
+        {
+            _mapper.Step(true, Vector3.zero, CharacterPos, Scale);
+            _mapper.Step(true, new Vector3(0.1f, 0f, 0f), CharacterPos, Scale);
+
+            _mapper.Reset();
+            var respawn = new Vector3(0f, 2f, 30f);
+            ClutchResult r = _mapper.Step(true, new Vector3(0.01f, 0f, 0f), respawn, Scale);
+
+            Assert.IsTrue(r.JustGrabbed);
+            Assert.IsFalse(r.JustReleased);
+            Assert.That(Vector3.Distance(r.Target, respawn + new Vector3(0.6f, 0f, 0f)), Is.LessThan(1e-4f));
+        }
+
+        [Test]
         public void Sampler_DeltaIsZeroWhenOpen()
         {
             _sampler.Step(true, 0.1f, Vector3.zero, Grab, Release, out _);

@@ -24,6 +24,7 @@ public class BotInputSource : HandInputSourceBehaviour
     [SerializeField] private int seed;
 
     private BotBrain _brain;
+    private FlyingCharacter _enemyHero;
 
     public BotBrain Brain => _brain;
 
@@ -58,10 +59,24 @@ public class BotInputSource : HandInputSourceBehaviour
     {
         if (self == null) return default;
 
+        // Dead: let go (the puppeteer drops its clutch too) and regrab at respawn.
+        if (!self.IsAlive)
+        {
+            _brain.Reset();
+            return default;
+        }
+
         _brain.Params = CurrentParams();
-        bool hasEnemy = enemy != null && enemy.gameObject.activeInHierarchy;
+        bool hasEnemy = enemy != null && enemy.gameObject.activeInHierarchy && EnemyAlive();
         return _brain.Step(self.transform.position, hasEnemy, hasEnemy ? enemy.position : Vector3.zero,
             self.Bounds, Time.deltaTime);
+    }
+
+    private bool EnemyAlive()
+    {
+        if (_enemyHero == null || _enemyHero.transform != enemy)
+            _enemyHero = enemy.GetComponent<FlyingCharacter>();
+        return _enemyHero == null || _enemyHero.IsAlive;
     }
 
     private BotParams CurrentParams()

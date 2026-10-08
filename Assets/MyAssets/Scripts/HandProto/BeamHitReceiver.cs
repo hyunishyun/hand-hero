@@ -5,6 +5,7 @@ public struct BeamHit
 {
     public Vector3 Point;
     public Vector3 Direction;
+    public float Damage;
     public FlyingCharacter Shooter;
 }
 

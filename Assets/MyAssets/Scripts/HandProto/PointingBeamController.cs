@@ -22,6 +22,8 @@ public class PointingBeamController : MonoBehaviour
 
     [Header("Firing")]
     [SerializeField] private float fireCooldown = 0.35f;
+    [Tooltip("Health removed from a hero (HeroHealth) per beam hit")]
+    [SerializeField] private float damage = 20f;
 
     [Header("Beam")]
     [SerializeField] private float beamDuration = 0.12f;
@@ -80,7 +82,7 @@ public class PointingBeamController : MonoBehaviour
         if (!input.HasAim) return;
 
         UpdateAim(input.AimRay);
-        if (input.FireTriggered) TryFire();
+        if (input.FireTriggered && character.IsAlive) TryFire();
     }
 
     private void UpdateAim(Ray ray)
@@ -125,7 +127,7 @@ public class PointingBeamController : MonoBehaviour
 
             var receiver = hit.collider.GetComponentInParent<BeamHitReceiver>();
             if (receiver != null)
-                receiver.Receive(new BeamHit { Point = hit.point, Direction = dir, Shooter = character });
+                receiver.Receive(new BeamHit { Point = hit.point, Direction = dir, Damage = damage, Shooter = character });
 
             if (hitEffectPrefab != null)
             {

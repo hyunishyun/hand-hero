@@ -46,6 +46,7 @@ namespace HandHero.EditorTools
             Material noseMat = LitMaterial("Hero_Nose", new Color(1f, 0.85f, 0.2f));
             Material targetMat = LitMaterial("Target", new Color(1f, 0.5f, 0.15f));
             Material reticleMat = UnlitMaterial("Reticle", new Color(1f, 1f, 0.3f));
+            Material barMat = UnlitMaterial("HealthBar", new Color(0.3f, 1f, 0.4f));
             Material beamMat = BeamMaterial("Beam");
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -88,7 +89,7 @@ namespace HandHero.EditorTools
                 target.AddComponent<PrototypeTarget>();
             }
 
-            var flying = Hero("PlayerHero", arena.transform, Vector3.zero, heroMat, noseMat);
+            var flying = Hero("PlayerHero", arena.transform, Vector3.zero, heroMat, noseMat, barMat);
 
             // Aim feedback: reticle without collider (else the aim ray hits it and jitters).
             GameObject reticle = Primitive(PrimitiveType.Sphere, "Reticle", null, ArenaCenter, Vector3.one * 0.4f, reticleMat);
@@ -116,7 +117,7 @@ namespace HandHero.EditorTools
 
             // Bot opponent: same hero, same controllers, input from BotInputSource.
             BotDifficulty difficulty = GetOrCreateBotDifficulty();
-            var botFlying = Hero("BotHero", arena.transform, new Vector3(6f, 3f, 12f), botMat, noseMat);
+            var botFlying = Hero("BotHero", arena.transform, new Vector3(6f, 3f, 12f), botMat, noseMat, barMat);
 
             var botBeamGo = new GameObject("BotBeamRenderer");
             var botBeam = botBeamGo.AddComponent<LineRenderer>();
@@ -135,15 +136,23 @@ namespace HandHero.EditorTools
             SetRefs(botInput, ("self", botFlying), ("puppeteer", botPuppeteer), ("enemy", flying.transform),
                 ("hitReceiver", botFlying.GetComponent<BeamHitReceiver>()), ("difficulty", difficulty));
 
+            // Enemy beam warning line (aim locked -> thickens, yellow -> red -> fire).
+            var telegraphGo = new GameObject("BotTelegraphRenderer");
+            var telegraph = telegraphGo.AddComponent<LineRenderer>();
+            telegraph.sharedMaterial = beamMat;
+            telegraph.enabled = false;
+            var telegraphLine = bot.AddComponent<BotTelegraphLine>();
+            SetRefs(telegraphLine, ("bot", botInput), ("botHero", botFlying), ("line", telegraph));
+
             EditorSceneManager.SaveScene(scene, SandboxScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log($"[HandHeroSceneBuilder] Built {SandboxScenePath}");
         }
 
-        // Greybox hero: collider + BeamHitReceiver on the root (beams hit it),
-        // visual pivot rotated by FlyingCharacter for facing/banking only.
+        // Greybox hero: collider + BeamHitReceiver + HeroHealth on the root (beams
+        // hit it), visual pivot rotated by FlyingCharacter for facing/banking only.
         private static FlyingCharacter Hero(string name, Transform arena, Vector3 localPos, Material bodyMat,
-            Material noseMat)
+            Material noseMat, Material barMat)
         {
             var hero = new GameObject(name);
             hero.transform.SetParent(arena, false);
@@ -161,6 +170,13 @@ namespace HandHero.EditorTools
 
             var flying = hero.AddComponent<FlyingCharacter>();
             SetRefs(flying, ("arenaCenter", arena), ("visual", visual.transform));
+
+            // Root doesn't rotate (only Visual does), so the bar stays level.
+            GameObject bar = Primitive(PrimitiveType.Cube, "HealthBar", hero.transform,
+                new Vector3(0f, 1.4f, 0f), new Vector3(1.6f, 0.12f, 0.12f), barMat);
+            var health = hero.AddComponent<HeroHealth>();
+            SetRefs(health, ("character", flying), ("hitReceiver", hero.GetComponent<BeamHitReceiver>()),
+                ("healthBarFill", bar.transform));
             return flying;
         }
 

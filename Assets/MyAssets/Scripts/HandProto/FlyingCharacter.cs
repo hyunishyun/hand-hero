@@ -31,16 +31,44 @@ public class FlyingCharacter : MonoBehaviour
     public Vector3 Velocity => _velocity;
     public bool IsClutched => _hasTarget;
     public ArenaBounds Bounds => GetArenaBounds();
+    // False between death and respawn (HeroHealth): no flight, no control, no firing.
+    public bool IsAlive => _alive;
 
     private Vector3 _velocity;
     private Vector3 _target;
     private bool _hasTarget;
+    private bool _alive = true;
+    private float _speedMultiplier = 1f;
 
     // Called by HandPuppeteerController while the clutch (fist) is held.
     public void SetTarget(Vector3 worldPosition)
     {
+        if (!_alive) return;
         _target = GetArenaBounds().Clamp(worldPosition);
         _hasTarget = true;
+    }
+
+    // Hit slow (ADR 3): scales maxSpeed only, the spring feel stays the same.
+    public void SetSpeedMultiplier(float multiplier)
+    {
+        _speedMultiplier = Mathf.Clamp01(multiplier);
+    }
+
+    public void Kill()
+    {
+        _alive = false;
+        _hasTarget = false;
+        _velocity = Vector3.zero;
+    }
+
+    // Teleports the hero (never the player's rig) and gives control back.
+    public void Respawn(Vector3 worldPosition)
+    {
+        transform.position = GetArenaBounds().Clamp(worldPosition);
+        _velocity = Vector3.zero;
+        _hasTarget = false;
+        _speedMultiplier = 1f;
+        _alive = true;
     }
 
     // Called when the fist opens: the character keeps its momentum and glides.
@@ -51,6 +79,8 @@ public class FlyingCharacter : MonoBehaviour
 
     private void Update()
     {
+        if (!_alive) return;
+
         float dt = Time.deltaTime;
 
         // Pure flight math lives in HandHero.Core (unit-tested, reusable by the
@@ -59,7 +89,7 @@ public class FlyingCharacter : MonoBehaviour
         {
             Stiffness = stiffness,
             Damping = damping,
-            MaxSpeed = maxSpeed,
+            MaxSpeed = maxSpeed * _speedMultiplier,
             GlideDrag = glideDrag,
         };
         var state = new FlightState { Position = transform.position, Velocity = _velocity };
