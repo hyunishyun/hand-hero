@@ -1,3 +1,4 @@
+using HandHero.Core;
 using UnityEngine;
 
 // Right-hand commander aiming + pinch-to-fire.
@@ -35,7 +36,7 @@ public class PointingBeamController : MonoBehaviour
     [SerializeField] private AudioClip fireSound;
 
     private Vector3 _aimPoint;
-    private bool _pinchLatched;
+    private HysteresisGate _pinchGate;
     private float _lastFireTime = -999f;
     private float _beamTimer;
 
@@ -64,7 +65,7 @@ public class PointingBeamController : MonoBehaviour
 
         if (!hand.IsTracked)
         {
-            _pinchLatched = false;
+            _pinchGate.Reset();
             return; // reticle freezes at the last aim point
         }
 
@@ -96,15 +97,8 @@ public class PointingBeamController : MonoBehaviour
     private void UpdateFire(HandGestureTracker.HandState hand)
     {
         // Edge-detected pinch with hysteresis: fire once per pinch.
-        if (!_pinchLatched && hand.PinchStrength >= pinchFireThreshold)
-        {
-            _pinchLatched = true;
+        if (_pinchGate.Step(hand.PinchStrength, pinchFireThreshold, pinchResetThreshold) == GateEdge.Rising)
             TryFire();
-        }
-        else if (_pinchLatched && hand.PinchStrength <= pinchResetThreshold)
-        {
-            _pinchLatched = false;
-        }
     }
 
     private void TryFire()

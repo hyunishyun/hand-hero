@@ -5,7 +5,7 @@
 | 태스크 | 상태 | 메모 |
 |---|---|---|
 | T0 작업 기반 | DONE | Phase 0에서 완료: git·브랜치·태그·`.gitignore`·`AUTO/`·`Networking~`·`compile_check.ps1`. Unity 6000.6.4f1 업그레이드 후 `compile_check.ps1` → `RESULT: OK`. 첫 배치 실행 이후 컴파일 체크 1회는 약 1–2분. |
-| T1 순수 로직 어셈블리 + 테스트 | TODO | |
+| T1 순수 로직 어셈블리 + 테스트 | IN_PROGRESS | |
 | T2 입력 추상화 | TODO | |
 | T3 봇 상대 | TODO | |
 | T4 전투 규칙 | TODO | |

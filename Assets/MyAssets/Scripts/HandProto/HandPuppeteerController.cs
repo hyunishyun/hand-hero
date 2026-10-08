@@ -1,3 +1,4 @@
+using HandHero.Core;
 using UnityEngine;
 
 // Left-hand puppeteer with a fist clutch and RELATIVE (mouse-style) mapping.
@@ -33,9 +34,8 @@ public class HandPuppeteerController : MonoBehaviour
     [SerializeField] private Color clutchedColor = new Color(0.3f, 1f, 0.5f);
     [SerializeField] private Color releasedColor = new Color(1f, 1f, 1f, 0.4f);
 
-    private bool _clutched;
-    private Vector3 _lastHandPosition;
-    private Vector3 _targetPosition;
+    // Clutch hysteresis + relative mapping (unit-tested in HandHero.Core).
+    private readonly ClutchMapper _clutch = new ClutchMapper();
 
     private void Update()
     {
@@ -46,45 +46,23 @@ public class HandPuppeteerController : MonoBehaviour
 
         // Tracking loss releases the clutch — the character glides instead of
         // teleporting when the hand comes back somewhere else.
-        if (!hand.IsTracked)
-        {
-            if (_clutched) Release();
-            return;
-        }
+        // Grabbing starts from where the character currently is — no snap.
+        ClutchResult clutch = _clutch.Step(hand.IsTracked, hand.FistStrength, hand.PalmPosition,
+            character.transform.position, grabThreshold, releaseThreshold, positionScale);
 
-        if (!_clutched && hand.FistStrength >= grabThreshold)
-        {
-            Grab(hand.PalmPosition);
-        }
-        else if (_clutched && hand.FistStrength <= releaseThreshold)
-        {
-            Release();
-        }
-
-        if (_clutched)
-        {
-            Vector3 delta = hand.PalmPosition - _lastHandPosition;
-            _lastHandPosition = hand.PalmPosition;
-
-            _targetPosition += delta * positionScale;
-            character.SetTarget(_targetPosition);
-        }
+        if (clutch.JustGrabbed) OnGrab();
+        if (clutch.JustReleased) OnRelease();
+        if (clutch.Clutched) character.SetTarget(clutch.Target);
     }
 
-    private void Grab(Vector3 handPosition)
+    private void OnGrab()
     {
-        _clutched = true;
-        _lastHandPosition = handPosition;
-        // Start dragging from where the character currently is — no snap.
-        _targetPosition = character.transform.position;
-
         if (clutchIndicator != null)
             clutchIndicator.material.color = clutchedColor;
     }
 
-    private void Release()
+    private void OnRelease()
     {
-        _clutched = false;
         character.ClearTarget();
 
         if (clutchIndicator != null)

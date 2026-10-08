@@ -1,3 +1,4 @@
+using HandHero.Core;
 using UnityEngine;
 
 // Greybox flying hero for the arena prototype.
@@ -37,7 +38,7 @@ public class FlyingCharacter : MonoBehaviour
     // Called by HandPuppeteerController while the clutch (fist) is held.
     public void SetTarget(Vector3 worldPosition)
     {
-        _target = ClampToArena(worldPosition);
+        _target = GetArenaBounds().Clamp(worldPosition);
         _hasTarget = true;
     }
 
@@ -51,34 +52,27 @@ public class FlyingCharacter : MonoBehaviour
     {
         float dt = Time.deltaTime;
 
-        if (_hasTarget)
+        // Pure flight math lives in HandHero.Core (unit-tested, reusable by the
+        // future Fusion FixedUpdateNetwork). This component only feeds it.
+        var flightParams = new FlightParams
         {
-            // Critically-damped-ish spring toward the target.
-            Vector3 toTarget = _target - transform.position;
-            _velocity += toTarget * (stiffness * dt);
-            _velocity -= _velocity * (damping * dt);
-        }
-        else
-        {
-            // Glide: momentum with gentle drag, no gravity (hero flight).
-            _velocity -= _velocity * (glideDrag * dt);
-        }
+            Stiffness = stiffness,
+            Damping = damping,
+            MaxSpeed = maxSpeed,
+            GlideDrag = glideDrag,
+        };
+        var state = new FlightState { Position = transform.position, Velocity = _velocity };
+        state = SpringFlightModel.Step(state, _hasTarget, _target, flightParams, GetArenaBounds(), dt);
 
-        _velocity = Vector3.ClampMagnitude(_velocity, maxSpeed);
-        transform.position = ClampToArena(transform.position + _velocity * dt);
+        _velocity = state.Velocity;
+        transform.position = state.Position;
 
         UpdateVisual(dt);
     }
 
-    private Vector3 ClampToArena(Vector3 p)
+    private ArenaBounds GetArenaBounds()
     {
-        if (arenaCenter == null) return p;
-        Vector3 half = arenaSize * 0.5f;
-        Vector3 local = p - arenaCenter.position;
-        local.x = Mathf.Clamp(local.x, -half.x, half.x);
-        local.y = Mathf.Clamp(local.y, -half.y, half.y);
-        local.z = Mathf.Clamp(local.z, -half.z, half.z);
-        return arenaCenter.position + local;
+        return arenaCenter != null ? new ArenaBounds(arenaCenter.position, arenaSize) : default;
     }
 
     private void UpdateVisual(float dt)
