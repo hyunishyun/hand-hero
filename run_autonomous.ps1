@@ -40,8 +40,11 @@ Add-Type -Namespace Win32 -Name Power -MemberDefinition @"
 [System.Runtime.InteropServices.DllImport("kernel32.dll")]
 public static extern uint SetThreadExecutionState(uint esFlags);
 "@
-# ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
-[Win32.Power]::SetThreadExecutionState(0x80000000 -bor 0x00000001 -bor 0x00000002) | Out-Null
+# ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED = 0x80000003.
+# Decimal [uint32] literals: in PS 5.1 hex 0x80000000 is a negative Int32 and fails the uint conversion.
+$ES_CONTINUOUS = [uint32]2147483648
+$ES_AWAKE      = [uint32]2147483651
+[Win32.Power]::SetThreadExecutionState($ES_AWAKE) | Out-Null
 
 $prompt = @"
 너는 무인 모드(Phase A)로 실행 중이다. 아무도 질문에 답하지 않는다.
@@ -108,5 +111,5 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 20
 }
 
-[Win32.Power]::SetThreadExecutionState(0x80000000) | Out-Null
+[Win32.Power]::SetThreadExecutionState($ES_CONTINUOUS) | Out-Null
 Log "=== Autonomous run finished. See AUTO/REPORT_FOR_HYUN.md ==="
