@@ -34,6 +34,8 @@ public class HandPuppeteerController : MonoBehaviour
     private readonly ClutchMapper _clutch = new ClutchMapper();
     private IHandInputSource _sourceOverride;
 
+    public float PositionScale => positionScale;
+
     // Code-assigned source (bot, test). Takes priority over the inspector field.
     public void SetInputSource(IHandInputSource source)
     {

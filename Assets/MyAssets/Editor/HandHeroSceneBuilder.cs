@@ -13,11 +13,13 @@ namespace HandHero.EditorTools
     {
         private const string SceneDir = "Assets/MyAssets/Scenes";
         private const string MaterialDir = "Assets/MyAssets/Generated/Materials";
+        private const string BotDir = "Assets/MyAssets/Generated/Bot";
         public const string SandboxScenePath = SceneDir + "/HandHero_Sandbox.unity";
+        public const string BotDifficultyPath = BotDir + "/BotDifficulty_Normal.asset";
 
-        // Built-in "Ignore Raycast" layer: keeps the player hero out of its own aim
-        // ray without adding a project layer (ProjectSettings stay untouched until T9).
-        private const int HeroLayer = 2;
+        // Heroes stay on the Default layer: PointingBeamController skips its own
+        // hero's colliders, so player and bot can hit each other without new
+        // project layers (ProjectSettings stay untouched until T9).
 
         private static readonly Vector3 ArenaCenter = new Vector3(0f, 2f, 20f);
         private static readonly Vector3 ArenaSize = new Vector3(35f, 20f, 35f);
@@ -40,6 +42,7 @@ namespace HandHero.EditorTools
             Material floorMat = LitMaterial("Greybox_Floor", new Color(0.35f, 0.37f, 0.4f));
             Material wallMat = LitMaterial("Greybox_Wall", new Color(0.5f, 0.52f, 0.56f));
             Material heroMat = LitMaterial("Hero_Player", new Color(0.2f, 0.55f, 1f));
+            Material botMat = LitMaterial("Hero_Bot", new Color(0.9f, 0.15f, 0.2f));
             Material noseMat = LitMaterial("Hero_Nose", new Color(1f, 0.85f, 0.2f));
             Material targetMat = LitMaterial("Target", new Color(1f, 0.5f, 0.15f));
             Material reticleMat = UnlitMaterial("Reticle", new Color(1f, 1f, 0.3f));
@@ -85,22 +88,7 @@ namespace HandHero.EditorTools
                 target.AddComponent<PrototypeTarget>();
             }
 
-            // Player hero: collider on the root (future enemy beams hit it),
-            // visual pivot rotated by FlyingCharacter for facing/banking only.
-            var hero = new GameObject("PlayerHero");
-            hero.transform.SetParent(arena.transform, false);
-            hero.AddComponent<SphereCollider>().radius = 0.9f;
-            var visual = new GameObject("Visual");
-            visual.transform.SetParent(hero.transform, false);
-            GameObject body = Primitive(PrimitiveType.Capsule, "Body", visual.transform,
-                Vector3.zero, new Vector3(0.8f, 0.9f, 0.8f), heroMat);
-            body.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            Primitive(PrimitiveType.Sphere, "Nose", visual.transform,
-                new Vector3(0f, 0f, 0.9f), Vector3.one * 0.35f, noseMat);
-            SetLayerRecursive(hero, HeroLayer);
-
-            var flying = hero.AddComponent<FlyingCharacter>();
-            SetRefs(flying, ("arenaCenter", arena.transform), ("visual", visual.transform));
+            var flying = Hero("PlayerHero", arena.transform, Vector3.zero, heroMat, noseMat);
 
             // Aim feedback: reticle without collider (else the aim ray hits it and jitters).
             GameObject reticle = Primitive(PrimitiveType.Sphere, "Reticle", null, ArenaCenter, Vector3.one * 0.4f, reticleMat);
@@ -125,13 +113,67 @@ namespace HandHero.EditorTools
             var pointing = controllers.AddComponent<PointingBeamController>();
             SetRefs(pointing, ("character", flying), ("reticle", reticle.transform), ("beam", beam),
                 ("inputSource", debugInput));
-            var so = new SerializedObject(pointing);
-            so.FindProperty("aimMask").intValue = ~(1 << HeroLayer);
-            so.ApplyModifiedPropertiesWithoutUndo();
+
+            // Bot opponent: same hero, same controllers, input from BotInputSource.
+            BotDifficulty difficulty = GetOrCreateBotDifficulty();
+            var botFlying = Hero("BotHero", arena.transform, new Vector3(6f, 3f, 12f), botMat, noseMat);
+
+            var botBeamGo = new GameObject("BotBeamRenderer");
+            var botBeam = botBeamGo.AddComponent<LineRenderer>();
+            botBeam.sharedMaterial = beamMat;
+            botBeam.enabled = false;
+
+            var bot = new GameObject("Bot");
+            var botInput = bot.AddComponent<BotInputSource>();
+            var botPuppeteer = bot.AddComponent<HandPuppeteerController>();
+            SetRefs(botPuppeteer, ("character", botFlying), ("inputSource", botInput));
+            var botPointing = bot.AddComponent<PointingBeamController>();
+            SetRefs(botPointing, ("character", botFlying), ("beam", botBeam), ("inputSource", botInput));
+            var beamSo = new SerializedObject(botPointing);
+            beamSo.FindProperty("beamColor").colorValue = new Color(1f, 0.25f, 0.2f);
+            beamSo.ApplyModifiedPropertiesWithoutUndo();
+            SetRefs(botInput, ("self", botFlying), ("puppeteer", botPuppeteer), ("enemy", flying.transform),
+                ("hitReceiver", botFlying.GetComponent<BeamHitReceiver>()), ("difficulty", difficulty));
 
             EditorSceneManager.SaveScene(scene, SandboxScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log($"[HandHeroSceneBuilder] Built {SandboxScenePath}");
+        }
+
+        // Greybox hero: collider + BeamHitReceiver on the root (beams hit it),
+        // visual pivot rotated by FlyingCharacter for facing/banking only.
+        private static FlyingCharacter Hero(string name, Transform arena, Vector3 localPos, Material bodyMat,
+            Material noseMat)
+        {
+            var hero = new GameObject(name);
+            hero.transform.SetParent(arena, false);
+            hero.transform.localPosition = localPos;
+            hero.AddComponent<SphereCollider>().radius = 0.9f;
+            hero.AddComponent<BeamHitReceiver>();
+
+            var visual = new GameObject("Visual");
+            visual.transform.SetParent(hero.transform, false);
+            GameObject body = Primitive(PrimitiveType.Capsule, "Body", visual.transform,
+                Vector3.zero, new Vector3(0.8f, 0.9f, 0.8f), bodyMat);
+            body.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Primitive(PrimitiveType.Sphere, "Nose", visual.transform,
+                new Vector3(0f, 0f, 0.9f), Vector3.one * 0.35f, noseMat);
+
+            var flying = hero.AddComponent<FlyingCharacter>();
+            SetRefs(flying, ("arenaCenter", arena), ("visual", visual.transform));
+            return flying;
+        }
+
+        // Kept if it already exists so tuning done in the editor survives rebuilds.
+        private static BotDifficulty GetOrCreateBotDifficulty()
+        {
+            EnsureFolder(BotDir);
+            var asset = AssetDatabase.LoadAssetAtPath<BotDifficulty>(BotDifficultyPath);
+            if (asset != null) return asset;
+
+            asset = ScriptableObject.CreateInstance<BotDifficulty>();
+            AssetDatabase.CreateAsset(asset, BotDifficultyPath);
+            return asset;
         }
 
         private static GameObject Cube(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat)
@@ -150,12 +192,6 @@ namespace HandHero.EditorTools
             go.GetComponent<Renderer>().sharedMaterial = mat;
             if (!keepCollider) Object.DestroyImmediate(go.GetComponent<Collider>());
             return go;
-        }
-
-        private static void SetLayerRecursive(GameObject go, int layer)
-        {
-            go.layer = layer;
-            foreach (Transform child in go.transform) SetLayerRecursive(child.gameObject, layer);
         }
 
         private static void SetRefs(Object target, params (string field, Object value)[] refs)

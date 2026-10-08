@@ -30,6 +30,7 @@ public class FlyingCharacter : MonoBehaviour
 
     public Vector3 Velocity => _velocity;
     public bool IsClutched => _hasTarget;
+    public ArenaBounds Bounds => GetArenaBounds();
 
     private Vector3 _velocity;
     private Vector3 _target;

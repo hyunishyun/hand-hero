@@ -33,6 +33,8 @@ public class PointingBeamController : MonoBehaviour
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip fireSound;
 
+    private static readonly RaycastHit[] HitBuffer = new RaycastHit[16];
+
     private Vector3 _aimPoint;
     private IHandInputSource _sourceOverride;
     private float _lastFireTime = -999f;
@@ -85,7 +87,7 @@ public class PointingBeamController : MonoBehaviour
     {
         if (ray.direction == Vector3.zero) return;
 
-        Vector3 point = Physics.Raycast(ray, out RaycastHit hit, maxAimDistance, aimMask)
+        Vector3 point = RaycastIgnoringSelf(ray, maxAimDistance, out RaycastHit hit)
             ? hit.point
             : ray.GetPoint(maxAimDistance);
 
@@ -114,12 +116,16 @@ public class PointingBeamController : MonoBehaviour
         float dist = Vector3.Distance(origin, _aimPoint);
         Vector3 end = _aimPoint;
 
-        if (Physics.Raycast(origin, dir, out RaycastHit hit, dist + 0.5f, aimMask))
+        if (RaycastIgnoringSelf(new Ray(origin, dir), dist + 0.5f, out RaycastHit hit))
         {
             end = hit.point;
 
             var target = hit.collider.GetComponentInParent<PrototypeTarget>();
             if (target != null) target.OnHit();
+
+            var receiver = hit.collider.GetComponentInParent<BeamHitReceiver>();
+            if (receiver != null)
+                receiver.Receive(new BeamHit { Point = hit.point, Direction = dir, Shooter = character });
 
             if (hitEffectPrefab != null)
             {
@@ -141,6 +147,26 @@ public class PointingBeamController : MonoBehaviour
             audioSource.pitch = Random.Range(0.95f, 1.1f);
             audioSource.PlayOneShot(fireSound);
         }
+    }
+
+    // Nearest hit that is not this controller's own hero, so a hero never
+    // blocks its own aim or beam (works for player and bot without extra layers).
+    private bool RaycastIgnoringSelf(Ray ray, float distance, out RaycastHit nearest)
+    {
+        nearest = default;
+        int count = Physics.RaycastNonAlloc(ray, HitBuffer, distance, aimMask);
+        bool found = false;
+        Transform self = character.transform;
+
+        for (int i = 0; i < count; i++)
+        {
+            RaycastHit h = HitBuffer[i];
+            if (h.collider.transform.IsChildOf(self)) continue;
+            if (found && h.distance >= nearest.distance) continue;
+            nearest = h;
+            found = true;
+        }
+        return found;
     }
 
     private void UpdateBeamTimer()
