@@ -34,6 +34,9 @@ namespace HandHero.Core
         public bool FireTriggered;
         // Aim-hand pinch is closed (level): the charge shot hold. FireTriggered is the edge.
         public bool PinchHeld;
+        // CURSOR aim fire: index-finger trigger (edge) and its hold (charge).
+        public bool TriggerFired;
+        public bool TriggerHeld;
 
         // Aim-hand fist clutch (CURSOR aim): drags the 3D aim marker. Delta in
         // tracking-space meters since the previous frame, zero when open.
