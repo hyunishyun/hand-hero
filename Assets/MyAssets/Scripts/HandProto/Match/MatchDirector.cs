@@ -22,6 +22,7 @@ public class MatchDirector : MonoBehaviour
         TogglePause,
         ReturnToMenu,
         SkipTutorial,
+        ToggleViewMode,    // VR arena <-> passthrough tabletop, main menu only (T10)
     }
 
     private const string TutorialSeenKey = "HandHero.TutorialSeen";
@@ -38,6 +39,10 @@ public class MatchDirector : MonoBehaviour
 
     [Header("Rules")]
     [SerializeField] private MatchParams rules = MatchParams.Default;
+
+    [Header("View")]
+    [Tooltip("Optional. VR arena / passthrough tabletop switch (Arena_Main only)")]
+    [SerializeField] private ArenaViewMode viewMode;
 
     [Header("Auto pause")]
     [Tooltip("Pause when the app loses focus or is suspended (system menu, headset off, Meta button)")]
@@ -106,7 +111,14 @@ public class MatchDirector : MonoBehaviour
             case MenuAction.TogglePause: TogglePause(); break;
             case MenuAction.ReturnToMenu: ReturnToMenu(); break;
             case MenuAction.SkipTutorial: CompleteTutorial(); break;
+            case MenuAction.ToggleViewMode: ToggleViewMode(); break;
         }
+    }
+
+    // The view only changes in the main menu, never mid-match (no view jumps while playing).
+    public void ToggleViewMode()
+    {
+        if (viewMode != null && _match.Phase == MatchPhase.Menu) viewMode.Toggle();
     }
 
     private void OnApplicationFocus(bool hasFocus)

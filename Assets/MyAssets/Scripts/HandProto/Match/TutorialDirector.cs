@@ -26,6 +26,7 @@ public class TutorialDirector : MonoBehaviour
     [SerializeField] private float targetAimRadius = 1.5f;
     [SerializeField] private Transform telegraphOrigin;
     [SerializeField] private LineRenderer telegraph;
+    [Tooltip("May live outside the tutorial root (seat space, scaled with the tabletop view); shown with it")]
     [SerializeField] private TMP_Text prompt;
     [SerializeField] private Transform ghostHand;
 
@@ -96,12 +97,14 @@ public class TutorialDirector : MonoBehaviour
         _sequencer = new TutorialSequencer(steps);
         _sequencer.DodgeShotFired += OnDodgeShot;
         if (tutorialRoot != null) tutorialRoot.SetActive(true);
+        if (prompt != null) prompt.gameObject.SetActive(true);
     }
 
     private void Stop()
     {
         _running = false;
         if (tutorialRoot != null) tutorialRoot.SetActive(false);
+        if (prompt != null) prompt.gameObject.SetActive(false);
     }
 
     private TutorialObservation Observe()
@@ -193,8 +196,10 @@ public class TutorialDirector : MonoBehaviour
         if (!show) return;
 
         // Comfortable hand spots in front of the seat (left = clutch hand, right = aim hand).
-        Vector3 leftHand = h.position + new Vector3(-0.2f, -0.35f, 0.4f);
-        Vector3 rightHand = h.position + new Vector3(0.2f, -0.3f, 0.4f);
+        // Physical meters: lossyScale is the tabletop view scale (1 in the VR arena).
+        float s = h.lossyScale.x;
+        Vector3 leftHand = h.position + new Vector3(-0.2f, -0.35f, 0.4f) * s;
+        Vector3 rightHand = h.position + new Vector3(0.2f, -0.3f, 0.4f) * s;
         float ping = Mathf.PingPong(Time.time * 0.8f, 1f);
         float pulse = 1f + 0.3f * Mathf.Sin(Time.time * 6f);
 
@@ -210,7 +215,7 @@ public class TutorialDirector : MonoBehaviour
                 {
                     // Small hand motion in the direction the hero has to travel.
                     Vector3 dir = (ring.position - playerHero.transform.position).normalized;
-                    pos = leftHand + dir * (0.12f * ping);
+                    pos = leftHand + dir * (0.12f * ping * s);
                 }
                 break;
             case TutorialStep.Aim:
@@ -221,11 +226,11 @@ public class TutorialDirector : MonoBehaviour
                 scale = pulse;
                 break;
             case TutorialStep.Dodge:
-                pos = leftHand + Vector3.right * (0.15f * (ping - 0.5f));
+                pos = leftHand + Vector3.right * (0.15f * (ping - 0.5f) * s);
                 break;
         }
 
         ghostHand.position = pos;
-        ghostHand.localScale = Vector3.one * (0.05f * scale);
+        ghostHand.localScale = Vector3.one * (0.05f * scale * s);
     }
 }

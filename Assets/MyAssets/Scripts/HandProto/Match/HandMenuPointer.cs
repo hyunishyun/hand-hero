@@ -38,6 +38,8 @@ public class HandMenuPointer : MonoBehaviour
     private HysteresisGate _pinch;
     private bool _waitForOpenHand;
     private HandMenuButton _hovered;
+    private float _rayWidth = -1f;
+    private float _scale = 1f; // tabletop view: menus and hands are this many times larger in world units
 
     // A menu can appear under a pinch that is still held (e.g. the right hand
     // was firing when the match ended): that pinch must open before one counts.
@@ -55,11 +57,14 @@ public class HandMenuPointer : MonoBehaviour
 
     private void Update()
     {
-        bool hasRay = TryGetRay(out Ray r, out bool pressed, out bool fromHand);
+        HandGestureTracker t = tracker != null ? tracker : HandGestureTracker.Instance;
+        _scale = t != null ? t.WorldScale : 1f;
+        bool hasRay = TryGetRay(t, out Ray r, out bool pressed, out bool fromHand);
 
         HandMenuButton hit = null;
-        float distance = idleRayLength;
-        if (hasRay && Physics.Raycast(r, out RaycastHit info, maxDistance, ~0, QueryTriggerInteraction.Collide))
+        float distance = idleRayLength * _scale;
+        if (hasRay && Physics.Raycast(r, out RaycastHit info, maxDistance * _scale, ~0,
+                QueryTriggerInteraction.Collide))
         {
             hit = info.collider.GetComponent<HandMenuButton>();
             if (hit != null) distance = info.distance;
@@ -74,20 +79,21 @@ public class HandMenuPointer : MonoBehaviour
             ray.enabled = hasRay && fromHand;
             if (ray.enabled)
             {
-                float start = Mathf.Min(rayStartOffset, distance);
+                if (_rayWidth < 0f) _rayWidth = ray.widthMultiplier;
+                ray.widthMultiplier = _rayWidth * _scale;
+                float start = Mathf.Min(rayStartOffset * _scale, distance);
                 ray.SetPosition(0, r.GetPoint(start));
                 ray.SetPosition(1, r.GetPoint(distance));
             }
         }
     }
 
-    private bool TryGetRay(out Ray r, out bool pressed, out bool fromHand)
+    private bool TryGetRay(HandGestureTracker t, out Ray r, out bool pressed, out bool fromHand)
     {
         r = default;
         pressed = false;
         fromHand = false;
 
-        HandGestureTracker t = tracker != null ? tracker : HandGestureTracker.Instance;
         if (t != null)
         {
             HandGestureTracker.HandState hand = useRightHand ? t.Right : t.Left;

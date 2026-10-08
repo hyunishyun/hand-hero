@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.SceneManagement;
+using UnityEngine.XR.ARFoundation;
 
 namespace HandHero.EditorTools
 {
@@ -216,9 +217,21 @@ namespace HandHero.EditorTools
             else SetArray(director, "fightOnly", playerInput, xrInput);
             SetArray(director, "opponentOnly", botInput);
 
+            // Seat-space UI (HUD, menus, wrist button, tutorial prompt) lives under the
+            // Camera Offset, so the T10 tabletop scale keeps it at the same apparent
+            // size and spot. World-fixed, never head-locked.
             Vector3 seat = camGo.transform.position;
-            TextMeshPro scoreLine = WorldText("HUD_Score", match.transform, seat + new Vector3(0f, 0.9f, 4f), 1.5f);
-            TextMeshPro banner = WorldText("HUD_Banner", match.transform, seat + new Vector3(0f, 0.15f, 4f), 3.5f);
+            Transform seatSpace = trackingSpace;
+            if (seatSpace == null)
+            {
+                seatSpace = new GameObject("SeatSpace").transform;
+                seatSpace.position = seat;
+            }
+            Transform seatUI = new GameObject("SeatUI").transform;
+            seatUI.SetParent(seatSpace, false);
+
+            TextMeshPro scoreLine = WorldText("HUD_Score", seatUI, seat + new Vector3(0f, 0.9f, 4f), 1.5f);
+            TextMeshPro banner = WorldText("HUD_Banner", seatUI, seat + new Vector3(0f, 0.15f, 4f), 3.5f);
             var hud = match.AddComponent<MatchHud>();
             SetRefs(hud, ("director", director), ("scoreLine", scoreLine), ("banner", banner));
 
@@ -232,16 +245,22 @@ namespace HandHero.EditorTools
             pointerRay.enabled = false;
 
             var menuGo = new GameObject("HandMenu");
-            menuGo.transform.SetParent(match.transform, false);
+            menuGo.transform.SetParent(seatUI, false);
             var pointer = menuGo.AddComponent<HandMenuPointer>();
             SetRefs(pointer, ("tracker", tracker), ("viewCamera", cam), ("ray", pointerRay));
 
             // Panels sit 2.5 m ahead, about 11 degrees below eye level, under the banner.
             Vector3 panelPos = seat + new Vector3(0f, -0.5f, 2.5f);
             GameObject mainPanel = Panel("MainPanel", menuGo.transform, panelPos);
-            MenuButton(mainPanel.transform, "START", MatchDirector.MenuAction.StartMatch, -0.5f, director, buttonMat);
-            MenuButton(mainPanel.transform, "TUTORIAL", MatchDirector.MenuAction.StartWithTutorial, 0.5f, director,
-                buttonMat);
+            // Arena_Main adds a third button for the passthrough tabletop view (T10).
+            MenuButton(mainPanel.transform, "START", MatchDirector.MenuAction.StartMatch, xr ? -0.95f : -0.5f,
+                director, buttonMat);
+            MenuButton(mainPanel.transform, "TUTORIAL", MatchDirector.MenuAction.StartWithTutorial, xr ? 0f : 0.5f,
+                director, buttonMat);
+            HandMenuButton viewButton = xr
+                ? MenuButton(mainPanel.transform, "MR TABLE", MatchDirector.MenuAction.ToggleViewMode, 0.95f,
+                    director, buttonMat)
+                : null;
             GameObject pausePanel = Panel("PausePanel", menuGo.transform, panelPos);
             MenuButton(pausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.5f, director, buttonMat);
             MenuButton(pausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.5f, director, buttonMat);
@@ -261,7 +280,7 @@ namespace HandHero.EditorTools
 
             // Wrist pause button: left palm toward the face, pinch that hand.
             var wristButton = new GameObject("WristButton");
-            wristButton.transform.SetParent(match.transform, false);
+            wristButton.transform.SetParent(seatUI, false);
             Primitive(PrimitiveType.Cube, "Background", wristButton.transform, Vector3.zero,
                 new Vector3(0.12f, 0.05f, 0.005f), buttonMat);
             TextMeshPro wristLabel = WorldText("Label", wristButton.transform, Vector3.zero, 0.25f);
@@ -308,7 +327,8 @@ namespace HandHero.EditorTools
             practiceBeam.sharedMaterial = beamMat;
             practiceBeam.enabled = false;
 
-            TextMeshPro tutorialPrompt = WorldText("Prompt", tutorialRoot.transform, seat + new Vector3(0f, 0.6f, 4f), 2.5f);
+            TextMeshPro tutorialPrompt = WorldText("TutorialPrompt", seatUI, seat + new Vector3(0f, 0.6f, 4f), 2.5f);
+            tutorialPrompt.gameObject.SetActive(false);
             GameObject ghost = Primitive(PrimitiveType.Sphere, "GhostHand", tutorialRoot.transform,
                 seat + new Vector3(-0.2f, -0.35f, 0.4f), Vector3.one * 0.05f, ghostMat);
             tutorialRoot.SetActive(false);
@@ -321,6 +341,8 @@ namespace HandHero.EditorTools
             var tutorialSo = new SerializedObject(tutorial);
             tutorialSo.FindProperty("ringRadius").floatValue = ringRadius;
             tutorialSo.ApplyModifiedPropertiesWithoutUndo();
+
+            if (xr) ViewModeSwitch(cam, director, arena.transform, viewButton);
 
             EditorSceneManager.SaveScene(scene, scenePath);
             AssetDatabase.SaveAssets();
@@ -357,6 +379,29 @@ namespace HandHero.EditorTools
             pose.trackingStateInput = new InputActionProperty(new InputAction("Head Tracking State",
                 InputActionType.Value, "<XRHMD>/trackingState", expectedControlType: "Integer"));
             return offsetGo.transform;
+        }
+
+        // T10: VR arena <-> passthrough tabletop (main menu button, VR arena by default).
+        // AR Session + AR Camera Manager (Meta OpenXR passthrough) stay disabled
+        // until the tabletop mode turns them on.
+        private static void ViewModeSwitch(Camera cam, MatchDirector director, Transform arena,
+            HandMenuButton viewButton)
+        {
+            var sessionGo = new GameObject("AR Session");
+            var session = sessionGo.AddComponent<ARSession>();
+            session.enabled = false;
+            var cameraManager = cam.gameObject.AddComponent<ARCameraManager>();
+            cameraManager.enabled = false;
+
+            var viewMode = director.gameObject.AddComponent<ArenaViewMode>();
+            SetRefs(viewMode, ("origin", cam.GetComponentInParent<XROrigin>()), ("arenaCenter", arena),
+                ("viewCamera", cam), ("toggleLabel", viewButton != null ? viewButton.GetComponentInChildren<TextMeshPro>() : null));
+            SetArray(viewMode, "passthroughOnly", session, cameraManager);
+            var so = new SerializedObject(viewMode);
+            so.FindProperty("eyeHeight").floatValue = SeatEyeHeight;
+            so.FindProperty("arenaWidth").floatValue = ArenaSize.x;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            SetRefs(director, ("viewMode", viewMode));
         }
 
         // Greybox hero: collider + BeamHitReceiver + HeroHealth on the root (beams

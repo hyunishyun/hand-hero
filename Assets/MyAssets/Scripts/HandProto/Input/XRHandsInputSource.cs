@@ -65,7 +65,7 @@ public class XRHandsInputSource : HandInputSourceBehaviour
 
         // Tracking loss opens the clutch: the character glides instead of
         // teleporting when the hand comes back somewhere else.
-        data.ClutchHeld = _clutch.Step(clutchHand.IsTracked, clutchHand.FistStrength, clutchHand.PalmPosition,
+        data.ClutchHeld = _clutch.Step(clutchHand.IsTracked, clutchHand.FistStrength, clutchHand.TrackingPalmPosition,
             grabThreshold, releaseThreshold, out data.ClutchDelta);
 
         bool charging = SampleGestures(t, ref data);
@@ -91,19 +91,23 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     }
 
     // Charge (palms together) and shockwave (palm push). Returns true while charging.
+    // Distances and speeds are physical (tracking space), so the thresholds hold in
+    // the tabletop mode too. The XR Origin never rotates, so the world palm normal
+    // is also the tracking-space one.
     private bool SampleGestures(HandGestureTracker t, ref HandInputData data)
     {
         HandGestureTracker.HandState left = t.Left;
         HandGestureTracker.HandState right = t.Right;
         float dt = Time.deltaTime;
 
-        bool charging = _palmsTogether.Step(left.IsTracked, right.IsTracked, left.PalmPosition, right.PalmPosition,
+        bool charging = _palmsTogether.Step(left.IsTracked, right.IsTracked, left.TrackingPalmPosition,
+            right.TrackingPalmPosition,
             chargeJoinDistance, chargeSeparateDistance, chargeLostGraceTime, dt);
 
         // Both recognizers always step so their speed history stays continuous.
-        bool leftPush = _leftPush.Step(left.IsTracked, left.PalmPosition, left.PalmRotation * palmNormalLocal,
+        bool leftPush = _leftPush.Step(left.IsTracked, left.TrackingPalmPosition, left.PalmRotation * palmNormalLocal,
             left.FistStrength, dt, push) && pushWithLeftHand;
-        bool rightPush = _rightPush.Step(right.IsTracked, right.PalmPosition, right.PalmRotation * palmNormalLocal,
+        bool rightPush = _rightPush.Step(right.IsTracked, right.TrackingPalmPosition, right.PalmRotation * palmNormalLocal,
             right.FistStrength, dt, push) && pushWithRightHand;
 
         if (charging) data.Gestures |= HandGestures.ChargeHeld;

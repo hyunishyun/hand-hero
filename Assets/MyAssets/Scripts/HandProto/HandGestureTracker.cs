@@ -18,6 +18,7 @@ public class HandGestureTracker : MonoBehaviour
     {
         public bool IsTracked;
         public Vector3 PalmPosition;    // world space
+        public Vector3 TrackingPalmPosition; // tracking space: physical meters, unaffected by the tabletop scale
         public Quaternion PalmRotation; // world space
         public float FistStrength;      // 0 = open hand, 1 = closed fist
         public float PinchStrength;     // 0 = apart, 1 = thumb+index pinched
@@ -45,6 +46,11 @@ public class HandGestureTracker : MonoBehaviour
     [Header("Smoothing")]
     [SerializeField] private float positionSmoothing = 25f;
     [SerializeField] private float valueSmoothing = 18f;
+
+    // Uniform scale of the tracking space (1 in the VR arena, about 35 in the
+    // passthrough tabletop). World-space hand distances are this many times the
+    // physical ones, so physical thresholds use TrackingPalmPosition instead.
+    public float WorldScale => xrOrigin != null ? xrOrigin.lossyScale.x : 1f;
 
     public HandState Left => _left;
     public HandState Right => _right;
@@ -128,6 +134,7 @@ public class HandGestureTracker : MonoBehaviour
         float valT = 1f - Mathf.Exp(-valueSmoothing * Time.unscaledDeltaTime);
 
         state.PalmPosition = Vector3.Lerp(state.PalmPosition, palmWorld, posT);
+        state.TrackingPalmPosition = Vector3.Lerp(state.TrackingPalmPosition, palmPose.position, posT);
         state.PalmRotation = Quaternion.Slerp(state.PalmRotation, palmRotWorld, posT);
 
         // ---- Fist strength: average fingertip-to-palm distance ----
@@ -167,7 +174,7 @@ public class HandGestureTracker : MonoBehaviour
         {
             Vector3 offset = shoulderOffset;
             if (isLeft) offset.x = -offset.x;
-            Vector3 shoulder = headCamera.position + headCamera.rotation * offset;
+            Vector3 shoulder = headCamera.position + headCamera.rotation * (offset * WorldScale);
 
             Vector3 knuckleWorld = xrOrigin != null ? xrOrigin.TransformPoint(knucklePose.position) : knucklePose.position;
             Vector3 dir = (knuckleWorld - shoulder).normalized;

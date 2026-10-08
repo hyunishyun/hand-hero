@@ -62,7 +62,8 @@ public class WristMenu : MonoBehaviour
         if (button.gameObject.activeSelf != show) button.gameObject.SetActive(show);
         if (!show) return;
 
-        button.position = hand.PalmPosition + normal.normalized * buttonOffset;
+        // The button lives in seat space (scaled with the tabletop view), so the offset scales too.
+        button.position = hand.PalmPosition + normal.normalized * (buttonOffset * t.WorldScale);
         // TMP text reads correctly when its +Z points away from the viewer.
         button.rotation = Quaternion.LookRotation(button.position - h.position, Vector3.up);
         if (label != null) label.text = m.IsPaused ? resumeText : pauseText;

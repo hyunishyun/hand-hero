@@ -21,12 +21,22 @@ namespace HandHero.EditorTools
         public const string ApplicationId = "com.hyun.handhero";
         public const string ProductName = "Hand Hero";
 
-        // Features enabled / disabled for Android, matched by type name so this file
-        // doesn't need direct references to the XR Hands / Android XR assemblies.
+        // Features enabled for Android, matched by full type name so this file
+        // doesn't need direct references to the XR Hands / Meta assemblies (the
+        // Android XR package has its own ARSessionFeature / ARCameraFeature).
         // XR Hands adds the hand tracking permission + uses-feature to the manifest
-        // when MetaQuestFeature and HandTracking are both on.
-        private static readonly string[] RequiredFeatures = { "MetaQuestFeature", "HandTracking", "MetaHandTrackingAim" };
-        private static readonly string[] ConflictingFeatures = { "AndroidXRSupportFeature" };
+        // when MetaQuestFeature and HandTracking are both on. The Meta session +
+        // camera features give the passthrough tabletop mode (T10).
+        private static readonly string[] RequiredFeatures =
+        {
+            "UnityEngine.XR.OpenXR.Features.MetaQuestSupport.MetaQuestFeature",
+            "UnityEngine.XR.Hands.OpenXR.HandTracking",
+            "UnityEngine.XR.Hands.OpenXR.MetaHandTrackingAim",
+            "UnityEngine.XR.OpenXR.Features.Meta.ARSessionFeature",
+            "UnityEngine.XR.OpenXR.Features.Meta.ARCameraFeature",
+        };
+        // Every Android XR (non-Quest) feature is turned off for the Quest APK.
+        private const string ConflictingNamespace = "UnityEngine.XR.OpenXR.Features.Android";
 
         [MenuItem("HandHero/Build Quest APK")]
         public static void BuildQuestApk()
@@ -94,9 +104,9 @@ namespace HandHero.EditorTools
             var found = new HashSet<string>();
             foreach (OpenXRFeature feature in settings.GetFeatures())
             {
-                string typeName = feature.GetType().Name;
+                string typeName = feature.GetType().FullName;
                 bool want = Array.IndexOf(RequiredFeatures, typeName) >= 0;
-                bool conflict = Array.IndexOf(ConflictingFeatures, typeName) >= 0;
+                bool conflict = feature.GetType().Namespace == ConflictingNamespace;
                 if (want) found.Add(typeName);
                 if (!want && !conflict) continue;
 
