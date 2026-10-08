@@ -21,3 +21,6 @@
 - T7 / 일시정지 진입 / **왼손 손바닥을 얼굴 쪽으로 0.25초 → 손목 PAUSE 버튼, 왼손 핀치로 누름**. 주먹 상태(클러치)에서는 안 뜸 / 싸우는 오른손(핀치=발사)과 겹치지 않고, Quest 시스템의 "왼손 손바닥 + 핀치 = 메뉴" 관례와 같음(시스템이 이 제스처를 가로채면 포커스 잃음 → 자동 일시정지로도 걸림) / `WristMenu` 인스펙터(`gesture` 값, `useLeftHand`).
 - T7 / 일시정지 구현 / `Time.timeScale = 0` + 플레이어·봇 입력 끔. 손 추적 스무딩(`HandGestureTracker`)은 unscaled 시간으로 바꿈(튜닝 값은 그대로, 평소 timeScale 1이라 동작 동일) / 히어로·빔·체력 타이머를 한 번에 멈추는 가장 단순한 방법 / 다른 방식을 원하면 `MatchDirector.OnPausedChanged`.
 - T7 / 자동 일시정지 / 포커스 잃음·앱 일시정지·헤드셋 벗음(userPresence 하강 엣지)에서 일시정지, **재개는 항상 플레이어가 직접** / 돌아와서 바로 맞는 일 방지 / `MatchDirector`의 `pauseOnFocusLoss`·`pauseOnHeadsetRemoved`. 에디터에서 Game 뷰 밖을 클릭해도 일시정지됨(P 키로 재개).
+- T8 / 튜토리얼 문구 언어 / 영어 한 줄(예: "Make a fist with your LEFT hand") / 심사위원이 영어권 + 기존 HUD도 영어 / `TutorialDirector.PromptText`.
+- T8 / 첫 실행 판정 / START를 누르면 튜토리얼을 한 번도 끝내거나 건너뛰지 않았을 때만 튜토리얼부터(PlayerPrefs `HandHero.TutorialSeen`). 앱을 켜자마자 자동 시작하지는 않음 / 콜드 스타트에서 메뉴 1단계는 유지하고 "Best First Five Minutes"는 START 한 번으로 바로 배우게 / 다시 보려면 TUTORIAL 버튼, 기록 지우려면 PlayerPrefs 삭제.
+- T8 / 연습 예고선 판정 / 실제 빔 레이캐스트 대신 "발사 순간 히어로가 고정점에서 1.5m 이상 벗어났나"로 판정, 데미지 없음 / 튜토리얼에서 죽거나 체력이 깎이지 않게, 테스트 가능하게 / `TutorialDirector`의 Rules(`DodgeHitRadius` 등).
