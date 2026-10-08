@@ -5,7 +5,7 @@
 | 태스크 | 상태 | 메모 |
 |---|---|---|
 | R1 테이블탑 보정 원뿔 | DONE | `aea6422`. 테이블탑(WorldScale > 1.5)에서 보정 원뿔 6°/8°, VR 아레나는 4°/6° 그대로. 봇(보정 0)은 계속 꺼짐. 순수 로직 `AimAssist.Cone` + 테스트 3개, 173/173 통과. 기기 확인 필요: 테이블탑에서 조준이 너무 끈적이지 않은지. |
-| R2 아이템 기반 (Core) | IN_PROGRESS | |
+| R2 아이템 기반 (Core) | DONE | `a7d0aac`. `ItemDefinition`·`StatEffect`·`Stat` enum, `Scaling.Evaluate`(4종, Hyperbolic 기반값은 0.99로 제한), `Scaling.DamageTakenMultiplier`(하한 25%), `Inventory`(중복=레벨업, 유니크·MaxLevel 거부, 보유 태그), `ItemCatalog` 19개. 테스트 26개 추가, 199/199 통과. 효과 수치를 실제 스탯으로 바꾸는 일은 R3. |
 | R3 인벤토리 → 히어로 스탯 (Core) | TODO | |
 | R4 상자·포털 롤링 (Core) | TODO | |
 | R5 런 상태 머신 (Core) | TODO | |
@@ -20,3 +20,4 @@
 ## 세션 로그
 
 - 2026-10-08 Phase 0 (대화형): 브랜치 `auto/2026-10-08-run`을 만들고, 1차 무인 작업 기록은 `AUTO/archive/2026-10-07/`로 옮겼다. 설계 문서는 `docs/crab-champions-systems-analysis.md`로 복사했다. 시작 시점 테스트 170/170.
+- 2026-10-08 무인 세션 1: R1, R2 완료(테스트 170 → 199, 모두 통과). 결정 3건은 `QUESTIONS_FOR_HYUN.md`에 기록. 다음 세션은 R3부터.
