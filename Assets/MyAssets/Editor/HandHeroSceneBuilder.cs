@@ -99,6 +99,8 @@ namespace HandHero.EditorTools
             Material heroMarkerMat = UnlitMaterial("GroundMarker_Player", new Color(0.15f, 0.3f, 0.55f));
             Material botMarkerMat = UnlitMaterial("GroundMarker_Bot", new Color(0.5f, 0.12f, 0.15f));
             Material impactMat = UnlitMaterial("BeamImpact", new Color(1f, 0.95f, 0.7f));
+            Material cursorMat = UnlitMaterial("AimCursor", new Color(1f, 0.6f, 0.15f));
+            Material cursorMarkerMat = UnlitMaterial("GroundMarker_Cursor", new Color(0.55f, 0.3f, 0.08f));
             GameObject impactPrefab = GetOrCreateImpactPrefab(impactMat);
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -149,6 +151,12 @@ namespace HandHero.EditorTools
             // Aim feedback: reticle without collider (else the aim ray hits it and jitters).
             GameObject reticle = Primitive(PrimitiveType.Sphere, "Reticle", null, ArenaCenter, Vector3.one * 0.4f, reticleMat);
 
+            // CURSOR aim: orange marker (no collider) + its own floor disc for depth.
+            GameObject cursorMarker = Primitive(PrimitiveType.Sphere, "AimCursor", null, ArenaCenter,
+                Vector3.one * 0.6f, cursorMat);
+            GameObject cursorGround = GroundMarker(flying, cursorMarkerMat, beamMat, new Color(1f, 0.6f, 0.15f, 0.5f),
+                cursorMarker.transform);
+
             var beamGo = new GameObject("BeamRenderer");
             var beam = beamGo.AddComponent<LineRenderer>();
             beam.sharedMaterial = beamMat;
@@ -177,7 +185,11 @@ namespace HandHero.EditorTools
             var pointing = controllers.AddComponent<PointingBeamController>();
             SetRefs(pointing, ("character", flying), ("reticle", reticle.transform), ("beam", beam),
                 ("inputSource", playerInput), ("chargeIndicator", chargeOrb.transform),
-                ("hitEffectPrefab", impactPrefab), ("audioSource", flying.GetComponent<AudioSource>()));
+                ("hitEffectPrefab", impactPrefab), ("audioSource", flying.GetComponent<AudioSource>()),
+                ("reticleRenderer", reticle.GetComponent<Renderer>()), ("health", flying.GetComponent<HeroHealth>()),
+                ("cursorMarker", cursorMarker.transform), ("cursorRenderer", cursorMarker.GetComponent<Renderer>()));
+            SetArray(pointing, "assistOnlyVisuals", reticle);
+            SetArray(pointing, "cursorOnlyVisuals", cursorMarker, cursorGround);
 
             // Palm push shockwave (T5): stuns the bot when it is within reach.
             var ringGo = new GameObject("ShockwaveRingRenderer");
@@ -207,6 +219,9 @@ namespace HandHero.EditorTools
                 ("hitEffectPrefab", impactPrefab), ("audioSource", botFlying.GetComponent<AudioSource>()));
             var beamSo = new SerializedObject(botPointing);
             beamSo.FindProperty("beamColor").colorValue = new Color(1f, 0.25f, 0.2f);
+            // No assist for the bot: a snap at fire time would retarget the player's
+            // current position and void the telegraph dodge (spec D10).
+            beamSo.FindProperty("assistAngle").floatValue = 0f;
             beamSo.ApplyModifiedPropertiesWithoutUndo();
             SetRefs(botInput, ("self", botFlying), ("puppeteer", botPuppeteer), ("enemy", flying.transform),
                 ("hitReceiver", botFlying.GetComponent<BeamHitReceiver>()), ("difficulty", difficulty));
@@ -263,27 +278,39 @@ namespace HandHero.EditorTools
             // Panels sit 2.5 m ahead, about 11 degrees below eye level, under the banner.
             Vector3 panelPos = seat + new Vector3(0f, -0.5f, 2.5f);
             GameObject mainPanel = Panel("MainPanel", menuGo.transform, panelPos);
-            // Arena_Main adds a third button for the passthrough tabletop view (T10).
-            MenuButton(mainPanel.transform, "START", MatchDirector.MenuAction.StartMatch, xr ? -0.95f : -0.5f,
+            // Main menu is a 2x2 grid (0.15 m gaps): START / TUTORIAL on top, then the
+            // passthrough view (Arena_Main only, T10) and the aim mode.
+            const float gridX = 0.475f;
+            const float gridY = 0.235f;
+            MenuButton(mainPanel.transform, "START", MatchDirector.MenuAction.StartMatch, -gridX, gridY,
                 director, buttonMat);
-            MenuButton(mainPanel.transform, "TUTORIAL", MatchDirector.MenuAction.StartWithTutorial, xr ? 0f : 0.5f,
+            MenuButton(mainPanel.transform, "TUTORIAL", MatchDirector.MenuAction.StartWithTutorial, gridX, gridY,
                 director, buttonMat);
             HandMenuButton viewButton = xr
-                ? MenuButton(mainPanel.transform, "MR TABLE", MatchDirector.MenuAction.ToggleViewMode, 0.95f,
+                ? MenuButton(mainPanel.transform, "MR TABLE", MatchDirector.MenuAction.ToggleViewMode, -gridX, -gridY,
                     director, buttonMat)
                 : null;
+            HandMenuButton aimButton = MenuButton(mainPanel.transform, "AIM: ASSIST",
+                MatchDirector.MenuAction.ToggleAimMode, xr ? gridX : -gridX, -gridY, director, buttonMat);
             GameObject pausePanel = Panel("PausePanel", menuGo.transform, panelPos);
-            MenuButton(pausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.5f, director, buttonMat);
-            MenuButton(pausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.5f, director, buttonMat);
+            MenuButton(pausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.5f, 0f, director, buttonMat);
+            MenuButton(pausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.5f, 0f, director,
+                buttonMat);
             GameObject tutorialPausePanel = Panel("TutorialPausePanel", menuGo.transform, panelPos);
-            MenuButton(tutorialPausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.95f, director,
+            MenuButton(tutorialPausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.95f, 0f, director,
                 buttonMat);
-            MenuButton(tutorialPausePanel.transform, "SKIP", MatchDirector.MenuAction.SkipTutorial, 0f, director,
+            MenuButton(tutorialPausePanel.transform, "SKIP", MatchDirector.MenuAction.SkipTutorial, 0f, 0f, director,
                 buttonMat);
-            MenuButton(tutorialPausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.95f, director,
+            MenuButton(tutorialPausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.95f, 0f, director,
                 buttonMat);
             GameObject endPanel = Panel("MatchEndPanel", menuGo.transform, panelPos);
-            MenuButton(endPanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0f, director, buttonMat);
+            MenuButton(endPanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0f, 0f, director, buttonMat);
+
+            // Aim mode (ASSIST / CURSOR): the player's controller, tutorial and AIM button share it.
+            var aimMode = match.AddComponent<AimModeSetting>();
+            SetRefs(aimMode, ("toggleLabel", aimButton.GetComponentInChildren<TextMeshPro>()));
+            SetRefs(director, ("aimMode", aimMode));
+            SetRefs(pointing, ("aimModeSetting", aimMode));
 
             var handMenu = menuGo.AddComponent<HandMenu>();
             SetRefs(handMenu, ("director", director), ("pointer", pointer), ("mainPanel", mainPanel),
@@ -330,6 +357,7 @@ namespace HandHero.EditorTools
                 Vector3.zero, Vector3.one * 2f, tutorialTargetMat, keepCollider: true);
             practiceTarget.transform.position = ArenaCenter + new Vector3(-6f, 1f, 2f);
             var practiceReceiver = practiceTarget.AddComponent<BeamHitReceiver>();
+            practiceTarget.AddComponent<AimAssistTarget>(); // registers only while the tutorial shows it
 
             var telegraphOrigin = new GameObject("PracticeBeamOrigin");
             telegraphOrigin.transform.SetParent(tutorialRoot.transform, false);
@@ -348,7 +376,8 @@ namespace HandHero.EditorTools
             SetRefs(tutorial, ("director", director), ("playerHero", flying), ("playerInput", playerInput),
                 ("head", camGo.transform), ("tutorialRoot", tutorialRoot), ("ring", ringGoal.transform),
                 ("target", practiceReceiver), ("telegraphOrigin", telegraphOrigin.transform),
-                ("telegraph", practiceBeam), ("prompt", tutorialPrompt), ("ghostHand", ghost.transform));
+                ("telegraph", practiceBeam), ("prompt", tutorialPrompt), ("ghostHand", ghost.transform),
+                ("playerAim", pointing), ("aimModeSetting", aimMode));
             var tutorialSo = new SerializedObject(tutorial);
             tutorialSo.FindProperty("ringRadius").floatValue = ringRadius;
             tutorialSo.ApplyModifiedPropertiesWithoutUndo();
@@ -465,6 +494,9 @@ namespace HandHero.EditorTools
             var health = hero.AddComponent<HeroHealth>();
             SetRefs(health, ("character", flying), ("hitReceiver", hero.GetComponent<BeamHitReceiver>()),
                 ("healthBarFill", bar.transform));
+            // The aim assist may snap to this hero (the other side's controller).
+            var assistTarget = hero.AddComponent<AimAssistTarget>();
+            SetRefs(assistTarget, ("character", flying));
             return flying;
         }
 
@@ -480,12 +512,12 @@ namespace HandHero.EditorTools
         // Big pinch target (0.8 x 0.32 m at 2.5 m, about 18 x 7 degrees). The trigger
         // collider is on the root so the hover scale applies to the label too.
         private static HandMenuButton MenuButton(Transform panel, string text, MatchDirector.MenuAction action,
-            float x, MatchDirector director, Material mat)
+            float x, float y, MatchDirector director, Material mat)
         {
             var size = new Vector3(0.8f, 0.32f, 0.04f);
             var go = new GameObject($"Button_{text}");
             go.transform.SetParent(panel, false);
-            go.transform.localPosition = new Vector3(x, 0f, 0f);
+            go.transform.localPosition = new Vector3(x, y, 0f);
             var box = go.AddComponent<BoxCollider>();
             box.size = size;
             box.isTrigger = true;
@@ -518,9 +550,12 @@ namespace HandHero.EditorTools
 
         // Floor disc + drop line under a hero (depth cue, T12). Lives outside the
         // hero so HeroHealth's hit flash and death hiding leave it alone.
-        private static void GroundMarker(FlyingCharacter hero, Material discMat, Material lineMat, Color lineColor)
+        // With `follow`, the marker sits under that transform (the CURSOR aim marker)
+        // and the hero only gives the arena bounds and visibility.
+        private static GameObject GroundMarker(FlyingCharacter hero, Material discMat, Material lineMat, Color lineColor,
+            Transform follow = null)
         {
-            var go = new GameObject(hero.name + "_GroundMarker");
+            var go = new GameObject((follow != null ? follow.name : hero.name) + "_GroundMarker");
             GameObject disc = Primitive(PrimitiveType.Cylinder, "Disc", go.transform, Vector3.zero,
                 new Vector3(2f, 0.01f, 2f), discMat);
             var line = go.AddComponent<LineRenderer>();
@@ -530,7 +565,8 @@ namespace HandHero.EditorTools
             line.startColor = line.endColor = lineColor;
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             var marker = go.AddComponent<HeroGroundMarker>();
-            SetRefs(marker, ("character", hero), ("disc", disc.transform), ("dropLine", line));
+            SetRefs(marker, ("character", hero), ("disc", disc.transform), ("dropLine", line), ("follow", follow));
+            return go;
         }
 
         // Beam hit effect prefab (T12): a sphere that pops and shrinks. Rewritten
