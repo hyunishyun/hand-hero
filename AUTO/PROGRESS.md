@@ -10,8 +10,8 @@
 | R4 상자·포털 롤링 (Core) | DONE | `7c0096c`. `ChestType`·`ChestRoller`(풀 필터 → 보유 ×1.75 → 가중 비복원 추출, `System.Random` 주입), `IslandType`·`Portal`·`PortalRoller`(2개, 섬 3부터 50%로 3개, 중복 없음, 빈 상자 금지, 엘리트 = Epic 상자, 섬 1 = Arena + Damage 상자 고정). 테스트 31개, 251/251 통과. 상자·섬 가중치는 첫 추정값이라 기기에서 밸런스 확인 필요. |
 | R5 런 상태 머신 (Core) | DONE | `70d34fe`. `RunStateMachine`(Idle → Intro 3초 → Island → Cleared 2초 → OpenChest → 섬 4 뒤 Shop → ChoosePortal, 섬 8 뒤 바로 Boss, 보스 클리어 = Victory, 부활 없는 사망 = Defeat), `RunRules.Island`(봇 수·동시 최대 2·적 체력 ×(1+0.15×(섬−1))·엘리트·보스 배수), `WantsSpawn`, `HealAfterClear`, 부활. 테스트 18개, 269/269 통과. **시간 추정**(아래 R5 메모) 약 9분 — 10분 한도에 여유가 적어 기기에서 꼭 재 볼 것. |
 | R6 경제·상점 (Core) | DONE | `34589b2`. `Economy`(기준 가격 100, 등급 배수 1/3/8/2, 인플레이션 1+0.05×섬 인덱스, 리롤 25×인플레이션×1.5^n, 처치 10×`CrystalGainMult`, 클리어 25+`CrystalPerClear`+이자, Spiked = 최대 체력 33%·HP 하한 1), `CrystalWallet`, `Shop`(Random 풀에서 4칸, 구매 = 레벨업, 리롤 = 4칸 전부 새로). 런에 연결: 처치·클리어 때 크리스탈, 섬 4 상자 뒤 `CurrentShop`, `BuyShopItem`/`RerollShop`. `ChestRoller.Roll`에 개수 지정 오버로드 추가. 테스트 14개, 283/283 통과. Spiked 체력 차감은 R8(RunDirector)이 `Economy.SpikedHealthAfter`로 적용해야 한다. |
-| R7 스탯을 전투에 연결 | TODO | |
-| R8 섬·봇 런타임 (RunDirector) | TODO | |
+| R7 스탯을 전투에 연결 | DONE | `dc4bac4`. 순수 로직 `CombatMath`(데미지·치명타·차지 데미지/시간·쿨다운·받는 피해·최대 체력·속도·쇼크웨이브 반경/스턴) + `HeroHealthModel.ChangeMaxHealth`(최대 체력이 오르면 오른 만큼 회복, 내리면 잘라냄)·`Heal`·`SetHealth`(최소 1). `RunHeroStats`(플레이어 히어로에 붙여 런 인벤토리를 `Bind`)를 4개 컨트롤러가 읽는다. 연결 안 됨/없음 = 중립이라 퀵 매치·봇은 그대로(치명타 확률 0이면 난수도 뽑지 않음). 치명타 빔은 노란색. 테스트 15개, 298/298 통과. **R8이 할 일**: 런 시작 때 `Bind(run.Inventory)`, 런이 끝나면 `Unbind()`. 씬에 `RunHeroStats` 추가는 R11. |
+| R8 섬·봇 런타임 (RunDirector) | IN_PROGRESS | |
 | R9 선택 UI (포털·상자·상점) | TODO | |
 | R10 HUD·메뉴 | TODO | |
 | R11 씬·디버그 키·APK | TODO | |
