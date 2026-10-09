@@ -18,3 +18,7 @@
 - **P9 / 손 추적이 끊겼을 때 잠금 대상도 풀까?** → 아니오. 잠금 링만 숨기고 대상은 기억한다. 손이 돌아오면 다음 조준 계산에서 그대로 이어지거나 풀린다. 뒤집으려면: `PointingBeamController.ShowAimLost`에서 `SetAssistTarget(null)`을 부른다.
 - **P10 / 핀치를 뗀 판정은 원시 값과 임계값 0.6 중 무엇으로?** → 임계값 0.6(`XRHandsInputSource.pinchResetThreshold` 0.5 → 0.6). 발사 임계값 0.8과의 히스테리시스는 그대로 남는다. 이유: 더 단순하고, `PinchTrigger`·`SystemGestureGate`가 같은 값을 쓰며 기존 테스트로 검증된다. 원시 값은 트래커·`PinchTrigger` API를 둘 다 바꿔야 한다. 이번 수정의 핵심은 `HoldDelay`다. 뒤집으려면: 그 필드를 0.5로 되돌리고 씬을 다시 만든다.
 - **P10 / `HoldDelay`를 CURSOR(검지 방아쇠)에도 적용할까?** → 예. 차지 모델이 하나라 두 조준 모드에 같이 적용된다. 차지 아이템(Quick Charge 등)은 `HoldDelay`를 줄이지 않는다(입력 구분용이지 차지 속도가 아니므로). 뒤집으려면: `CombatMath.Charge`에서 `HoldDelay`도 곱하거나, CURSOR일 때 `charge.HoldDelay = 0`으로 넘긴다.
+- **P11 / 봇 발사·차지 소리는?** → 봇 발사는 플레이어 발사와 다른 낮은 톱니파 `EnemyFire`(봇 위치 3D). 차지 시작·준비음은 플레이어만 낸다. 이유: 봇 차지까지 울리면 시끄럽고, 봇 공격은 예고 경고음(`BotTelegraph`)이 이미 알려 준다. 뒤집으려면: `PointingBeamController.UpdateChargeSounds`의 팀 검사를 지운다.
+- **P11 / 명중 확인음과 피격음은 2D와 3D 중 무엇으로?** → 명중 확인(`HitDealt`)·피격(`HitTaken`)·메뉴·흐름 소리는 2D, 발사·쇼크웨이브·봇 처치·예고음은 그 위치의 3D(공간감 0.6, 8 m까지 최대, 200 m까지 선형 감쇠). 이유: 내 행동의 결과는 거리와 관계없이 분명해야 하고, 월드 사건은 방향을 알려 줘야 한다. 뒤집으려면: 호출부의 `SfxPlayer.Play`/`PlayUi`를 바꾸거나 씬의 `Sfx` 오브젝트에서 `spatialBlend`를 조정한다.
+- **P11 / 상점에서 살 수 없는 물건을 누르면?** → 거절음(`Denied`). 크리스털 부족·매진·일시정지 중 모두 같은 소리. 뒤집으려면: `RunChoiceMenu.Choose`의 `else` 줄을 지운다.
+- **P11 / 퀵 매치 라운드 결과음은?** → 라운드를 이기면 클리어 소리, 지면 소리 없음. 매치 승패는 VICTORY/DEFEAT. 뒤집으려면: `SfxCues.ForMatchPhase`.
