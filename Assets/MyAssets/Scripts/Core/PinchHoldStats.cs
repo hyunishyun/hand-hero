@@ -13,6 +13,8 @@ namespace HandHero.Core
         public int ChargesStarted { get; private set; }
         public int ChargeShots { get; private set; }
         public IReadOnlyList<float> Durations => _durations;
+        // Per hold, in the same order as Durations: did it fire a charge shot.
+        public IReadOnlyList<bool> ChargeShotFlags => _shots;
 
         // Takes the step a held gesture ended on; any other step is ignored.
         public void Add(ChargeStep step)

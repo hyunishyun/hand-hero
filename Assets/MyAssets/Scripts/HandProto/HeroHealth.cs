@@ -54,6 +54,8 @@ public class HeroHealth : MonoBehaviour
     // With run items applied (base maxHealth when there are none).
     public float MaxHealth => _model != null ? _model.Params.MaxHealth : maxHealth;
     public bool IsDead => _model.IsDead;
+    // Health the latest hit took (after armor, capped at what was left); valid in Damaged.
+    public float LastDamage { get; private set; }
     public float SpeedMultiplier => _model.SpeedMultiplier;
     public bool IsStunned => _model.IsStunned;
 
@@ -106,8 +108,10 @@ public class HeroHealth : MonoBehaviour
 
     public void ApplyDamage(float damage)
     {
+        float before = _model.CurrentHealth;
         HitOutcome outcome = _model.ApplyDamage(CombatMath.DamageTaken(damage, RunHeroStats.StatsOf(runStats)));
         if (outcome == HitOutcome.Ignored) return;
+        LastDamage = before - _model.CurrentHealth;
 
         _flashTimer = flashDuration;
         SetColor(flashColor);

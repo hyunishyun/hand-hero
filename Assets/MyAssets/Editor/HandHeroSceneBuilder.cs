@@ -369,6 +369,7 @@ namespace HandHero.EditorTools
             SetRefs(aimMode, ("toggleLabel", aimButton.GetComponentInChildren<TextMeshPro>()));
             SetRefs(director, ("aimMode", aimMode));
             SetRefs(pointing, ("aimModeSetting", aimMode));
+            SetRefs(runDirector, ("playerAim", pointing), ("aimModeSetting", aimMode));
 
             RunChoiceMenu runChoices = RunChoicePanels(menuGo, panelPos, runDirector, buttonMat);
 
@@ -498,6 +499,8 @@ namespace HandHero.EditorTools
             SetRefs(viewMode, ("origin", cam.GetComponentInParent<XROrigin>()), ("arenaCenter", arena),
                 ("viewCamera", cam), ("toggleLabel", viewButton != null ? viewButton.GetComponentInChildren<TextMeshPro>() : null));
             SetArray(viewMode, "passthroughOnly", session, cameraManager);
+            RunDirector runDirector = director.GetComponent<RunDirector>();
+            if (runDirector != null) SetRefs(runDirector, ("viewMode", viewMode));
             Transform backWall = arena.Find("BackWall");
             if (backWall != null) SetArray(viewMode, "arenaOnly", backWall.gameObject);
             var so = new SerializedObject(viewMode);

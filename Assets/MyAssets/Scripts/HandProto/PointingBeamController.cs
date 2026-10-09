@@ -128,6 +128,18 @@ public class PointingBeamController : MonoBehaviour
     public AimMode Mode => aimModeSetting != null ? aimModeSetting.Mode : AimMode.Assist;
     // Every finished pinch / trigger hold: duration and whether it charged (D13, for run telemetry).
     public PinchHoldStats PinchHolds => _pinchHolds;
+    // Run telemetry (D16): shots since ResetShotStats; a hit = the ray reached a hero.
+    public int ShotsFired { get; private set; }
+    public int ShotsHit { get; private set; }
+    public int ChargeShotsFired { get; private set; }
+
+    public void ResetShotStats()
+    {
+        ShotsFired = 0;
+        ShotsHit = 0;
+        ChargeShotsFired = 0;
+        _pinchHolds.Clear();
+    }
 
     // Cursor back to the arena center, assist lock dropped.
     public void ResetAim()
@@ -438,6 +450,8 @@ public class PointingBeamController : MonoBehaviour
     {
         float shotDamage = shot.Damage;
         _shots.MarkFired(Time.time);
+        ShotsFired++;
+        if (charged) ChargeShotsFired++;
 
         Vector3 origin = character.transform.position;
 
@@ -456,7 +470,10 @@ public class PointingBeamController : MonoBehaviour
 
             var receiver = hit.collider.GetComponentInParent<BeamHitReceiver>();
             if (receiver != null)
+            {
+                ShotsHit++;
                 receiver.Receive(new BeamHit { Point = hit.point, Direction = dir, Damage = shotDamage, Shooter = character });
+            }
 
             // Hit confirm for the player only; a crit rings higher (D15).
             if ((target != null || receiver != null) && character.Team == HeroTeam.Player)

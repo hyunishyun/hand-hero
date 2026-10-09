@@ -71,16 +71,22 @@ namespace HandHero.Core
     public class CrystalWallet
     {
         public int Balance { get; private set; }
+        // Run telemetry (D16): everything earned / spent since the wallet was made.
+        public int TotalEarned { get; private set; }
+        public int TotalSpent { get; private set; }
 
         public void Add(int amount)
         {
-            if (amount > 0) Balance += amount;
+            if (amount <= 0) return;
+            Balance += amount;
+            TotalEarned += amount;
         }
 
         public bool TrySpend(int amount)
         {
             if (amount < 0 || amount > Balance) return false;
             Balance -= amount;
+            TotalSpent += amount;
             return true;
         }
     }

@@ -33,6 +33,15 @@ public class RunDirector : MonoBehaviour
     [Tooltip("Random seed for chests, portals and the shop; 0 = different every run")]
     [SerializeField] private int seed;
 
+    [Header("Run log (D16)")]
+    [Tooltip("Append one JSON line per run to <persistentDataPath>/run_log.jsonl at Victory, Defeat or quit (never mid-fight)")]
+    [SerializeField] private bool writeRunLog = true;
+    [Tooltip("The player's beam: shots, hits, charge shots and pinch holds for the run log")]
+    [SerializeField] private PointingBeamController playerAim;
+    [SerializeField] private AimModeSetting aimModeSetting;
+    [Tooltip("Optional (XR scene only): records VR or TABLE")]
+    [SerializeField] private ArenaViewMode viewMode;
+
     [Header("Debug keys (editor / desktop)")]
     [Tooltip("R = start a run (menu), 1-3 = pick a portal / chest card, B = buy the first affordable shop item, N = leave the shop")]
     [SerializeField] private bool debugKeys = true;
@@ -50,6 +59,10 @@ public class RunDirector : MonoBehaviour
     // Per-spawn bot seeds (D9), drawn from the run's own stream.
     private System.Random _spawnSeeds;
 
+    // Run telemetry (P13, D16).
+    private readonly RunRecorder _recorder = new RunRecorder();
+    private int _rngSeed;
+
     public RunStateMachine Run => _run;
     public bool IsRunning => _run != null && _run.Phase != RunPhase.Idle;
     public int BotsAlive => _bots.Count;
@@ -59,18 +72,23 @@ public class RunDirector : MonoBehaviour
 
     private void Awake()
     {
-        _run = new RunStateMachine(rules, new System.Random(seed != 0 ? seed : System.Environment.TickCount));
+        _rngSeed = seed != 0 ? seed : System.Environment.TickCount;
+        _run = new RunStateMachine(rules, new System.Random(_rngSeed));
         _run.PhaseChanged += OnRunPhaseChanged;
     }
 
     private void OnEnable()
     {
-        if (playerHealth != null) playerHealth.Died += OnPlayerDied;
+        if (playerHealth == null) return;
+        playerHealth.Died += OnPlayerDied;
+        playerHealth.Damaged += OnPlayerDamaged;
     }
 
     private void OnDisable()
     {
-        if (playerHealth != null) playerHealth.Died -= OnPlayerDied;
+        if (playerHealth == null) return;
+        playerHealth.Died -= OnPlayerDied;
+        playerHealth.Damaged -= OnPlayerDamaged;
     }
 
     // After MatchDirector.Awake created the match (BR-9): leaving MatchPhase.Run
@@ -109,6 +127,8 @@ public class RunDirector : MonoBehaviour
     private void BeginRun()
     {
         _run.Params = rules;
+        // Before StartRun: it enters island 1's intro, which the recorder logs.
+        BeginRecord();
         _run.StartRun();
         PrewarmBots();
         _spawnSeeds = new System.Random(seed != 0 ? unchecked(seed * 31 + 17) : System.Environment.TickCount);
@@ -122,10 +142,34 @@ public class RunDirector : MonoBehaviour
     }
 
     // Choice entry points for the run panels (R9) and debug keys (R11).
-    public bool PickChestItem(int index) => !Paused && _run.PickChestItem(index);
+    public bool PickChestItem(int index)
+    {
+        if (Paused || _run.Phase != RunPhase.OpenChest || index < 0 || index >= _run.ChestChoices.Count) return false;
+        string id = _run.ChestChoices[index].Id;
+        if (!_run.Inventory.CanAdd(id)) return false;
+        // Logged before the pick: picking can already start the next island (the boss).
+        _recorder.ItemPicked(id, _run.Inventory.Level(id) + 1, ItemSource.Chest);
+        return _run.PickChestItem(index);
+    }
+
     public bool ChoosePortal(int index) => !Paused && _run.ChoosePortal(index);
-    public bool BuyShopItem(int index) => _run.BuyShopItem(index);
-    public bool RerollShop() => _run.RerollShop();
+
+    public bool BuyShopItem(int index)
+    {
+        Shop shop = _run.CurrentShop;
+        string id = shop != null && index >= 0 && index < shop.Slots.Count ? shop.Slots[index].Item.Id : null;
+        if (!_run.BuyShopItem(index)) return false;
+        _recorder.ItemPicked(id, _run.Inventory.Level(id), ItemSource.Shop);
+        return true;
+    }
+
+    public bool RerollShop()
+    {
+        if (!_run.RerollShop()) return false;
+        _recorder.ShopRerolled();
+        return true;
+    }
+
     public bool LeaveShop() => !Paused && _run.LeaveShop();
 
     private bool Paused => match != null && match.IsPaused;
@@ -288,7 +332,14 @@ public class RunDirector : MonoBehaviour
     private void OnPlayerDied()
     {
         if (!IsRunning) return;
+        // Logged first: a death without revives enters Defeat, which closes the record.
+        if (!IsOver) _recorder.PlayerDied(revived: _run.RevivesLeft > 0);
         if (_run.ReportPlayerDeath()) playerHealth.Revive(_run.ReviveHealth(playerHealth.MaxHealth));
+    }
+
+    private void OnPlayerDamaged()
+    {
+        if (IsRunning && !IsOver) _recorder.DamageTaken(playerHealth.LastDamage);
     }
 
     private void OnRunPhaseChanged(RunPhase phase)
@@ -296,13 +347,19 @@ public class RunDirector : MonoBehaviour
         switch (phase)
         {
             case RunPhase.Intro:
+                _recorder.IslandStarted(_run.Island, _run.Spec.Type);
                 // Fresh island: the player back at the spawn point, health carried over.
                 DespawnBots();
                 _spawnTimer = 0f;
                 if (playerHealth != null) playerHealth.ReturnToSpawn();
                 break;
 
+            case RunPhase.Island:
+                _recorder.FightStarted(_run.RunTime);
+                break;
+
             case RunPhase.IslandCleared:
+                _recorder.FightEnded(_run.RunTime);
                 DespawnBots();
                 if (playerHealth != null && !playerHealth.IsDead)
                     playerHealth.SetHealth(_run.HealAfterClear(playerHealth.CurrentHealth, playerHealth.MaxHealth));
@@ -318,12 +375,39 @@ public class RunDirector : MonoBehaviour
             case RunPhase.Defeat:
                 DespawnBots();
                 if (match != null) match.SetRunControls(false);
+                FinishRecord(phase == RunPhase.Victory ? RunResult.Victory : RunResult.Defeat);
                 break;
         }
     }
 
+    private void BeginRecord()
+    {
+        string aim = aimModeSetting != null ? aimModeSetting.Mode.ToString() : "Unknown";
+        string view = viewMode == null ? "Vr" : viewMode.IsTabletop ? "Table" : "Vr";
+        _recorder.Begin(_rngSeed, aim, view, System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"));
+        if (playerAim != null) playerAim.ResetShotStats();
+    }
+
+    // Victory / Defeat (end screen) or quitting mid-run: never during a fight.
+    // A second call for the same run does nothing.
+    private void FinishRecord(RunResult result)
+    {
+        RunRecord record = _recorder.Finish(result, _run.RunTime, new RunTotals
+        {
+            Kills = _run.Kills,
+            CrystalsEarned = _run.Crystals.TotalEarned,
+            CrystalsSpent = _run.Crystals.TotalSpent,
+            ShotsFired = playerAim != null ? playerAim.ShotsFired : 0,
+            ShotsHit = playerAim != null ? playerAim.ShotsHit : 0,
+            ChargeShots = playerAim != null ? playerAim.ChargeShotsFired : 0,
+            Holds = playerAim != null ? playerAim.PinchHolds : null,
+        });
+        if (record != null && writeRunLog) RunLogFile.Append(RunRecordJson.ToJson(record));
+    }
+
     private void EndRun()
     {
+        if (_recorder.IsRecording) FinishRecord(RunResult.Quit);
         _run.ReturnToMenu();
         DespawnBots();
         if (playerStats != null) playerStats.Unbind();
