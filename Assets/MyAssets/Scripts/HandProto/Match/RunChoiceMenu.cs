@@ -190,7 +190,9 @@ public class RunChoiceMenu : MonoBehaviour
         Shop shop = r.CurrentShop;
         if (shop == null) return 0;
         int key = r.Crystals.Balance * 31 + shop.Rerolls;
-        foreach (ShopSlot slot in shop.Slots) key = key * 2 + (slot.Sold ? 1 : 0);
+        // Index loop: foreach over IReadOnlyList boxes its enumerator every frame (GM-7).
+        var slots = shop.Slots;
+        for (int i = 0; i < slots.Count; i++) key = key * 2 + (slots[i].Sold ? 1 : 0);
         return key;
     }
 

@@ -87,7 +87,13 @@ public class HandGestureTracker : MonoBehaviour
     {
         if (_subsystem == null || !_subsystem.running)
         {
-            FindSubsystem();
+            _subsystem = null;
+            // Searching allocates and calls native code: at most every 0.5 s while none runs (GC-2).
+            if (Time.unscaledTime >= _nextFindTime)
+            {
+                _nextFindTime = Time.unscaledTime + SubsystemRetryInterval;
+                FindSubsystem();
+            }
             if (_subsystem == null)
             {
                 // A stopped subsystem's joint arrays are disposed; reading them throws.
@@ -102,26 +108,35 @@ public class HandGestureTracker : MonoBehaviour
         UpdateHand(_subsystem.rightHand, ref _right, isLeft: false);
     }
 
-    private string _lastSubsystemReport;
+    private const float SubsystemRetryInterval = 0.5f;
+    private static readonly List<XRHandSubsystem> Subsystems = new List<XRHandSubsystem>();
+    private float _nextFindTime;
+    private long _lastSubsystemSignature = -1;
 
     private void FindSubsystem()
     {
         _subsystem = null;
-        var subsystems = new List<XRHandSubsystem>();
-        SubsystemManager.GetSubsystems(subsystems);
-        foreach (var s in subsystems)
+        SubsystemManager.GetSubsystems(Subsystems);
+        long signature = Subsystems.Count;
+        for (int i = 0; i < Subsystems.Count; i++)
         {
+            XRHandSubsystem s = Subsystems[i];
             if (s.running)
             {
-                _subsystem = s;
-                break;
+                if (_subsystem == null) _subsystem = s;
+                if (i < 31) signature |= 1L << (i + 32);
             }
         }
-        ReportSubsystems(subsystems);
+        // The report string is built only when the count or a running flag changed.
+        if (signature != _lastSubsystemSignature)
+        {
+            _lastSubsystemSignature = signature;
+            ReportSubsystems(Subsystems);
+        }
     }
 
     // Diagnostic: logs once per change so a missing/stopped hand subsystem is visible in the Console.
-    private void ReportSubsystems(List<XRHandSubsystem> subsystems)
+    private static void ReportSubsystems(List<XRHandSubsystem> subsystems)
     {
         string report;
         if (subsystems.Count == 0)
@@ -136,8 +151,6 @@ public class HandGestureTracker : MonoBehaviour
             report = string.Join(", ", parts);
         }
 
-        if (report == _lastSubsystemReport) return;
-        _lastSubsystemReport = report;
         HHLog.Info($"[HandGestureTracker] hand subsystems: {report}");
     }
 

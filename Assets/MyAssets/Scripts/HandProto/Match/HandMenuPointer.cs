@@ -24,6 +24,8 @@ public class HandMenuPointer : MonoBehaviour
     [Tooltip("Pinch strength below this re-arms the next press (lower than press = no flicker)")]
     [SerializeField] private float pinchReleaseThreshold = 0.5f;
     [SerializeField] private float maxDistance = 10f;
+    [Tooltip("Layers the menu ray tests; the scene builder puts the button colliders on UI and sets this to UI")]
+    [SerializeField] private LayerMask buttonLayers = ~0;
 
     [Header("Ray visual")]
     [Tooltip("Ray length when nothing is hovered")]
@@ -63,7 +65,7 @@ public class HandMenuPointer : MonoBehaviour
 
         HandMenuButton hit = null;
         float distance = idleRayLength * _scale;
-        if (hasRay) hit = NearestButton(r, maxDistance * _scale, ref distance);
+        if (hasRay) hit = NearestButton(r, maxDistance * _scale, buttonLayers, ref distance);
 
         Hover(hit);
         if (pressed && hit != null) hit.Press();
@@ -88,16 +90,16 @@ public class HandMenuPointer : MonoBehaviour
     // Nearest menu button along the ray, looking through everything else: in the
     // tabletop view the miniature arena sits between the seat and the menu, and a
     // plain first-hit raycast stopped on its walls and heroes.
-    private static HandMenuButton NearestButton(Ray r, float maxDistance, ref float distance)
+    private static HandMenuButton NearestButton(Ray r, float maxDistance, LayerMask layers, ref float distance)
     {
-        int count = Physics.RaycastNonAlloc(r, HitBuffer, maxDistance, ~0, QueryTriggerInteraction.Collide);
+        // Layer mask (GM-12): with buttons on their own layer the 32-hit cap no longer matters.
+        int count = Physics.RaycastNonAlloc(r, HitBuffer, maxDistance, layers, QueryTriggerInteraction.Collide);
         HandMenuButton best = null;
         float bestDistance = float.MaxValue;
         for (int i = 0; i < count; i++)
         {
             if (HitBuffer[i].distance >= bestDistance) continue;
-            var button = HitBuffer[i].collider.GetComponent<HandMenuButton>();
-            if (button == null) continue;
+            if (!HitBuffer[i].collider.TryGetComponent(out HandMenuButton button)) continue;
             best = button;
             bestDistance = HitBuffer[i].distance;
         }

@@ -125,6 +125,7 @@ namespace HandHero.Core
         private float _phaseTime;
         private int _islandKills;
         private int _revivesUsed;
+        private readonly HeroStatsCache _statsCache = new HeroStatsCache();
         private List<ItemDefinition> _chestChoices = new List<ItemDefinition>();
         private List<Portal> _portals = new List<Portal>();
 
@@ -146,7 +147,7 @@ namespace HandHero.Core
         public CrystalWallet Crystals { get; private set; } = new CrystalWallet();
         // Open only in the Shop phase.
         public Shop CurrentShop { get; private set; }
-        public HeroStats Stats => HeroStats.From(Inventory);
+        public HeroStats Stats => _statsCache.Get(Inventory);
 
         // 1-based island number (1..9).
         public int Island { get; private set; }

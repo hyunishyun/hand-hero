@@ -62,6 +62,9 @@ public class MatchDirector : MonoBehaviour
     private bool _runFighting;
     private bool _userWasPresent = true;
     private readonly List<XRInputDevice> _heads = new List<XRInputDevice>();
+    private XRInputDevice _head;
+    private float _nextPresenceCheck;
+    private const float PresencePollInterval = 0.25f;
 
     public MatchStateMachine Match => _match;
     public bool IsPaused => _match != null && _match.IsPaused;
@@ -201,12 +204,21 @@ public class MatchDirector : MonoBehaviour
 
     // Headset proximity sensor (OpenXR user presence). Pauses on the
     // present -> absent edge only; resuming is always the player's choice.
+    // Polled every PresencePollInterval (unscaled); the head device is looked up
+    // again only when the cached one is no longer valid (GM-11).
     private void CheckUserPresence()
     {
-        _heads.Clear();
-        XRInputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.HeadMounted, _heads);
-        if (_heads.Count == 0 || !_heads[0].TryGetFeatureValue(XRCommonUsages.userPresence, out bool present))
-            return;
+        if (Time.unscaledTime < _nextPresenceCheck) return;
+        _nextPresenceCheck = Time.unscaledTime + PresencePollInterval;
+
+        if (!_head.isValid)
+        {
+            _heads.Clear();
+            XRInputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.HeadMounted, _heads);
+            if (_heads.Count == 0) return;
+            _head = _heads[0];
+        }
+        if (!_head.TryGetFeatureValue(XRCommonUsages.userPresence, out bool present)) return;
 
         if (_userWasPresent && !present) Pause();
         _userWasPresent = present;

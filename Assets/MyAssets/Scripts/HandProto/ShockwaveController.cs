@@ -38,6 +38,10 @@ public class ShockwaveController : MonoBehaviour
     private IHandInputSource _sourceOverride;
     private float _lastFireTime = -999f;
     private float _ringTimer;
+    // Ring radius fixed at Fire(); unit circle and point buffer built once (GC-7).
+    private float _ringRadius;
+    private Vector2[] _ringUnit;
+    private Vector3[] _ringPoints;
 
     // With run items applied (the tuned radius when there are none).
     public float Radius => CombatMath.ShockwaveRadius(radius, RunHeroStats.StatsOf(runStats));
@@ -51,6 +55,13 @@ public class ShockwaveController : MonoBehaviour
             ring.useWorldSpace = true;
             ring.loop = true;
             ring.positionCount = ringSegments;
+            _ringUnit = new Vector2[ringSegments];
+            _ringPoints = new Vector3[ringSegments];
+            for (int i = 0; i < ringSegments; i++)
+            {
+                float a = i * Mathf.PI * 2f / ringSegments;
+                _ringUnit[i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            }
             ring.startColor = ringColor;
             ring.endColor = ringColor;
             ring.enabled = false;
@@ -87,7 +98,8 @@ public class ShockwaveController : MonoBehaviour
         float stun = CombatMath.StunDuration(stunDuration, stats);
 
         _stunnedThisWave.Clear();
-        int count = Physics.OverlapSphereNonAlloc(center, Radius, OverlapBuffer);
+        float reach = CombatMath.ShockwaveRadius(radius, stats);
+        int count = Physics.OverlapSphereNonAlloc(center, reach, OverlapBuffer);
         for (int i = 0; i < count; i++)
         {
             Collider c = OverlapBuffer[i];
@@ -101,6 +113,7 @@ public class ShockwaveController : MonoBehaviour
         if (ring != null)
         {
             _ringTimer = ringDuration;
+            _ringRadius = reach;
             ring.enabled = true;
         }
     }
@@ -118,13 +131,11 @@ public class ShockwaveController : MonoBehaviour
         }
 
         float t = 1f - _ringTimer / ringDuration;
-        float r = Mathf.Lerp(0.5f, Radius, t);
+        float r = Mathf.Lerp(0.5f, _ringRadius, t);
         Vector3 center = character != null ? character.transform.position : transform.position;
-        for (int i = 0; i < ringSegments; i++)
-        {
-            float a = i * Mathf.PI * 2f / ringSegments;
-            ring.SetPosition(i, center + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r));
-        }
+        for (int i = 0; i < _ringPoints.Length; i++)
+            _ringPoints[i] = center + new Vector3(_ringUnit[i].x * r, 0f, _ringUnit[i].y * r);
+        ring.SetPositions(_ringPoints);
         float width = Mathf.Lerp(0.4f, 0.05f, t);
         ring.startWidth = width;
         ring.endWidth = width;

@@ -20,13 +20,27 @@ public class HeroGroundMarker : MonoBehaviour
     [SerializeField] private float farSize = 0.8f;
     [SerializeField] private float floorLift = 0.03f;
 
+    // Visibility is applied only when it changes (GC-8).
+    private bool _visibleApplied;
+    private bool _visible;
+
+    private void Awake()
+    {
+        if (dropLine != null) dropLine.positionCount = 2;
+    }
+
     private void LateUpdate()
     {
         ArenaBounds bounds = character != null ? character.Bounds : default;
         bool visible = character != null && character.IsAlive && bounds.Enabled &&
                        (follow == null || follow.gameObject.activeInHierarchy);
-        if (disc != null) disc.gameObject.SetActive(visible);
-        if (dropLine != null) dropLine.enabled = visible;
+        if (!_visibleApplied || visible != _visible)
+        {
+            _visibleApplied = true;
+            _visible = visible;
+            if (disc != null) disc.gameObject.SetActive(visible);
+            if (dropLine != null) dropLine.enabled = visible;
+        }
         if (!visible) return;
 
         Vector3 hero = follow != null ? follow.position : character.transform.position;
@@ -43,7 +57,6 @@ public class HeroGroundMarker : MonoBehaviour
 
         if (dropLine != null)
         {
-            dropLine.positionCount = 2;
             dropLine.SetPosition(0, hero);
             dropLine.SetPosition(1, ground);
         }

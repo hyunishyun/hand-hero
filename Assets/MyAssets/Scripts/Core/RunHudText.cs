@@ -6,7 +6,38 @@ namespace HandHero.Core
     // island countdown banner and the VICTORY / DEFEAT summary. ASCII only.
     public static class RunHudText
     {
-        public static string IslandName(IslandType type) => type.ToString().ToUpperInvariant();
+        // Literals, not enum ToString + ToUpperInvariant (GM-2): no allocation per call.
+        public static string IslandName(IslandType type)
+        {
+            switch (type)
+            {
+                case IslandType.Arena: return "ARENA";
+                case IslandType.Horde: return "HORDE";
+                case IslandType.Elite: return "ELITE";
+                case IslandType.Shop: return "SHOP";
+                case IslandType.Boss: return "BOSS";
+                default: return type.ToString().ToUpperInvariant();
+            }
+        }
+
+        // Change keys (GM-1, GM-3, GM-4): the shown integers of each line, so the
+        // HUD rebuilds a string only when one of them changes.
+        public static HudKey StatusKey(int island, IslandType type, bool showObjective, int botsLeft,
+            float hordeSecondsLeft, int crystals, float health, float maxHealth)
+        {
+            int objective = !showObjective ? -1
+                : type == IslandType.Horde ? Mathf.Max(0, Mathf.CeilToInt(hordeSecondsLeft))
+                : botsLeft;
+            return new HudKey(HudKeyKind.RunStatus, island, (int)type, objective, crystals,
+                Mathf.Max(0, Mathf.RoundToInt(health)), Mathf.RoundToInt(maxHealth));
+        }
+
+        public static HudKey IntroKey(int island, IslandType type, float secondsLeft) =>
+            new HudKey(HudKeyKind.IntroBanner, island, (int)type, Mathf.CeilToInt(secondsLeft));
+
+        public static HudKey EndKey(bool victory, int islandsCleared, int items, float runSeconds) =>
+            new HudKey(HudKeyKind.EndBanner, victory ? 1 : 0, islandsCleared, items,
+                Mathf.Max(0, Mathf.CeilToInt(runSeconds)));
 
         // Arena / Elite: bots still to defeat; Boss: just BOSS; Horde: time left to survive.
         public static string Objective(IslandType type, int botsLeft, float hordeSecondsLeft)

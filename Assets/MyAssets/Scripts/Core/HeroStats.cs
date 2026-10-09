@@ -77,10 +77,17 @@ namespace HandHero.Core
             float reduction = 1f; // product of (1 - damage reduction)
             float increase = 1f;  // product of (1 + extra damage taken)
 
-            foreach (OwnedItem owned in inventory.Items)
+            // Index loops: foreach over IReadOnlyList boxes its enumerator (GM-9).
+            var items = inventory.Items;
+            for (int i = 0; i < items.Count; i++)
             {
-                foreach (StatEffect e in owned.Item.Effects) s.Apply(e, owned.Level, ref critMiss, ref reduction, ref increase);
-                foreach (StatEffect e in owned.Item.Debuffs) s.Apply(e, owned.Level, ref critMiss, ref reduction, ref increase);
+                OwnedItem owned = items[i];
+                var effects = owned.Item.Effects;
+                for (int j = 0; j < effects.Count; j++)
+                    s.Apply(effects[j], owned.Level, ref critMiss, ref reduction, ref increase);
+                var debuffs = owned.Item.Debuffs;
+                for (int j = 0; j < debuffs.Count; j++)
+                    s.Apply(debuffs[j], owned.Level, ref critMiss, ref reduction, ref increase);
             }
 
             s.CritChance = 1f - critMiss;

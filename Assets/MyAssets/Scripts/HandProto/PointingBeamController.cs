@@ -104,6 +104,7 @@ public class PointingBeamController : MonoBehaviour
     private readonly List<AimAssistTarget> _candidateTargets = new List<AimAssistTarget>();
     private AimAssistTarget _assistTarget;
     private Vector3 _rawAimPoint;
+    private Transform _head;
     private readonly AimCursorModel _cursor = new AimCursorModel();
     private bool _visualsApplied;
     private AimMode _visualsMode;
@@ -237,7 +238,7 @@ public class PointingBeamController : MonoBehaviour
     private void UpdateChargeIndicator(ChargeStep step)
     {
         if (chargeIndicator == null) return;
-        chargeIndicator.gameObject.SetActive(step.Charging);
+        if (chargeIndicator.gameObject.activeSelf != step.Charging) chargeIndicator.gameObject.SetActive(step.Charging);
         if (!step.Charging) return;
 
         chargeIndicator.position = character.transform.position;
@@ -250,13 +251,18 @@ public class PointingBeamController : MonoBehaviour
     {
         if (ray.direction == Vector3.zero) return;
 
-        CollectCandidates();
-        int current = _assistTarget != null ? _candidateTargets.IndexOf(_assistTarget) : -1;
         HandGestureTracker tracker = HandGestureTracker.Instance;
         bool tabletop = tracker != null && tracker.WorldScale > tabletopWorldScaleThreshold;
         AimAssist.Cone(tabletop, assistAngle, assistReleaseAngle, tabletopAssistAngle, tabletopAssistReleaseAngle,
             out float acquire, out float release);
-        int pick = AimAssist.SelectByAngle(ray, _candidatePositions, current, acquire, release);
+        // No cone and nothing held (the bots: 0 deg assist): nothing can be picked, skip the scan (GC-1).
+        int pick = -1;
+        if (acquire > 0f || _assistTarget != null)
+        {
+            CollectCandidates();
+            int current = _assistTarget != null ? _candidateTargets.IndexOf(_assistTarget) : -1;
+            pick = AimAssist.SelectByAngle(ray, _candidatePositions, current, acquire, release);
+        }
         SetAssistTarget(pick >= 0 ? _candidateTargets[pick] : null);
 
         // The reticle always shows where the hand points (smoothed against jitter):
@@ -276,7 +282,8 @@ public class PointingBeamController : MonoBehaviour
         {
             reticle.position = _rawAimPoint;
             // Reticle keeps a readable size at any distance.
-            float dist = Vector3.Distance(Camera.main != null ? Camera.main.transform.position : ray.origin, _rawAimPoint);
+            Transform head = HeadTransform();
+            float dist = Vector3.Distance(head != null ? head.position : ray.origin, _rawAimPoint);
             reticle.localScale = Vector3.one * Mathf.Max(0.1f, dist * 0.02f);
         }
     }
@@ -321,12 +328,26 @@ public class PointingBeamController : MonoBehaviour
         _candidatePositions.Clear();
         _candidateTargets.Clear();
         Transform self = character.transform;
-        foreach (AimAssistTarget t in AimAssistTarget.All)
+        // Index loop: foreach over IReadOnlyList boxes its enumerator every frame (GC-1).
+        var all = AimAssistTarget.All;
+        for (int i = 0; i < all.Count; i++)
         {
+            AimAssistTarget t = all[i];
             if (t == null || !t.IsTargetable || t.transform.IsChildOf(self)) continue;
             _candidateTargets.Add(t);
             _candidatePositions.Add(t.transform.position);
         }
+    }
+
+    // Camera.main looked up once, again only if the camera goes away (GC-9).
+    private Transform HeadTransform()
+    {
+        if (_head == null)
+        {
+            Camera cam = Camera.main;
+            if (cam != null) _head = cam.transform;
+        }
+        return _head;
     }
 
     // The lock-on ring follows the current snap target in both modes.

@@ -22,6 +22,14 @@ public class MatchHud : MonoBehaviour
     [Tooltip("Seconds \"FIGHT!\" stays up when a round starts")]
     [SerializeField] private float fightBannerTime = 0.8f;
 
+    // Last shown keys (P3 / GM-1…GM-5): strings are rebuilt and assigned only
+    // when a shown integer changes, not every frame.
+    private HudKey _scoreKey;
+    private HudKey _bannerKey;
+    private bool _keysValid;
+
+    private void OnEnable() => _keysValid = false;
+
     private void LateUpdate()
     {
         if (director == null || director.Match == null) return;
@@ -33,17 +41,90 @@ public class MatchHud : MonoBehaviour
             bool inMatch = m.Phase != MatchPhase.Menu && m.Phase != MatchPhase.Boot && m.Phase != MatchPhase.Tutorial
                 && m.Phase != MatchPhase.Run;
             bool inRun = r != null && r.Phase != RunPhase.Victory && r.Phase != RunPhase.Defeat;
-            scoreLine.gameObject.SetActive(inMatch || inRun);
-            if (inMatch) scoreLine.text = ScoreText(m);
-            else if (inRun) scoreLine.text = RunStatusText(r);
+            SetActive(scoreLine, inMatch || inRun);
+            if (inMatch)
+            {
+                HudKey key = ScoreKey(m);
+                if (!_keysValid || key != _scoreKey)
+                {
+                    _scoreKey = key;
+                    scoreLine.text = ScoreText(m);
+                }
+            }
+            else if (inRun)
+            {
+                HudKey key = RunStatusKey(r);
+                if (!_keysValid || key != _scoreKey)
+                {
+                    _scoreKey = key;
+                    scoreLine.text = RunStatusText(r);
+                }
+            }
         }
 
         if (banner != null)
         {
-            string text = m.IsPaused ? "PAUSED" : r != null ? RunBannerText(r) : BannerText(m);
-            banner.gameObject.SetActive(!string.IsNullOrEmpty(text));
-            banner.text = text;
+            HudKey key = m.IsPaused ? PausedKey : r != null ? RunBannerKey(r) : BannerKey(m);
+            if (!_keysValid || key != _bannerKey)
+            {
+                _bannerKey = key;
+                string text = m.IsPaused ? "PAUSED" : r != null ? RunBannerText(r) : BannerText(m);
+                SetActive(banner, !string.IsNullOrEmpty(text));
+                banner.text = text;
+            }
         }
+
+        _keysValid = true;
+    }
+
+    private static void SetActive(Component c, bool active)
+    {
+        if (c.gameObject.activeSelf != active) c.gameObject.SetActive(active);
+    }
+
+    private static readonly HudKey PausedKey = new HudKey(HudKeyKind.MatchBanner, -1);
+
+    private static HudKey ScoreKey(MatchStateMachine m)
+    {
+        float seconds = m.Phase == MatchPhase.Fight ? m.PhaseRemaining : m.Params.RoundTime;
+        return new HudKey(HudKeyKind.MatchScore, m.PlayerWins, m.OpponentWins, m.Round, Mathf.CeilToInt(seconds));
+    }
+
+    private HudKey RunStatusKey(RunStateMachine r)
+    {
+        IslandSpec spec = r.Spec;
+        float hordeLeft = r.Phase == RunPhase.Island ? r.PhaseRemaining : r.Params.HordeTime;
+        bool showObjective = r.Phase == RunPhase.Island || r.Phase == RunPhase.Intro;
+        HeroHealth hp = run.PlayerHealth;
+        return RunHudText.StatusKey(r.Island, spec.Type, showObjective, r.BotsRemaining, hordeLeft,
+            r.Crystals.Balance, hp != null ? hp.CurrentHealth : 0f, hp != null ? hp.MaxHealth : 0f);
+    }
+
+    // Mirrors RunBannerText: every value that text shows is in the key.
+    private HudKey RunBannerKey(RunStateMachine r)
+    {
+        switch (r.Phase)
+        {
+            case RunPhase.Intro:
+                return RunHudText.IntroKey(r.Island, r.Spec.Type, r.PhaseRemaining);
+            case RunPhase.Victory:
+            case RunPhase.Defeat:
+                return RunHudText.EndKey(r.Phase == RunPhase.Victory, r.IslandsCleared, r.Inventory.TotalLevels,
+                    r.RunTime);
+            case RunPhase.Island:
+                return new HudKey(HudKeyKind.MatchBanner, -2, r.PhaseTime < fightBannerTime ? 1 : 0);
+            default:
+                return new HudKey(HudKeyKind.MatchBanner, -3, (int)r.Phase);
+        }
+    }
+
+    // Mirrors BannerText.
+    private HudKey BannerKey(MatchStateMachine m)
+    {
+        int countdown = m.Phase == MatchPhase.Countdown ? Mathf.CeilToInt(m.PhaseRemaining) : 0;
+        int fight = m.Phase == MatchPhase.Fight && m.PhaseTime < fightBannerTime ? 1 : 0;
+        return new HudKey(HudKeyKind.MatchBanner, (int)m.Phase, m.Round, countdown, fight,
+            (int)m.RoundWinner * 8 + (int)m.MatchWinner, m.PlayerWins * 1000 + m.OpponentWins);
     }
 
     private string ScoreText(MatchStateMachine m)

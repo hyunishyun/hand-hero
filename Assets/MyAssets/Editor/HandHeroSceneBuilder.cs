@@ -21,6 +21,8 @@ namespace HandHero.EditorTools
         private const string BotDir = "Assets/MyAssets/Generated/Bot";
         public const string SandboxScenePath = SceneDir + "/HandHero_Sandbox.unity";
         public const string ArenaMainScenePath = SceneDir + "/Arena_Main.unity";
+        // Built-in UI layer: menu button colliders, the only layer the menu ray tests.
+        private const int MenuButtonLayer = 5;
         public const string BotDifficultyPath = BotDir + "/BotDifficulty_Normal.asset";
         public const string RunBotPrefabPath = BotDir + "/RunBot.prefab";
         private const string FxDir = "Assets/MyAssets/Generated/FX";
@@ -289,6 +291,10 @@ namespace HandHero.EditorTools
             menuGo.transform.SetParent(seatUI, false);
             var pointer = menuGo.AddComponent<HandMenuPointer>();
             SetRefs(pointer, ("tracker", tracker), ("viewCamera", cam), ("ray", pointerRay));
+            // The menu ray tests only the button colliders (built-in UI layer, GM-12).
+            var pointerSo = new SerializedObject(pointer);
+            pointerSo.FindProperty("buttonLayers").intValue = 1 << MenuButtonLayer;
+            pointerSo.ApplyModifiedPropertiesWithoutUndo();
 
             // Panels sit 2.5 m ahead, about 11 degrees below eye level, under the banner.
             Vector3 panelPos = seat + new Vector3(0f, -0.5f, 2.5f);
@@ -556,6 +562,7 @@ namespace HandHero.EditorTools
             var box = go.AddComponent<BoxCollider>();
             box.size = size;
             box.isTrigger = true;
+            go.layer = MenuButtonLayer;
 
             GameObject bg = Primitive(PrimitiveType.Cube, "Background", go.transform, Vector3.zero, size, mat);
             TextMeshPro label = WorldText("Label", go.transform, Vector3.zero, 1.6f);

@@ -8,33 +8,19 @@ using UnityEngine;
 public class RunHeroStats : MonoBehaviour
 {
     private Inventory _inventory;
-    private int _cachedLevels = -1;
-    private HeroStats _stats = HeroStats.Neutral;
+    private readonly HeroStatsCache _cache = new HeroStatsCache();
 
     public Inventory Inventory => _inventory;
     public bool IsBound => _inventory != null;
 
-    // Recomputed only when the inventory gained a level (Add always adds one).
-    public HeroStats Stats
-    {
-        get
-        {
-            if (_inventory == null) return HeroStats.Neutral;
-            if (_inventory.TotalLevels != _cachedLevels)
-            {
-                _stats = HeroStats.From(_inventory);
-                _cachedLevels = _inventory.TotalLevels;
-            }
-            return _stats;
-        }
-    }
+    // Recomputed only when the inventory changed (HeroStatsCache).
+    public HeroStats Stats => _cache.Get(_inventory);
 
     // Run start: the run's inventory. Null = back to neutral (run over, menu).
     public void Bind(Inventory inventory)
     {
         _inventory = inventory;
-        _cachedLevels = -1;
-        _stats = HeroStats.Neutral;
+        _cache.Invalidate();
     }
 
     public void Unbind() => Bind(null);

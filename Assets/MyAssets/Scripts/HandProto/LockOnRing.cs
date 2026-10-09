@@ -23,6 +23,12 @@ public class LockOnRing : MonoBehaviour
 
     private Transform _target;
     private float _popStart;
+    private Transform _head;
+    // Ring points are rewritten only when the radius or width changes (GC-6).
+    private float _shownRadius = -1f;
+    private float _shownWidth = -1f;
+    private readonly Vector3[] _points = new Vector3[Segments];
+    private static Vector3[] _unitCircle;
 
     public void Show(Transform target)
     {
@@ -45,6 +51,15 @@ public class LockOnRing : MonoBehaviour
         line.positionCount = Segments;
         line.startColor = line.endColor = color;
         line.enabled = false;
+        if (_unitCircle == null)
+        {
+            _unitCircle = new Vector3[Segments];
+            for (int i = 0; i < Segments; i++)
+            {
+                float a = i * Mathf.PI * 2f / Segments;
+                _unitCircle[i] = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+            }
+        }
     }
 
     private void OnDisable()
@@ -54,29 +69,38 @@ public class LockOnRing : MonoBehaviour
 
     private void LateUpdate()
     {
-        Camera cam = Camera.main;
-        if (_target == null || !_target.gameObject.activeInHierarchy || cam == null)
+        if (_head == null)
+        {
+            Camera cam = Camera.main;
+            if (cam != null) _head = cam.transform;
+        }
+        if (_target == null || !_target.gameObject.activeInHierarchy || _head == null)
         {
             if (line.enabled) line.enabled = false;
             return;
         }
 
-        Vector3 toTarget = _target.position - cam.transform.position;
+        Vector3 toTarget = _target.position - _head.position;
         float dist = toTarget.magnitude;
         transform.position = _target.position;
-        transform.rotation = Quaternion.LookRotation(toTarget, cam.transform.up);
+        transform.rotation = Quaternion.LookRotation(toTarget, _head.up);
 
         float pop = popTime > 0f
             ? Mathf.Lerp(popScale, 1f, Mathf.Clamp01((Time.unscaledTime - _popStart) / popTime))
             : 1f;
         float radius = Mathf.Max(minRadius, dist * Mathf.Tan(angularSize * Mathf.Deg2Rad)) * pop;
-        for (int i = 0; i < Segments; i++)
+        if (Mathf.Abs(radius - _shownRadius) > 0.001f)
         {
-            float a = i * Mathf.PI * 2f / Segments;
-            line.SetPosition(i, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * radius);
+            _shownRadius = radius;
+            for (int i = 0; i < Segments; i++) _points[i] = _unitCircle[i] * radius;
+            line.SetPositions(_points);
         }
-        line.widthMultiplier = width * Mathf.Max(1f, dist / 10f);
-        line.startColor = line.endColor = color;
-        line.enabled = true;
+        float w = width * Mathf.Max(1f, dist / 10f);
+        if (Mathf.Abs(w - _shownWidth) > 0.0001f)
+        {
+            _shownWidth = w;
+            line.widthMultiplier = w;
+        }
+        if (!line.enabled) line.enabled = true;
     }
 }
