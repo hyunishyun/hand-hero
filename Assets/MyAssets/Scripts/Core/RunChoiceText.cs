@@ -50,6 +50,11 @@ namespace HandHero.Core
 
         public static string ShopHeader(int balance) => $"SHOP  -  {balance} CRYSTALS";
 
+        // Starting relic chest (round 4, S5): unlocked relic cards plus a NONE card.
+        public const string StartRelicHeader = "STARTING RELIC";
+
+        public const string NoneCard = "<b>NONE</b>\n<size=60%>Start the run without a relic.</size>";
+
         public static string RerollLabel(int price) => $"REROLL\n<size=70%>{price} CRYSTALS</size>";
 
         public static Color RarityColor(ItemRarity rarity)

@@ -33,3 +33,26 @@
   - 뺌: `hh.meta.newUnlocks`(끝 화면이 `MetaChanges`를 바로 받으므로 저장할 필요가 없다), `hh.meta.lastStart`(카드 미리 선택 기능이 계획에 없다).
 - **그 밖의 규칙:** `runs`는 끝난 런 수(중도 포기 포함)다. 그 모드의 첫 기록도 `NEW BEST`로 센다(첫 런 끝 화면에 NEW BEST가 뜬다).
 - **뒤집으려면:** `MetaProgress.cs`의 키 상수와 `OnRunEnded`. 첫 기록에 NEW BEST를 안 띄우려면 `BestIsland(aim) > 0`일 때만 `NewBestIsland`를 켠다.
+
+## S5-1 메뉴의 최고 기록 줄 위치
+- **질문:** 계획은 "메인 메뉴 그리드 위에 TextMeshPro 한 줄"이다. 어디에 둘까?
+- **택한 답:** 새 텍스트 오브젝트를 만들지 않고, 메뉴 배너(`HAND HERO`) 아래 작은 줄을 쓴다. 기록이 생기면 안내 문구 `point and pinch to choose` 자리에 `BEST  ISLAND 7  -  WIN 9:12`가 나온다. 지금 조준 모드에 기록이 없으면 안내 문구가 그대로 나온다.
+- **이유:** 배너(4 m, 눈높이 +0.15 m)의 아래 끝과 메인 패널 그리드(2.5 m)의 위 끝이 시야각으로 이미 거의 맞닿아 있다(둘 다 약 -2.4°). 그 사이에 줄을 하나 더 넣으면 배너와 겹친다. 안내 문구는 처음 하는 사람에게만 필요하다.
+- **그 밖에:** 계획의 가운뎃점(·)은 기본 폰트 아틀라스에 없을 수 있어서 다른 HUD 문구처럼 ASCII `-`를 썼다. 승리 기록은 `ISLAND 9  -  WIN m:ss`로 보인다.
+- **뒤집으려면:** `MetaText.MenuBanner`가 안내 문구와 기록 줄을 함께 내도록 바꾸거나, 씬 빌더에서 MainPanel 아래쪽(AIM 버튼 밑)에 TextMeshPro를 하나 더 만들고 `MetaText.BestLine`을 넣는다.
+
+## S5-2 시작 유물 고르는 시간도 런 시간에 들어간다
+- **질문:** STARTING RELIC 화면에 머문 시간을 런 시간(최단 승리 기록)에 넣을까?
+- **택한 답:** 넣는다. 상자·포털·상점에서 고르는 시간도 이미 런 시간에 들어간다.
+- **뒤집으려면:** `RunStateMachine.Tick`에서 `Phase == RunPhase.StartRelic`이면 `RunTime`을 늘리지 않는다(`StartRelicTests.RunTime_CountsTheRelicChoice_LikeEveryOtherChoice`도 같이 고친다).
+
+## S5-3 RESET PROGRESS는 일시정지 패널에만
+- **질문:** 메인 메뉴에도 초기화 버튼을 둘까?
+- **택한 답:** 계획대로 일시정지 패널에만 둔다(RESUME·MENU 아래 둘째 줄, 어두운 빨강). 퀵 매치나 런 중에 일시정지하면 보인다. 첫 누름은 `CONFIRM RESET`으로 바뀌기만 하고, 3초 안에 다시 눌러야 지운다. 지운 뒤 1.5초 동안 `PROGRESS RESET`이 보인다. 패널이 닫히면 확인 대기도 취소된다.
+- **이유:** 실수로 눌리기 어렵게(D5). 진행 중인 런은 이미 고른 시작 유물을 그대로 가진다.
+- **뒤집으려면:** 씬 빌더의 `Button_RESET PROGRESS` 블록을 지우면 버튼이 사라진다. 확인 시간은 `ResetProgressButton.confirmWindow`.
+
+## S5-4 시작 유물 기록
+- **질문:** 고른 시작 유물을 `run_log.jsonl`에 남길까?
+- **택한 답:** 남긴다. 새 필드 `"start_relic":"second_wind"`(고르지 않았거나 NONE이면 `""`). 섬 1 전에 고르므로 `items` 목록이 아니라 런 필드다. JSON 버전은 1 그대로(필드 추가만).
+- **뒤집으려면:** `RunRecordJson.ToJson`의 `start_relic` 한 줄.

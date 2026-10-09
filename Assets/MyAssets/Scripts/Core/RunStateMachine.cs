@@ -15,6 +15,7 @@ namespace HandHero.Core
         ChoosePortal,  // pick the next island + its reward chest
         Victory,       // boss down; stays until ReturnToMenu
         Defeat,        // died without a revive; stays until ReturnToMenu
+        StartRelic,    // pick 1 unlocked starting relic (or NONE) before island 1's intro (round 4, S5)
     }
 
     [Serializable]
@@ -115,8 +116,9 @@ namespace HandHero.Core
     }
 
     // Single-player RUN mode (autonomous plan R5, decisions Q2/Q3):
-    // Idle -> Intro -> Island -> IslandCleared -> OpenChest -> (Shop) -> ChoosePortal
-    // -> Intro ... -> island 9 Boss -> Victory, or Defeat on a death without revives.
+    // Idle -> (StartRelic) -> Intro -> Island -> IslandCleared -> OpenChest -> (Shop)
+    // -> ChoosePortal -> Intro ... -> island 9 Boss -> Victory, or Defeat on a death
+    // without revives. StartRelic shows only when meta progression unlocked a relic.
     // The chest opened after a clear is the reward of the portal that led to the
     // island (PortalRoller); island 1 is fixed, island 9 has no portal choice.
     // Player health lives on the hero; the director asks this class how much to
@@ -133,6 +135,7 @@ namespace HandHero.Core
         private readonly HeroStatsCache _statsCache = new HeroStatsCache();
         private List<ItemDefinition> _chestChoices = new List<ItemDefinition>();
         private List<Portal> _portals = new List<Portal>();
+        private readonly List<ItemDefinition> _startRelicChoices = new List<ItemDefinition>();
 
         public RunStateMachine(RunParams p, System.Random rng)
         {
@@ -172,9 +175,16 @@ namespace HandHero.Core
         public ChestType OpenedChest => CurrentPortal.Chest;
         public IReadOnlyList<ItemDefinition> ChestChoices => _chestChoices;
         public IReadOnlyList<Portal> Portals => _portals;
+        // Open only in the StartRelic phase, in the order StartRun was given.
+        public IReadOnlyList<ItemDefinition> StartRelicChoices => _startRelicChoices;
         public int RevivesLeft => Mathf.Max(0, Stats.Revives - _revivesUsed);
 
-        public bool StartRun()
+        public bool StartRun() => StartRun(null);
+
+        // startingRelics: the unlocked starting relic ids (MetaProgress), in card
+        // order. Any the run can take open the StartRelic choice first; none (or
+        // null) go straight to island 1's intro.
+        public bool StartRun(IReadOnlyList<string> startingRelics)
         {
             if (Phase != RunPhase.Idle) return false;
             Inventory = new Inventory(ItemCatalog.Get);
@@ -184,7 +194,46 @@ namespace HandHero.Core
             Kills = 0;
             RunTime = 0f;
             _revivesUsed = 0;
-            BeginIsland(1, PortalRoller.FirstIsland);
+
+            _startRelicChoices.Clear();
+            if (startingRelics != null)
+            {
+                for (int i = 0; i < startingRelics.Count; i++)
+                {
+                    ItemDefinition item = ItemCatalog.Get(startingRelics[i]);
+                    if (item != null && Inventory.CanAdd(item.Id) && !_startRelicChoices.Contains(item))
+                        _startRelicChoices.Add(item);
+                }
+            }
+
+            if (_startRelicChoices.Count == 0)
+            {
+                BeginIsland(1, PortalRoller.FirstIsland);
+                return true;
+            }
+            // Island 1 is already the current island, so a quit here counts as reaching it.
+            PrepareIsland(1, PortalRoller.FirstIsland);
+            Enter(RunPhase.StartRelic);
+            return true;
+        }
+
+        // The starting relic joins the inventory like a chest pick, so no chest
+        // offers it again this run.
+        public bool PickStartRelic(int index)
+        {
+            if (Phase != RunPhase.StartRelic || index < 0 || index >= _startRelicChoices.Count) return false;
+            if (!Inventory.Add(_startRelicChoices[index].Id)) return false;
+            _startRelicChoices.Clear();
+            BeginIsland(1, CurrentPortal);
+            return true;
+        }
+
+        // The NONE card.
+        public bool SkipStartRelic()
+        {
+            if (Phase != RunPhase.StartRelic) return false;
+            _startRelicChoices.Clear();
+            BeginIsland(1, CurrentPortal);
             return true;
         }
 
@@ -193,6 +242,7 @@ namespace HandHero.Core
             SetPaused(false);
             _chestChoices.Clear();
             _portals.Clear();
+            _startRelicChoices.Clear();
             CurrentShop = null;
             Enter(RunPhase.Idle);
         }
@@ -324,11 +374,16 @@ namespace HandHero.Core
 
         private void BeginIsland(int island, Portal portal)
         {
+            PrepareIsland(island, portal);
+            Enter(RunPhase.Intro);
+        }
+
+        private void PrepareIsland(int island, Portal portal)
+        {
             Island = island;
             CurrentPortal = portal;
             Spec = RunRules.Island(island, portal.Island, Params);
             _islandKills = 0;
-            Enter(RunPhase.Intro);
         }
 
         private void ClearIsland()

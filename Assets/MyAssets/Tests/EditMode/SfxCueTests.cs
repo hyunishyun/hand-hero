@@ -71,6 +71,13 @@ namespace HandHero.Tests
             Assert.AreEqual(SfxId.None, SfxCues.ForRunPhase(RunPhase.Intro));
         }
 
+        // Round 4 (S5): the starting relic chest opens like every other chest.
+        [Test]
+        public void StartRelic_PlaysTheChestOpenSound()
+        {
+            Assert.AreEqual(SfxId.ChestOpen, SfxCues.ForRunPhase(RunPhase.StartRelic));
+        }
+
         [Test]
         public void CountdownPhases()
         {

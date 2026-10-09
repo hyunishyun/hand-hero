@@ -361,6 +361,14 @@ namespace HandHero.EditorTools
             MenuButton(pausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.5f, 0f, director, buttonMat);
             MenuButton(pausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.5f, 0f, director,
                 buttonMat);
+            // Round 4 (S5 / D5): RESET PROGRESS on a second row, dark red; a second press confirms.
+            HandMenuButton resetButton = Button(pausePanel.transform, "Button_RESET PROGRESS", "RESET PROGRESS", 0f,
+                -0.42f, MenuButtonSize, buttonMat);
+            var resetButtonSo = new SerializedObject(resetButton);
+            Prop(resetButtonSo, "idleColor").colorValue = new Color(0.35f, 0.1f, 0.1f);
+            resetButtonSo.ApplyModifiedPropertiesWithoutUndo();
+            var resetProgress = resetButton.gameObject.AddComponent<ResetProgressButton>();
+            SetRefs(resetProgress, ("run", runDirector));
             GameObject tutorialPausePanel = Panel("TutorialPausePanel", menuGo.transform, panelPos);
             MenuButton(tutorialPausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.95f, 0f, director,
                 buttonMat);

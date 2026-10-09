@@ -64,11 +64,12 @@ public class MatchHud : MonoBehaviour
 
         if (banner != null)
         {
-            HudKey key = m.IsPaused ? PausedKey : r != null ? RunBannerKey(r) : BannerKey(m);
+            bool menu = m.Phase == MatchPhase.Menu;
+            HudKey key = m.IsPaused ? PausedKey : r != null ? RunBannerKey(r) : menu ? MenuKey() : BannerKey(m);
             if (!_keysValid || key != _bannerKey)
             {
                 _bannerKey = key;
-                string text = m.IsPaused ? "PAUSED" : r != null ? RunBannerText(r) : BannerText(m);
+                string text = m.IsPaused ? "PAUSED" : r != null ? RunBannerText(r) : menu ? MenuText() : BannerText(m);
                 SetActive(banner, !string.IsNullOrEmpty(text));
                 banner.text = text;
             }
@@ -110,13 +111,21 @@ public class MatchHud : MonoBehaviour
             case RunPhase.Victory:
             case RunPhase.Defeat:
                 return RunHudText.EndKey(r.Phase == RunPhase.Victory, r.IslandsCleared, r.Inventory.TotalLevels,
-                    r.RunTime);
+                    r.RunTime, MetaText.ChangesKey(run.LastMetaChanges));
             case RunPhase.Island:
                 return new HudKey(HudKeyKind.MatchBanner, -2, r.PhaseTime < fightBannerTime ? 1 : 0);
             default:
                 return new HudKey(HudKeyKind.MatchBanner, -3, (int)r.Phase);
         }
     }
+
+    // Main menu banner (S5): the current aim mode's best line replaces the hint
+    // once there is one. Mirrors MenuText.
+    private HudKey MenuKey() =>
+        run != null ? MetaText.MenuKey(run.BestIsland, run.BestWinSeconds) : MetaText.MenuKey(0, 0f);
+
+    private string MenuText() =>
+        MetaText.MenuBanner(run != null ? MetaText.BestLine(run.BestIsland, run.BestWinSeconds) : "");
 
     // Mirrors BannerText.
     private HudKey BannerKey(MatchStateMachine m)
@@ -160,7 +169,7 @@ public class MatchHud : MonoBehaviour
             case RunPhase.Victory:
             case RunPhase.Defeat:
                 return RunHudText.EndBanner(r.Phase == RunPhase.Victory, r.IslandsCleared, r.Inventory.TotalLevels,
-                    r.RunTime);
+                    r.RunTime, MetaText.EndLines(run.LastMetaChanges));
             default:
                 return "";
         }
@@ -171,7 +180,7 @@ public class MatchHud : MonoBehaviour
         switch (m.Phase)
         {
             case MatchPhase.Menu:
-                return "HAND HERO\n<size=50%>point and pinch to choose</size>";
+                return MenuText();
             case MatchPhase.Countdown:
                 return $"ROUND {m.Round}\n{Mathf.CeilToInt(m.PhaseRemaining)}";
             case MatchPhase.Fight:

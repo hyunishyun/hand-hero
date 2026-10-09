@@ -43,7 +43,7 @@ public class RunDirector : MonoBehaviour
     [SerializeField] private ArenaViewMode viewMode;
 
     [Header("Debug keys (editor / desktop)")]
-    [Tooltip("R = start a run (menu), 1-3 = pick a portal / chest card, B = buy the first affordable shop item, N = leave the shop")]
+    [Tooltip("R = start a run (menu), 1-4 = pick a portal / chest card / starting relic (the card after the relics = NONE), B = buy the first affordable shop item, N = leave the shop")]
     [SerializeField] private bool debugKeys = true;
 
     private RunStateMachine _run;
@@ -64,18 +64,29 @@ public class RunDirector : MonoBehaviour
     private readonly RunRecorder _recorder = new RunRecorder();
     private int _rngSeed;
 
+    // Meta progression A (round 4, S5 / D4): unlocked starting relics and the
+    // personal bests, saved once per run end together with the run log.
+    private MetaProgress _meta;
+    private MetaChanges _lastMetaChanges;
+
     public RunStateMachine Run => _run;
     public bool IsRunning => _run != null && _run.Phase != RunPhase.Idle;
     public int BotsAlive => _bots.Count;
     // VICTORY / DEFEAT showing; the run waits for MENU.
     public bool IsOver => _run != null && (_run.Phase == RunPhase.Victory || _run.Phase == RunPhase.Defeat);
     public HeroHealth PlayerHealth => playerHealth;
+    // What the last finished run changed (NEW BEST / UNLOCKED); cleared when a run starts.
+    public MetaChanges LastMetaChanges => _lastMetaChanges;
+    // The current aim mode's bests for the menu line, cached (no PlayerPrefs reads per frame).
+    public int BestIsland { get; private set; }
+    public float BestWinSeconds { get; private set; }
 
     private void Awake()
     {
         _rngSeed = seed != 0 ? seed : System.Environment.TickCount;
         _run = new RunStateMachine(rules, new System.Random(_rngSeed));
         _run.PhaseChanged += OnRunPhaseChanged;
+        _meta = new MetaProgress(PlayerPrefsKeyValueStore.Instance);
     }
 
     private void OnEnable()
@@ -103,12 +114,36 @@ public class RunDirector : MonoBehaviour
             _subscribedMatch = match.Match;
             _subscribedMatch.PhaseChanged += OnMatchPhaseChanged;
         }
+        // After AimModeSetting.Awake loaded the saved mode.
+        if (aimModeSetting != null) aimModeSetting.Changed += OnAimModeChanged;
+        RefreshBest();
         PrewarmBots();
     }
 
     private void OnDestroy()
     {
         if (_subscribedMatch != null) _subscribedMatch.PhaseChanged -= OnMatchPhaseChanged;
+        if (aimModeSetting != null) aimModeSetting.Changed -= OnAimModeChanged;
+    }
+
+    private void OnAimModeChanged(AimMode mode) => RefreshBest();
+
+    private string AimName => aimModeSetting != null ? aimModeSetting.Mode.ToString() : "Unknown";
+
+    private void RefreshBest()
+    {
+        string aim = AimName;
+        BestIsland = _meta.BestIsland(aim);
+        BestWinSeconds = _meta.BestWinSeconds(aim);
+    }
+
+    // Pause panel RESET PROGRESS (after its confirm press): clears hh.meta.* only;
+    // the aim mode and the tutorial flag stay. A run in progress keeps its relic.
+    public void ResetProgress()
+    {
+        _meta.Reset();
+        _lastMetaChanges = default;
+        RefreshBest();
     }
 
     private void OnMatchPhaseChanged(MatchPhase phase)
@@ -129,9 +164,11 @@ public class RunDirector : MonoBehaviour
     private void BeginRun()
     {
         _run.Params = rules;
+        _lastMetaChanges = default;
         // Before StartRun: it enters island 1's intro, which the recorder logs.
         BeginRecord();
-        _run.StartRun();
+        // Unlocked relics open the STARTING RELIC chest first (S5).
+        _run.StartRun(_meta.StartingRelicChoices());
         PrewarmBots();
         _spawnSeeds = new System.Random(seed != 0 ? unchecked(seed * 31 + 17) : System.Environment.TickCount);
         if (playerStats != null) playerStats.Bind(_run.Inventory);
@@ -153,6 +190,19 @@ public class RunDirector : MonoBehaviour
         _recorder.ItemPicked(id, _run.Inventory.Level(id) + 1, ItemSource.Chest);
         return _run.PickChestItem(index);
     }
+
+    public bool PickStartRelic(int index)
+    {
+        if (Paused || _run.Phase != RunPhase.StartRelic || index < 0 || index >= _run.StartRelicChoices.Count)
+            return false;
+        string id = _run.StartRelicChoices[index].Id;
+        if (!_run.PickStartRelic(index)) return false;
+        _recorder.StartRelicPicked(id);
+        return true;
+    }
+
+    // The NONE card.
+    public bool SkipStartRelic() => !Paused && _run.SkipStartRelic();
 
     public bool ChoosePortal(int index) => !Paused && _run.ChoosePortal(index);
 
@@ -217,11 +267,17 @@ public class RunDirector : MonoBehaviour
         int pick = keyboard.digit1Key.wasPressedThisFrame ? 0
             : keyboard.digit2Key.wasPressedThisFrame ? 1
             : keyboard.digit3Key.wasPressedThisFrame ? 2
+            : keyboard.digit4Key.wasPressedThisFrame ? 3
             : -1;
         if (pick >= 0)
         {
             if (_run.Phase == RunPhase.OpenChest) PickChestItem(pick);
             else if (_run.Phase == RunPhase.ChoosePortal) ChoosePortal(pick);
+            else if (_run.Phase == RunPhase.StartRelic)
+            {
+                if (pick < _run.StartRelicChoices.Count) PickStartRelic(pick);
+                else if (pick == _run.StartRelicChoices.Count) SkipStartRelic();
+            }
         }
         else if (keyboard.bKey.wasPressedThisFrame && _run.Phase == RunPhase.Shop)
         {
@@ -424,7 +480,13 @@ public class RunDirector : MonoBehaviour
         });
         // The record copied the holds; menu and Quick Match pinches are not logged.
         if (playerAim != null) playerAim.SetHoldRecording(false);
-        if (record != null && writeRunLog) RunLogFile.Append(RunRecordJson.ToJson(record));
+        if (record == null) return;
+        if (writeRunLog) RunLogFile.Append(RunRecordJson.ToJson(record));
+
+        // Same moment as the run log (S5): the end screen or a quit, one PlayerPrefs.Save.
+        // The aim mode the run was played in, as recorded at its start.
+        _lastMetaChanges = _meta.OnRunEnded(result, _run.Island, _run.RunTime, record.AimMode);
+        RefreshBest();
     }
 
     private void EndRun()

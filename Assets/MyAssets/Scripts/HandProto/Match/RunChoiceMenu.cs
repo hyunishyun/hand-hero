@@ -8,6 +8,7 @@ using UnityEngine;
 // pointer on while IsShowing):
 //   ChoosePortal -> portal panel: next island + its reward chest
 //   OpenChest    -> chest panel: item cards (name, level after the pick, rarity color)
+//   StartRelic   -> chest panel: STARTING RELIC, unlocked relic cards + a NONE card (S5)
 //   Shop         -> shop panel: 4 pedestals with prices, REROLL, LEAVE
 // The heroes are already out of control in these phases (RunDirector only
 // enables them on an island), and the panels hide while the run is paused.
@@ -59,7 +60,19 @@ public class RunChoiceMenu : MonoBehaviour
 
     private static bool IsChoicePhase(RunPhase phase)
     {
-        return phase == RunPhase.ChoosePortal || phase == RunPhase.OpenChest || phase == RunPhase.Shop;
+        return phase == RunPhase.ChoosePortal || phase == RunPhase.OpenChest || phase == RunPhase.Shop
+            || phase == RunPhase.StartRelic;
+    }
+
+    private static bool UsesChestPanel(RunPhase phase) => phase == RunPhase.OpenChest || phase == RunPhase.StartRelic;
+
+    // Chest cards serve the reward chest and the starting relic chest; in the
+    // latter the card after the relics is NONE.
+    private bool PickCard(int index)
+    {
+        RunStateMachine r = run.Run;
+        if (r == null || r.Phase != RunPhase.StartRelic) return run.PickChestItem(index);
+        return index < r.StartRelicChoices.Count ? run.PickStartRelic(index) : run.SkipStartRelic();
     }
 
     private void Awake()
@@ -74,7 +87,7 @@ public class RunChoiceMenu : MonoBehaviour
         {
             int index = i;
             if (chestCards[i] != null)
-                chestCards[i].SetCustomAction(() => Choose(() => run.PickChestItem(index), SfxId.ItemPick));
+                chestCards[i].SetCustomAction(() => Choose(() => PickCard(index), SfxId.ItemPick));
         }
         for (int i = 0; i < Length(shopSlots); i++)
         {
@@ -109,7 +122,7 @@ public class RunChoiceMenu : MonoBehaviour
         }
 
         SetActive(portalPanel, phase == RunPhase.ChoosePortal);
-        SetActive(chestPanel, phase == RunPhase.OpenChest);
+        SetActive(chestPanel, UsesChestPanel(phase));
         SetActive(shopPanel, phase == RunPhase.Shop);
 
         // Debug keys buy and leave through RunDirector directly: catch those too.
@@ -126,8 +139,22 @@ public class RunChoiceMenu : MonoBehaviour
         {
             case RunPhase.ChoosePortal: RefreshPortals(run.Run); break;
             case RunPhase.OpenChest: RefreshChest(run.Run); break;
+            case RunPhase.StartRelic: RefreshStartRelic(run.Run); break;
             case RunPhase.Shop: RefreshShop(run.Run); break;
         }
+    }
+
+    // Up to 3 relics + NONE: 4 cards use the same 2x2 layout as a Big Chests chest.
+    private void RefreshStartRelic(RunStateMachine r)
+    {
+        if (chestHeader != null) chestHeader.text = RunChoiceText.StartRelicHeader;
+        IReadOnlyList<ItemDefinition> relics = r.StartRelicChoices;
+        ShowButtons(chestCards, relics.Count + 1, (button, i) =>
+        {
+            bool none = i >= relics.Count;
+            button.SetLabel(none ? RunChoiceText.NoneCard : RunChoiceText.ItemCard(relics[i], r.Inventory));
+            button.SetIdleColor(RunChoiceText.RarityColor(none ? ItemRarity.Common : relics[i].Rarity));
+        });
     }
 
     private void RefreshPortals(RunStateMachine r)

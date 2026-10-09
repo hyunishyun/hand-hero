@@ -23,7 +23,8 @@ namespace HandHero.Core
             {
                 case RunPhase.Island: return SfxId.Fight;
                 case RunPhase.IslandCleared: return SfxId.IslandCleared;
-                case RunPhase.OpenChest: return SfxId.ChestOpen;
+                case RunPhase.OpenChest:
+                case RunPhase.StartRelic: return SfxId.ChestOpen;
                 case RunPhase.Victory: return SfxId.Victory;
                 case RunPhase.Defeat: return SfxId.Defeat;
                 default: return SfxId.None;

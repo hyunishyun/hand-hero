@@ -252,5 +252,32 @@ namespace HandHero.Tests
             CollectionAssert.AreEqual(new[] { true, false }, r.HoldStarted);
             StringAssert.Contains("\"hold_started\":[1,0]", RunRecordJson.ToJson(r));
         }
+
+        // Round 4 (S5): the starting relic is picked before island 1, so it is a
+        // run field, not an item pick (picks belong to an island).
+        [Test]
+        public void StartRelic_IsKeptFromBeforeTheFirstIsland()
+        {
+            RunRecorder rec = Begun();
+            rec.StartRelicPicked(ItemCatalog.SecondWind);
+            rec.IslandStarted(1, IslandType.Arena);
+            RunRecord r = Finish(rec, RunResult.Quit, 5f);
+
+            Assert.AreEqual(ItemCatalog.SecondWind, r.StartRelic);
+            Assert.AreEqual(0, r.Items.Count);
+            StringAssert.Contains("\"start_relic\":\"second_wind\"", RunRecordJson.ToJson(r));
+        }
+
+        [Test]
+        public void StartRelic_EmptyWithoutAPick_AndResetByBegin()
+        {
+            RunRecorder rec = Begun();
+            rec.StartRelicPicked(ItemCatalog.Dividends);
+            Finish(rec, RunResult.Quit, 1f);
+
+            RunRecord next = Finish(Begun(), RunResult.Quit, 1f);
+            Assert.AreEqual("", next.StartRelic);
+            StringAssert.Contains("\"start_relic\":\"\"", RunRecordJson.ToJson(next));
+        }
     }
 }

@@ -10,6 +10,7 @@ namespace HandHero.Core
         EndBanner,
         MatchScore,
         MatchBanner,
+        MenuBanner,
     }
 
     // The integers a HUD line shows (round 3, P3 / GM-1…GM-5). The HUD rebuilds

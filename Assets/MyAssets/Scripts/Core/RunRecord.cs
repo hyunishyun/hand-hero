@@ -46,6 +46,8 @@ namespace HandHero.Core
         public string AimMode;
         public string ViewMode;
         public string StartTime;
+        // Starting relic id picked before island 1 (round 4, S5); "" = none offered or NONE.
+        public string StartRelic = "";
         public RunResult Result;
         public float TotalSeconds;
         public readonly List<IslandRecord> Islands = new List<IslandRecord>();
@@ -128,6 +130,12 @@ namespace HandHero.Core
             if (source == ItemSource.Shop) _record.ShopBuys++;
         }
 
+        // Before island 1, so it is a run field: ItemPicked needs an island.
+        public void StartRelicPicked(string id)
+        {
+            if (_record != null) _record.StartRelic = id ?? "";
+        }
+
         public void ShopRerolled()
         {
             if (_record != null) _record.ShopRerolls++;
@@ -185,6 +193,7 @@ namespace HandHero.Core
             Str(sb, "aim", r.AimMode);
             Str(sb, "view", r.ViewMode);
             Str(sb, "start", r.StartTime);
+            Str(sb, "start_relic", r.StartRelic);
             Str(sb, "result", r.Result.ToString());
             Num(sb, "total_s", r.TotalSeconds);
             Int(sb, "death_island", r.DeathIsland);

@@ -35,9 +35,10 @@ namespace HandHero.Core
         public static HudKey IntroKey(int island, IslandType type, float secondsLeft) =>
             new HudKey(HudKeyKind.IntroBanner, island, (int)type, Mathf.CeilToInt(secondsLeft));
 
-        public static HudKey EndKey(bool victory, int islandsCleared, int items, float runSeconds) =>
+        // metaKey: MetaText.ChangesKey of the lines EndBanner shows under the summary.
+        public static HudKey EndKey(bool victory, int islandsCleared, int items, float runSeconds, int metaKey = 0) =>
             new HudKey(HudKeyKind.EndBanner, victory ? 1 : 0, islandsCleared, items,
-                Mathf.Max(0, Mathf.CeilToInt(runSeconds)));
+                Mathf.Max(0, Mathf.CeilToInt(runSeconds)), metaKey);
 
         // Arena / Elite: bots still to defeat; Boss: just BOSS; Horde: time left to survive.
         public static string Objective(IslandType type, int botsLeft, float hordeSecondsLeft)
@@ -65,12 +66,15 @@ namespace HandHero.Core
                 + Mathf.CeilToInt(secondsLeft);
         }
 
-        public static string EndBanner(bool victory, int islandsCleared, int items, float runSeconds)
+        // metaLines (MetaText.EndLines): NEW BEST / UNLOCKED lines under the summary, same size.
+        public static string EndBanner(bool victory, int islandsCleared, int items, float runSeconds,
+            string metaLines = null)
         {
             string islands = islandsCleared == 1 ? "1 ISLAND" : $"{islandsCleared} ISLANDS";
             string picked = items == 1 ? "1 ITEM" : $"{items} ITEMS";
-            return (victory ? "VICTORY" : "DEFEAT")
+            string banner = (victory ? "VICTORY" : "DEFEAT")
                 + $"\n<size=50%>{islands}    {picked}    {Clock(runSeconds)}</size>";
+            return string.IsNullOrEmpty(metaLines) ? banner : banner + "\n<size=50%>" + metaLines + "</size>";
         }
 
         // m:ss, rounded up so a countdown never shows 0:00 while time is left.

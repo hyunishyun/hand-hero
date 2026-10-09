@@ -4,7 +4,7 @@ using UnityEngine;
 // Shows the hands-only menu panel that fits the match state (T7) and turns the
 // point-and-pinch pointer on only while one is up:
 //   Menu      -> main panel (QUICK MATCH / RUN / TUTORIAL / view / aim)
-//   paused    -> pause panel (RESUME / MENU), in the tutorial (RESUME / SKIP / MENU)
+//   paused    -> pause panel (RESUME / MENU / RESET PROGRESS), in the tutorial (RESUME / SKIP / MENU)
 //   MatchEnd  -> end panel (MENU; the match also returns by itself)
 //   Run       -> RunChoiceMenu shows its own portal / chest / shop panels;
 //                VICTORY / DEFEAT -> end panel (MENU)
