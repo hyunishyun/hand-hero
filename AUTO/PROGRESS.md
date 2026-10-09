@@ -10,8 +10,8 @@
 | P4 머티리얼·렌더러 캐시 | DONE | `25d07ba`. `HeroHealth`의 피격 번쩍임·스턴 색을 `MaterialPropertyBlock` 하나로(속성 ID 캐시) 칠하고, 원래 색은 블록을 지워서 되돌린다. 봇 하나당 머티리얼 4개 복제·누수가 없어짐. `SetVisible`은 Awake에서 캐시한 렌더러·콜라이더 배열을 쓴다. `PrototypeTarget`·클러치 표시기도 프로퍼티 블록, `HandMenuButton`은 속성 ID. 테스트 353/353, 씬 재생성 배선 오류 0. GC-4, GC-5, GC-10, GM-13, SP-2, RS-5, BR-11 해결. 기기 확인: 피격 번쩍임(흰색)·스턴(보라) 색이 예전과 같은지. |
 | P5 풀 코어 + BeamImpact 풀 | DONE | `9b89f55`. Core `ObjectPool<T>`(미리 생성, 상한, 상한에선 null, 두 번 반환·남의 물건 무시, `ReleaseAll`) + 테스트 9개(362/362). 씬 루트의 `BeamImpactPool`(미리 8개, 최대 24개)을 모든 히어로가 같이 쓰고, `ImpactFlash`는 끝나면 풀로 돌아간다. 프리팹이 다르거나 풀이 없는 씬은 예전 Instantiate 경로로 동작. 두 씬 재생성, 배선 오류 0. SP-3, GC-3, RF-2(이펙트 부분) 해결. 기기 확인: 피격 이펙트가 예전처럼 보이는지. |
 | P6 RunBot 생명주기·풀 | DONE | `e4d5541`. `RunBot.Activate/Deactivate`(스폰 위치→체력 배율·리셋·부활→적·배율→새 시드→조종), `Died` 이벤트는 풀 생성 때 한 번만 구독. `RunDirector`는 런 시작 때 `MaxAlive+1`개를 미리 만들고(상한 2배), 처치 후 0.3초 뒤·섬 전환 때 즉시 비활성화해 풀로 돌린다(Destroy 없음). 퍼펫티어 `OnDisable` 클러치 리셋, 빔 `OnDisable`에서 빔·대기 발사 정리. Core `BotBrain.Reseed`·`SpawnSeed`·첫 발사 ×U(0.5,1.0) + 테스트 5개(367/367, 기존 봇 테스트 그대로 통과). 씬 재생성 배선 오류 0. SP-1, SP-4, SP-6, SP-9, RF-1, BR-4a, GM-10, GM-M1, BC-M1, BC-2 해결. 주의: 지터는 퀵 매치 봇에도 적용(`QUESTIONS_FOR_HYUN.md`). 기기 확인: 런에서 봇 2마리가 따로 움직이고 따로 쏘는지, 섬 전환 때 끊김이 줄었는지. |
-| P7 비행·손 입력 견고화 | TODO | (다음 세션 시작점) |
-| P8 런 사망·상태 버그 | TODO | |
+| P7 비행·손 입력 견고화 | DONE | `4342b24`. 스프링을 지수 감쇠 + 1/60초 넘는 프레임은 약 1/90초 서브스텝(최대 4)으로 바꿔 끊김 뒤 뒤로 튀지 않음. 클러치·커서 목표를 아레나 안으로 제한(벽에서 되돌리면 바로 움직임). 입력 소스가 다시 켜질 때 클러치·손바닥 밀기·양손 모으기 상태 리셋, 손바닥 밀기는 0.1초 넘는 프레임을 속도로 안 읽고 손 스무딩과 같은 unscaled dt 사용. 추적이 다시 잡힌 첫 프레임은 스냅. 부활 시 클러치 리셋·차지·대기 발사 취소. 테스트 380/380(새 13개, 기존 `SingleStep` 테스트는 D5에 맞게 수정). BC-3, BR-12, RS-7, CR-5(고정 스텝 부분), BC-4, BR-13, BR-2, BR-3, BR-1, CR-8 해결. 기기 확인: 끊김 뒤 회복, 벽 드래그, 추적 끊긴 뒤 다시 잡기, 부활. |
+| P8 런 사망·상태 버그 | IN_PROGRESS | 세션 4 |
 | P9 추적 끊김 표시·시스템 제스처 | TODO | |
 | P10 ASSIST 차지 오인 | TODO | |
 | P11 합성 효과음 | TODO | |
@@ -26,6 +26,7 @@
 (태스크가 바꿀 때마다 키·이전 값·새 값을 적는다.)
 
 - P2: `m_StackTraceTypes`는 파일상 그대로(전부 ScriptOnly). 릴리스 빌드 중에만 Log·Warning → None.
+- P7: `TimeManager.asset` Maximum Allowed Timestep 0.3333 → 0.1, Fixed Timestep 0.01 → 0.02 (`BuildScript.ApplyTimeSettings`, `ConfigurePlayer`에서도 호출).
 - P1: `ProjectSettings.asset` `enableFrameTimingStats` 0 → 1 (`BuildScript.ApplyDiagnosticsSettings`, `ConfigurePlayer`에서도 호출).
 
 ## 세션 로그
