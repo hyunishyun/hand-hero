@@ -138,3 +138,10 @@
 - **택한 답:** `BuildScript`에 `BuildQuestApkDevClean`·`BuildQuestApkReleaseClean`(메뉴 HandHero > Build Quest APK (dev, clean) / (release, clean))을 더했다. `BuildOptions.CleanBuildCache`만 더 켜고 나머지는 같다. 개발 APK를 클린으로 다시 만들었더니 126.5 MB(파일 크기 = 항목 합)가 됐다. 릴리스는 증분 빌드로도 55.4 MB(항목 합과 같음)라 클린 없이 만들었다.
 - **이유:** `Library/` 안의 Gradle 출력을 손으로 지우는 것보다 Unity가 정한 방법이 안전하고, 다음에도 같은 명령으로 반복할 수 있다. 클린 빌드는 약 1분 더 걸린다(6.4분 vs 5.6분).
 - **뒤집으려면:** 두 메서드와 `clean` 매개변수를 지운다(`BuildScript.cs`). 커진 개발 APK `HandHero_20261009_1917_dev.apk`(207.6 MB)는 지우지 않고 `MetaAwards\Build\`에 남겨 두었다. 설치에는 문제없지만 `_1923_dev`를 쓰면 된다.
+
+## S10-1 보스 패턴 전환은 공격을 시작할 때 센다(리뷰 F1-1)
+- **태스크:** S10 최종 리뷰 수정 F1-1 (`BotBrain`).
+- **질문:** 피격이 예고나 연발을 끊으면 그 공격은 끝나지 않아 전환 횟수에 안 들어갔다. 잘 맞히는 플레이어 상대로 보스가 Gunner↔Lancer를 거의 바꾸지 않았다. 언제 세야 할까?
+- **택한 답:** 예고를 시작하는 순간(예고가 0이면 첫 발) 한 번 센다. 끊기지 않은 런에서는 전환 순서가 예전과 똑같다(기존 `Boss_SwitchesPattern_EveryNAttacks` 그대로 통과). 피격 뒤 재발사 하한도 `FireInterval × 0.5 × 직전 공격의 IntervalMult`로 바꿨다(Sniper ×1.8, Lancer ×2.5, Striker·Gunner ×1 그대로).
+- **이유:** 리뷰는 "예고가 끝나거나 첫 발이 나가면" 세라고 했지만, Lancer 예고(1.08초)는 1초마다 맞으면 거의 끝나지 않아 그 기준으로는 여전히 Lancer에 머문다. 시작 시점에 세면 두 패턴이 같은 횟수씩 번갈아 나온다. 하한은 느린 공격이 피격 덕분에 더 빨리 돌아오는 일을 막는다.
+- **뒤집으려면:** `BotBrain.CountAttackForSwitch()` 호출을 `UpdateShooting`에서 `FireShot`의 마지막 발 분기로 옮기고, `StartEvade`의 `* _active.IntervalMult`를 지운다. 테스트 `Boss_KeepsAlternating_*`, `Hit_DuringATelegraph_RefireFloorScalesWithTheAttack`도 함께 지운다.

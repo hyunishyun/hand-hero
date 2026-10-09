@@ -216,6 +216,90 @@ namespace HandHero.Tests
             }
         }
 
+        // Final review F1-1: a hit cancels the attack under way. The boss must
+        // still alternate (an attack counts once begun), or it sits in whichever
+        // pattern a competent player interrupts most.
+        private static List<float> BossTelegraphsUnderFire(bool hitDuringTelegraph, float seconds)
+        {
+            BotBrain brain = Brain(Gunner, Lancer, 2);
+            var starts = new List<float>();
+            bool wasTelegraphing = false;
+            bool hitThisAttack = false;
+            for (int i = 0; i * Dt < seconds; i++)
+            {
+                HandInputData input = brain.Step(Self, true, Enemy, Arena, Dt);
+                if (brain.IsTelegraphing && !wasTelegraphing)
+                {
+                    starts.Add(brain.ActiveAttack.TelegraphMult);
+                    hitThisAttack = false;
+                }
+                wasTelegraphing = brain.IsTelegraphing;
+
+                bool hit = hitDuringTelegraph
+                    ? brain.IsTelegraphing && brain.TelegraphProgress >= 0.3f
+                    : input.FireTriggered && brain.IsBursting; // right after a burst's first shot
+                if (hit && !hitThisAttack)
+                {
+                    hitThisAttack = true;
+                    brain.NotifyHit();
+                }
+            }
+            return starts;
+        }
+
+        private static void AssertAlternatesInPairs(List<float> telegraphMults)
+        {
+            Assert.GreaterOrEqual(telegraphMults.Count, 6);
+            for (int i = 0; i < 6; i++)
+            {
+                float expected = i % 4 < 2 ? Gunner.TelegraphMult : Lancer.TelegraphMult;
+                Assert.AreEqual(expected, telegraphMults[i], 1e-5f, $"attack {i}");
+            }
+        }
+
+        [Test]
+        public void Boss_KeepsAlternating_WhenEveryTelegraphIsInterrupted()
+        {
+            AssertAlternatesInPairs(BossTelegraphsUnderFire(true, 40f));
+        }
+
+        [Test]
+        public void Boss_KeepsAlternating_WhenEveryBurstIsCutAfterItsFirstShot()
+        {
+            AssertAlternatesInPairs(BossTelegraphsUnderFire(false, 40f));
+        }
+
+        // Seconds from a hit during the telegraph to the next telegraph start.
+        private static float RefireAfterHit(BotAttack attack)
+        {
+            BotBrain brain = Brain(attack);
+            int i = 0;
+            for (; i < 72 * 5; i++)
+            {
+                brain.Step(Self, true, Enemy, Arena, Dt);
+                if (brain.IsTelegraphing && brain.TelegraphProgress >= 0.3f) break;
+            }
+            Assert.IsTrue(brain.IsTelegraphing, "a telegraph to interrupt");
+            brain.NotifyHit();
+            for (int j = 1; j < 72 * 10; j++)
+            {
+                brain.Step(Self, true, Enemy, Arena, Dt);
+                if (brain.IsTelegraphing) return (j - 1) * Dt;
+            }
+            Assert.Fail("no telegraph after the hit");
+            return 0f;
+        }
+
+        [Test]
+        public void Hit_DuringATelegraph_RefireFloorScalesWithTheAttack()
+        {
+            float evade = BotParams.Default.EvadeDuration;
+            // Floor = FireInterval (1 s) x 0.5 x the interrupted attack's interval multiple.
+            Assert.That(RefireAfterHit(Striker), Is.EqualTo(evade + 0.5f).Within(3f * Dt));
+            Assert.That(RefireAfterHit(Sniper), Is.EqualTo(evade + 0.5f * 1.8f).Within(3f * Dt));
+            Assert.That(RefireAfterHit(Lancer), Is.EqualTo(evade + 0.5f * 2.5f).Within(3f * Dt));
+        }
+
         [Test]
         public void Reseed_StartsThePatternOver()
         {

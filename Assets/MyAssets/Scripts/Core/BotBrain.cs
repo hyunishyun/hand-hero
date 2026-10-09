@@ -174,7 +174,7 @@ namespace HandHero.Core
         }
 
         // Archetype attacks (S6): `altAttack` takes over every `switchEvery`
-        // finished attacks (0 = only `attack`). Takes effect from the next attack.
+        // begun attacks (0 = only `attack`). Takes effect from the next attack.
         public void SetAttacks(BotAttack attack, BotAttack altAttack, int switchEvery)
         {
             _primary = attack;
@@ -353,6 +353,7 @@ namespace HandHero.Core
             _lockedAim = _perceived + AimError(self, _perceived);
             _active = Current;
             _shotsLeft = Mathf.Max(1, _active.BurstCount);
+            CountAttackForSwitch();
             float telegraph = _p.TelegraphTime * _active.TelegraphMult;
             if (telegraph <= 0f) return FireShot();
 
@@ -362,8 +363,22 @@ namespace HandHero.Core
             return false;
         }
 
+        // The boss's pattern switch counts an attack once it begins (final review
+        // F1-1): a hit cancels the telegraph or the rest of a burst, and counting
+        // only finished attacks left the boss stuck in whichever pattern the
+        // player interrupted most. The next attack reads Current, so an
+        // uninterrupted sequence is the same as before.
+        private void CountAttackForSwitch()
+        {
+            if (_switchEvery > 0 && ++_attacksDone >= _switchEvery)
+            {
+                _attacksDone = 0;
+                _useAlt = !_useAlt;
+            }
+        }
+
         // One shot of the active attack. The last one starts the interval (scaled
-        // by the attack) and counts the attack for the boss's pattern switch.
+        // by the attack).
         private bool FireShot()
         {
             LastShot = _active;
@@ -376,11 +391,6 @@ namespace HandHero.Core
 
             float m = _active.IntervalMult;
             _fireTimer = _p.FireInterval * m + (float)_rng.NextDouble() * (_p.FireIntervalJitter * m);
-            if (_switchEvery > 0 && ++_attacksDone >= _switchEvery)
-            {
-                _attacksDone = 0;
-                _useAlt = !_useAlt;
-            }
             return true;
         }
 
@@ -394,7 +404,9 @@ namespace HandHero.Core
         private void StartEvade()
         {
             CancelAttack();
-            _fireTimer = Mathf.Max(_fireTimer, _p.FireInterval * 0.5f);
+            // Re-fire floor scaled by the latest attack, so a hit never makes a
+            // slow attack (Sniper, Lancer) come back sooner (F1-1). Striker: x1.
+            _fireTimer = Mathf.Max(_fireTimer, _p.FireInterval * 0.5f * _active.IntervalMult);
             _evadeTimer = _p.EvadeDuration;
 
             float side = _rng.NextDouble() < 0.5 ? -1f : 1f;
