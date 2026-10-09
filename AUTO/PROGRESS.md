@@ -9,8 +9,11 @@
 | S3 남은 Minor 4건 | TODO | |
 | S4 메타 진행 Core | TODO | |
 | S5 메타 진행 연결 | TODO | |
-| S6 씬·테스트·APK 2종 | TODO | |
-| S7 최종 리뷰·보고서 | TODO | |
+| S6 적 다양성 설계 문서 | TODO | |
+| S7 지형 다양성 설계 문서 | TODO | |
+| S8 MR 방 스캔 스파이크 | TODO | |
+| S9 씬·테스트·APK 2종 | TODO | |
+| S10 최종 리뷰·보고서 | TODO | |
 
 ## 세션 로그
 
