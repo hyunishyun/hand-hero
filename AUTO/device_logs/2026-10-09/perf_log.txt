@@ -1,0 +1,116 @@
+=== Hand Hero perf log | 2026-10-09 12:48:00 | app 9.2.0 | build release | device Oculus Quest 3 | refresh 72.0 Hz | unity 6000.6.4f1 | spike > 50 ms | frame timing on | sfx 10.4 ms 588 KB
+12:47:59.404 t=4.694 SPIKE frame=138.5 cpu=13.7 rt=-1.0 gpu=1.4 gc=+2 heap=3.6MB match=Menu run=Idle isl=0 bots=0 ts=1.00 focus=1 L=0 R=0 head=1
+12:47:59.404 t=4.694 HAND_FOUND hand=L frame=138.5 cpu=13.7 rt=-1.0 gpu=1.4 gc=+0 heap=3.6MB match=Menu run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:47:59.404 t=4.694 HAND_FOUND hand=R frame=138.5 cpu=13.7 rt=-1.0 gpu=1.4 gc=+0 heap=3.6MB match=Menu run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:47:59.404 t=4.694 MATCH_PHASE frame=138.5 cpu=13.7 rt=-1.0 gpu=1.4 gc=+0 heap=3.6MB match=Menu run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (menu) records=4 dropped=0 frames=2 spikes=1 worst=138.5ms
+12:48:00.182 t=5.089 SPIKE frame=394.9 cpu=13.8 rt=-1.0 gpu=1.4 gc=+0 heap=3.6MB match=Menu run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:48:07.966 t=12.874 MATCH_PHASE frame=14.5 cpu=13.8 rt=-1.0 gpu=2.8 gc=+0 heap=3.6MB match=Tutorial run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:48:46.383 t=51.290 MATCH_PHASE frame=13.8 cpu=14.5 rt=-1.0 gpu=2.5 gc=+0 heap=3.8MB match=Countdown run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=3 dropped=0 frames=3327 spikes=1 worst=394.9ms
+12:48:49.396 t=54.304 MATCH_PHASE frame=13.7 cpu=13.6 rt=-1.0 gpu=2.5 gc=+0 heap=3.8MB match=Fight run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:49:01.633 t=66.540 MATCH_PHASE frame=14.2 cpu=13.1 rt=-1.0 gpu=2.5 gc=+0 heap=3.8MB match=RoundEnd run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=2 dropped=0 frames=1098 spikes=0 worst=14.7ms
+12:49:04.633 t=69.540 MATCH_PHASE frame=14.0 cpu=13.0 rt=-1.0 gpu=2.4 gc=+0 heap=3.9MB match=Countdown run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:49:07.647 t=72.554 MATCH_PHASE frame=13.5 cpu=13.7 rt=-1.0 gpu=2.5 gc=+0 heap=3.9MB match=Fight run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:49:23.272 t=88.179 MATCH_PHASE frame=14.5 cpu=14.4 rt=-1.0 gpu=2.7 gc=+0 heap=3.9MB match=RoundEnd run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=3 dropped=0 frames=1558 spikes=0 worst=18.2ms
+12:49:26.272 t=91.179 MATCH_PHASE frame=14.2 cpu=14.6 rt=-1.0 gpu=2.5 gc=+0 heap=3.9MB match=MatchEnd run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:49:28.855 t=93.762 MATCH_PHASE frame=14.3 cpu=13.5 rt=-1.0 gpu=2.5 gc=+0 heap=3.9MB match=Menu run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (menu) records=2 dropped=0 frames=402 spikes=0 worst=14.6ms
+12:49:34.230 t=99.137 SPIKE frame=167.3 cpu=13.7 rt=-1.0 gpu=2.5 gc=+2 heap=4.9MB match=Menu run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:49:36.426 t=101.333 MATCH_PHASE frame=14.0 cpu=13.7 rt=-1.0 gpu=1.2 gc=+0 heap=5.0MB match=Run run=Idle isl=0 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:49:36.440 t=101.347 RUN_PHASE frame=13.8 cpu=13.7 rt=-1.0 gpu=1.2 gc=+0 heap=5.0MB match=Run run=Intro isl=1 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=3 dropped=0 frames=710 spikes=1 worst=167.3ms
+12:49:39.435 t=104.342 RUN_PHASE frame=14.0 cpu=13.8 rt=-1.0 gpu=1.8 gc=+0 heap=5.1MB match=Run run=Island isl=1 bots=1 ts=1.00 focus=1 L=1 R=1 head=1
+12:49:45.717 t=110.624 RUN_PHASE frame=14.1 cpu=13.9 rt=-1.0 gpu=1.8 gc=+0 heap=5.2MB match=Run run=IslandCleared isl=1 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:49:47.729 t=112.636 RUN_PHASE frame=13.1 cpu=13.6 rt=-1.0 gpu=1.8 gc=+0 heap=5.4MB match=Run run=OpenChest isl=1 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=3 dropped=0 frames=720 spikes=0 worst=16.5ms
+12:50:00.217 t=125.124 RUN_PHASE frame=14.0 cpu=13.9 rt=-1.0 gpu=1.9 gc=+1 heap=5.4MB match=Run run=ChoosePortal isl=1 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:50:05.856 t=130.763 RUN_PHASE frame=13.9 cpu=13.4 rt=-1.0 gpu=1.6 gc=+0 heap=5.5MB match=Run run=Intro isl=2 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:50:08.857 t=133.764 RUN_PHASE frame=14.3 cpu=13.7 rt=-1.0 gpu=0.2 gc=+0 heap=5.5MB match=Run run=Island isl=2 bots=2 ts=1.00 focus=1 L=1 R=1 head=1
+12:50:53.857 t=178.764 RUN_PHASE frame=14.3 cpu=13.9 rt=-1.0 gpu=1.2 gc=+0 heap=6.1MB match=Run run=IslandCleared isl=2 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=4 dropped=0 frames=4679 spikes=0 worst=15.8ms
+12:50:55.870 t=180.777 RUN_PHASE frame=13.4 cpu=14.3 rt=-1.0 gpu=1.3 gc=+0 heap=6.2MB match=Run run=OpenChest isl=2 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:51:02.134 t=187.041 RUN_PHASE frame=13.8 cpu=13.3 rt=-1.0 gpu=1.1 gc=+0 heap=6.2MB match=Run run=ChoosePortal isl=2 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:51:03.370 t=188.277 RUN_PHASE frame=13.4 cpu=13.8 rt=-1.0 gpu=1.1 gc=+0 heap=6.3MB match=Run run=Intro isl=3 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=3 dropped=0 frames=721 spikes=0 worst=15.0ms
+12:51:06.371 t=191.278 RUN_PHASE frame=14.0 cpu=13.3 rt=-1.0 gpu=1.1 gc=+0 heap=6.3MB match=Run run=Island isl=3 bots=2 ts=1.00 focus=1 L=1 R=1 head=1
+12:51:51.384 t=236.291 RUN_PHASE frame=14.1 cpu=13.8 rt=-1.0 gpu=1.2 gc=+1 heap=5.9MB match=Run run=IslandCleared isl=3 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=2 dropped=0 frames=3421 spikes=0 worst=15.7ms
+12:51:53.385 t=238.292 RUN_PHASE frame=14.2 cpu=13.0 rt=-1.0 gpu=1.2 gc=+0 heap=6.0MB match=Run run=OpenChest isl=3 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:52:00.648 t=245.555 RUN_PHASE frame=13.5 cpu=13.8 rt=-1.0 gpu=1.2 gc=+0 heap=6.1MB match=Run run=ChoosePortal isl=3 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=2 dropped=0 frames=721 spikes=0 worst=15.4ms
+12:52:02.967 t=247.874 RUN_PHASE frame=13.3 cpu=13.8 rt=-1.0 gpu=1.1 gc=+0 heap=6.2MB match=Run run=Intro isl=4 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:52:05.982 t=250.889 RUN_PHASE frame=14.3 cpu=14.2 rt=-1.0 gpu=1.1 gc=+0 heap=6.2MB match=Run run=Island isl=4 bots=2 ts=1.00 focus=1 L=1 R=1 head=1
+12:52:54.189 t=299.097 RUN_PHASE frame=13.5 cpu=13.3 rt=-1.0 gpu=1.2 gc=+1 heap=5.7MB match=Run run=IslandCleared isl=4 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=3 dropped=0 frames=3801 spikes=0 worst=16.1ms
+12:52:56.204 t=301.111 RUN_PHASE frame=14.0 cpu=13.1 rt=-1.0 gpu=1.1 gc=+0 heap=5.7MB match=Run run=OpenChest isl=4 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:53:03.773 t=308.680 RUN_PHASE frame=13.6 cpu=14.2 rt=-1.0 gpu=1.2 gc=+0 heap=6.2MB match=Run run=Shop isl=4 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=2 dropped=0 frames=721 spikes=0 worst=15.5ms
+12:53:15.523 t=320.430 HAND_LOST hand=L frame=14.2 cpu=13.9 rt=-1.0 gpu=1.4 gc=+0 heap=6.3MB match=Run run=Shop isl=4 bots=0 ts=1.00 focus=1 L=0 R=1 head=1
+12:53:15.620 t=320.527 HAND_FOUND hand=L frame=14.1 cpu=13.4 rt=-1.0 gpu=1.4 gc=+0 heap=6.3MB match=Run run=Shop isl=4 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:53:17.009 t=321.916 RUN_PHASE frame=13.8 cpu=14.0 rt=-1.0 gpu=1.5 gc=+0 heap=6.4MB match=Run run=ChoosePortal isl=4 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:53:21.578 t=326.485 RUN_PHASE frame=13.8 cpu=13.8 rt=-1.0 gpu=1.5 gc=+0 heap=6.4MB match=Run run=Intro isl=5 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=4 dropped=0 frames=1441 spikes=0 worst=15.4ms
+12:53:24.592 t=329.499 RUN_PHASE frame=14.2 cpu=14.0 rt=-1.0 gpu=1.4 gc=+0 heap=6.5MB match=Run run=Island isl=5 bots=2 ts=1.00 focus=1 L=1 R=1 head=1
+12:53:51.093 t=356.000 RUN_PHASE frame=13.7 cpu=13.9 rt=-1.0 gpu=1.1 gc=+1 heap=5.9MB match=Run run=IslandCleared isl=5 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=2 dropped=0 frames=1935 spikes=0 worst=15.9ms
+12:53:53.106 t=358.013 RUN_PHASE frame=13.5 cpu=12.9 rt=-1.0 gpu=1.2 gc=+0 heap=6.0MB match=Run run=OpenChest isl=5 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:54:00.732 t=365.639 RUN_PHASE frame=14.0 cpu=13.5 rt=-1.0 gpu=1.2 gc=+0 heap=6.1MB match=Run run=ChoosePortal isl=5 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=2 dropped=0 frames=720 spikes=0 worst=15.7ms
+12:54:02.829 t=367.736 RUN_PHASE frame=13.4 cpu=13.4 rt=-1.0 gpu=1.1 gc=+0 heap=6.1MB match=Run run=Intro isl=6 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:54:05.843 t=370.750 RUN_PHASE frame=14.1 cpu=13.1 rt=-1.0 gpu=1.1 gc=+0 heap=6.1MB match=Run run=Island isl=6 bots=1 ts=1.00 focus=1 L=1 R=1 head=1
+12:54:48.204 t=413.111 RUN_PHASE frame=14.1 cpu=13.7 rt=-1.0 gpu=1.1 gc=+0 heap=6.6MB match=Run run=IslandCleared isl=6 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=3 dropped=0 frames=3392 spikes=0 worst=15.8ms
+12:54:50.204 t=415.111 RUN_PHASE frame=14.2 cpu=13.6 rt=-1.0 gpu=1.0 gc=+0 heap=6.7MB match=Run run=OpenChest isl=6 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:54:57.315 t=422.222 RUN_PHASE frame=14.3 cpu=14.2 rt=-1.0 gpu=1.2 gc=+0 heap=6.8MB match=Run run=ChoosePortal isl=6 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=2 dropped=0 frames=720 spikes=0 worst=15.3ms
+12:55:01.218 t=426.125 RUN_PHASE frame=14.5 cpu=13.8 rt=-1.0 gpu=1.1 gc=+0 heap=6.9MB match=Run run=Intro isl=7 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:55:04.218 t=429.125 RUN_PHASE frame=14.4 cpu=13.4 rt=-1.0 gpu=1.1 gc=+0 heap=6.9MB match=Run run=Island isl=7 bots=2 ts=1.00 focus=1 L=1 R=1 head=1
+12:55:17.648 t=442.555 HAND_LOST hand=L frame=13.8 cpu=13.8 rt=-1.0 gpu=1.1 gc=+0 heap=7.1MB match=Run run=Island isl=7 bots=2 ts=1.00 focus=1 L=0 R=1 head=1
+12:55:18.051 t=442.958 HAND_FOUND hand=L frame=13.5 cpu=13.5 rt=-1.0 gpu=1.1 gc=+0 heap=7.1MB match=Run run=Island isl=7 bots=2 ts=1.00 focus=1 L=1 R=1 head=1
+12:55:20.148 t=445.055 HAND_LOST hand=L frame=13.8 cpu=13.5 rt=-1.0 gpu=1.1 gc=+0 heap=7.1MB match=Run run=Island isl=7 bots=1 ts=1.00 focus=1 L=0 R=1 head=1
+12:55:20.245 t=445.152 HAND_FOUND hand=L frame=13.5 cpu=14.2 rt=-1.0 gpu=1.1 gc=+0 heap=7.1MB match=Run run=Island isl=7 bots=1 ts=1.00 focus=1 L=1 R=1 head=1
+12:56:28.857 t=513.764 RUN_PHASE frame=14.0 cpu=13.8 rt=-1.0 gpu=1.1 gc=+1 heap=6.7MB match=Run run=IslandCleared isl=7 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=7 dropped=0 frames=6527 spikes=0 worst=15.7ms
+12:56:30.871 t=515.778 RUN_PHASE frame=13.9 cpu=13.6 rt=-1.0 gpu=1.1 gc=+0 heap=6.8MB match=Run run=OpenChest isl=7 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=1 dropped=0 frames=721 spikes=0 worst=15.3ms
+12:56:39.356 t=524.263 RUN_PHASE frame=14.2 cpu=14.1 rt=-1.0 gpu=1.2 gc=+0 heap=6.9MB match=Run run=ChoosePortal isl=7 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:56:42.065 t=526.972 RUN_PHASE frame=14.2 cpu=13.1 rt=-1.0 gpu=1.2 gc=+0 heap=6.9MB match=Run run=Intro isl=8 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:56:45.065 t=529.972 RUN_PHASE frame=14.0 cpu=13.3 rt=-1.0 gpu=1.0 gc=+0 heap=6.9MB match=Run run=Island isl=8 bots=2 ts=1.00 focus=1 L=1 R=1 head=1
+12:57:30.079 t=574.986 RUN_PHASE frame=13.8 cpu=14.9 rt=-1.0 gpu=1.1 gc=+1 heap=6.2MB match=Run run=IslandCleared isl=8 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=4 dropped=0 frames=3687 spikes=0 worst=15.6ms
+12:57:32.091 t=576.999 RUN_PHASE frame=14.0 cpu=14.2 rt=-1.0 gpu=1.1 gc=+0 heap=6.3MB match=Run run=OpenChest isl=8 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:57:36.843 t=581.750 RUN_PHASE frame=14.2 cpu=13.6 rt=-1.0 gpu=1.5 gc=+0 heap=6.3MB match=Run run=Intro isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:57:39.843 t=584.750 RUN_PHASE frame=14.1 cpu=14.0 rt=-1.0 gpu=1.1 gc=+0 heap=6.4MB match=Run run=Island isl=9 bots=1 ts=1.00 focus=1 L=1 R=1 head=1
+12:59:22.301 t=687.208 RUN_PHASE frame=13.4 cpu=13.0 rt=-1.0 gpu=1.1 gc=+1 heap=6.3MB match=Run run=IslandCleared isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=4 dropped=0 frames=8080 spikes=0 worst=15.8ms
+12:59:24.315 t=689.222 RUN_PHASE frame=14.0 cpu=14.0 rt=-1.0 gpu=1.2 gc=+0 heap=6.4MB match=Run run=Victory isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (run end) records=1 dropped=0 frames=145 spikes=0 worst=14.9ms
+12:59:27.579 t=692.486 MATCH_PHASE frame=14.1 cpu=13.9 rt=-1.0 gpu=1.1 gc=+0 heap=6.5MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (menu) records=1 dropped=0 frames=235 spikes=0 worst=15.3ms
+12:59:27.579 t=692.487 RUN_PHASE frame=14.1 cpu=13.9 rt=-1.0 gpu=1.1 gc=+0 heap=6.5MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:59:29.273 t=694.180 HAND_LOST hand=L frame=13.7 cpu=13.8 rt=-1.0 gpu=1.2 gc=+0 heap=6.5MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=0 R=1 head=1
+12:59:30.482 t=695.389 HAND_FOUND hand=L frame=14.0 cpu=14.2 rt=-1.0 gpu=1.2 gc=+0 heap=6.5MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:59:33.135 t=698.042 MATCH_PHASE frame=14.2 cpu=13.6 rt=-1.0 gpu=1.2 gc=+0 heap=6.6MB match=Countdown run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:59:36.148 t=701.056 MATCH_PHASE frame=13.9 cpu=13.5 rt=-1.0 gpu=1.1 gc=+0 heap=6.6MB match=Fight run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:59:43.260 t=708.167 MATCH_PHASE frame=14.0 cpu=13.6 rt=-1.0 gpu=1.1 gc=+0 heap=6.7MB match=RoundEnd run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=6 dropped=0 frames=1129 spikes=0 worst=15.3ms
+12:59:46.260 t=711.167 MATCH_PHASE frame=14.6 cpu=14.1 rt=-1.0 gpu=1.2 gc=+0 heap=6.7MB match=Countdown run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:59:49.273 t=714.180 MATCH_PHASE frame=13.8 cpu=13.5 rt=-1.0 gpu=1.1 gc=+0 heap=6.8MB match=Fight run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:59:54.551 t=719.458 MATCH_PHASE frame=13.8 cpu=13.4 rt=-1.0 gpu=1.2 gc=+0 heap=6.8MB match=RoundEnd run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (periodic) records=3 dropped=0 frames=813 spikes=0 worst=15.9ms
+12:59:57.551 t=722.459 MATCH_PHASE frame=13.9 cpu=13.5 rt=-1.0 gpu=1.1 gc=+0 heap=6.9MB match=MatchEnd run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+12:59:58.648 t=723.555 MATCH_PHASE frame=13.7 cpu=13.2 rt=-1.0 gpu=1.1 gc=+0 heap=6.9MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=1 R=1 head=1
+--- flush (menu) records=2 dropped=0 frames=295 spikes=0 worst=15.3ms
+12:59:59.745 t=724.652 HAND_LOST hand=L frame=13.7 cpu=13.8 rt=-1.0 gpu=1.2 gc=+0 heap=6.9MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=0 R=1 head=1
+12:59:59.773 t=724.680 HAND_LOST hand=R frame=13.9 cpu=13.6 rt=-1.0 gpu=1.2 gc=+0 heap=6.9MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=0 R=0 head=1
+12:59:59.813 t=724.720 USER_ABSENT frame=12.0 cpu=13.7 rt=-1.0 gpu=1.2 gc=+0 heap=6.9MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=0 R=0 head=1
+13:00:00.244 t=725.151 HAND_FOUND hand=R frame=13.6 cpu=13.3 rt=-1.0 gpu=1.7 gc=+0 heap=6.9MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=0 R=1 head=1
+13:00:00.481 t=725.388 HAND_LOST hand=R frame=14.1 cpu=13.5 rt=-1.0 gpu=1.7 gc=+0 heap=6.9MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=1 L=0 R=0 head=1
+--- flush (periodic) records=5 dropped=0 frames=720 spikes=0 worst=15.3ms
+13:00:14.847 t=739.754 FOCUS_LOST frame=3.0 cpu=14.7 rt=-1.0 gpu=0.6 gc=+0 heap=7.1MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=0 L=0 R=0 head=1
+--- flush (focus lost) records=1 dropped=0 frames=446 spikes=0 worst=36.4ms
+13:00:14.849 t=739.756 APP_PAUSE frame=3.0 cpu=14.7 rt=-1.0 gpu=0.6 gc=+0 heap=7.2MB match=Menu run=Idle isl=9 bots=0 ts=1.00 focus=0 L=0 R=0 head=1
+--- flush (app pause) records=1 dropped=0 frames=0 spikes=0 worst=0.0ms
