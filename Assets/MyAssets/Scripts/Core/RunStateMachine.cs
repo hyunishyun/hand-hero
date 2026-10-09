@@ -35,6 +35,8 @@ namespace HandHero.Core
         public float EliteHealthMult;
         public float EliteDamageMult;
         public float BossHealthMult;
+        [Tooltip("Every run bot's shot damage, on top of the Elite multiplier (Quick Match and the tutorial bot never read it). 0 reads as 1")]
+        public float EnemyDamageMult;
         [Tooltip("Boss fire interval multiplier (< 1 = fires more often)")]
         public float BossFireIntervalMult;
         [Tooltip("Share of max health a revive brings back")]
@@ -44,13 +46,14 @@ namespace HandHero.Core
         {
             IntroTime = 3f,
             ClearedTime = 2f,
-            HordeTime = 45f,
+            HordeTime = 30f,        // round 4 (D2): was 45
             BaseHealOnClear = 25f,
             EnemyHealthPerIsland = 0.15f,
             MaxAlive = 2,
             EliteHealthMult = 3f,
             EliteDamageMult = 1.5f,
-            BossHealthMult = 6f,
+            BossHealthMult = 5f,    // round 4 (D2): was 6
+            EnemyDamageMult = 1.15f, // round 4 (D2): new
             BossFireIntervalMult = 0.7f,
             ReviveHealthFraction = 0.5f,
         };
@@ -77,13 +80,15 @@ namespace HandHero.Core
         public static IslandSpec Island(int island, IslandType type, RunParams p)
         {
             float scale = 1f + p.EnemyHealthPerIsland * (island - 1);
+            // A RunParams serialized before round 4 has no value: 0 must not disarm the bots.
+            float damage = p.EnemyDamageMult > 0f ? p.EnemyDamageMult : 1f;
             var spec = new IslandSpec
             {
                 Type = type,
                 BotCount = 1,
                 MaxAlive = 1,
                 HealthMult = scale,
-                DamageMult = 1f,
+                DamageMult = damage,
                 FireIntervalMult = 1f,
             };
             switch (type)
@@ -98,7 +103,7 @@ namespace HandHero.Core
                     break;
                 case IslandType.Elite:
                     spec.HealthMult = scale * p.EliteHealthMult;
-                    spec.DamageMult = p.EliteDamageMult;
+                    spec.DamageMult = p.EliteDamageMult * damage;
                     break;
                 case IslandType.Boss:
                     spec.HealthMult = scale * p.BossHealthMult;

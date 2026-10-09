@@ -263,16 +263,17 @@ namespace HandHero.Tests
             Assert.AreEqual(1f, RunRules.Island(1, IslandType.Arena, p).HealthMult, 1e-5f);
             Assert.AreEqual(1.45f, RunRules.Island(4, IslandType.Arena, p).HealthMult, 1e-5f);
             Assert.AreEqual(1.45f, RunRules.Island(4, IslandType.Horde, p).HealthMult, 1e-5f);
-            Assert.AreEqual(1f, RunRules.Island(4, IslandType.Arena, p).DamageMult, 1e-5f);
+            // Round 4 (D2): every run bot hits x1.15, on top of the Elite multiplier.
+            Assert.AreEqual(1.15f, RunRules.Island(4, IslandType.Arena, p).DamageMult, 1e-5f);
 
             IslandSpec elite = RunRules.Island(4, IslandType.Elite, p);
             Assert.AreEqual(1, elite.BotCount);
             Assert.AreEqual(1.45f * 3f, elite.HealthMult, 1e-4f);
-            Assert.AreEqual(1.5f, elite.DamageMult, 1e-5f);
+            Assert.AreEqual(1.5f * 1.15f, elite.DamageMult, 1e-5f);
 
             IslandSpec boss = RunRules.Island(9, IslandType.Boss, p);
             Assert.AreEqual(1, boss.BotCount);
-            Assert.AreEqual(2.2f * 6f, boss.HealthMult, 1e-4f);
+            Assert.AreEqual(2.2f * 5f, boss.HealthMult, 1e-4f); // D2: boss health x6 -> x5
             Assert.Less(boss.FireIntervalMult, 1f);
             Assert.AreEqual(1f, RunRules.Island(9, IslandType.Arena, p).FireIntervalMult, 1e-5f);
 
