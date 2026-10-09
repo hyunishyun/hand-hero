@@ -52,6 +52,9 @@ public class PerfSpikeLogger : MonoBehaviour
     private StringBuilder _text;
     private readonly FrameTiming[] _timings = new FrameTiming[1];
     private readonly List<XRInputDevice> _heads = new List<XRInputDevice>();
+    private const double HeadPollInterval = 0.25;
+    private XRInputDevice _head;
+    private double _nextHeadPoll;
 
     private readonly TrackedEdge _leftEdge = new TrackedEdge();
     private readonly TrackedEdge _rightEdge = new TrackedEdge();
@@ -120,7 +123,7 @@ public class PerfSpikeLogger : MonoBehaviour
             Record(PerfRecordKind.Hitch, 0);
         }
 
-        PollTracking();
+        PollTracking(now);
         PollPhases();
 
         if (PerfFlushPolicy.PeriodicFlushDue(InCombat(), now, _lastFlush, flushInterval))
@@ -150,7 +153,7 @@ public class PerfSpikeLogger : MonoBehaviour
         Flush("disabled", forced: true);
     }
 
-    private void PollTracking()
+    private void PollTracking(double now)
     {
         HandGestureTracker t = tracker != null ? tracker : HandGestureTracker.Instance;
         if (t != null)
@@ -161,20 +164,29 @@ public class PerfSpikeLogger : MonoBehaviour
             RecordEdge(_rightEdge.Step(_rightTracked), PerfRecordKind.HandFound, PerfRecordKind.HandLost, 1);
         }
 
-        // Same query as MatchDirector's presence check; it allocates nothing with a reused list.
-        _heads.Clear();
-        XRInputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.HeadMounted, _heads);
-        if (_heads.Count == 0)
+        // Like MatchDirector's presence check (round 4, S3): the head is polled every
+        // HeadPollInterval of real time, and the device is looked up again only when
+        // the cached one is no longer valid.
+        if (now < _nextHeadPoll) return;
+        _nextHeadPoll = now + HeadPollInterval;
+
+        if (!_head.isValid)
         {
-            _headTracked = false;
-            return;
+            _heads.Clear();
+            XRInputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.HeadMounted, _heads);
+            if (_heads.Count == 0)
+            {
+                _headTracked = false;
+                return;
+            }
+            _head = _heads[0];
         }
-        if (_heads[0].TryGetFeatureValue(XRCommonUsages.isTracked, out bool tracked))
+        if (_head.TryGetFeatureValue(XRCommonUsages.isTracked, out bool tracked))
         {
             _headTracked = tracked;
             RecordEdge(_headEdge.Step(tracked), PerfRecordKind.HeadFound, PerfRecordKind.HeadLost, 0);
         }
-        if (_heads[0].TryGetFeatureValue(XRCommonUsages.userPresence, out bool present))
+        if (_head.TryGetFeatureValue(XRCommonUsages.userPresence, out bool present))
             RecordEdge(_presenceEdge.Step(present), PerfRecordKind.UserPresent, PerfRecordKind.UserAbsent, 0);
     }
 

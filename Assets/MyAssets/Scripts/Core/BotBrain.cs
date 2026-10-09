@@ -79,7 +79,7 @@ namespace HandHero.Core
     // Shooting: lock aim (with error) -> telegraph for TelegraphTime -> fire.
     public class BotBrain
     {
-        private System.Random _rng;
+        private readonly SeededRandom _rng;
         private BotParams _p;
 
         private bool _grabbed;
@@ -106,7 +106,7 @@ namespace HandHero.Core
         public BotBrain(BotParams p, int seed)
         {
             _p = p;
-            _rng = new System.Random(seed);
+            _rng = new SeededRandom(seed);
             Reset();
         }
 
@@ -141,10 +141,11 @@ namespace HandHero.Core
             State = BotState.Idle;
         }
 
-        // A pooled bot reused for a new spawn (P6): fresh random stream, then Reset.
+        // A pooled bot reused for a new spawn (P6): its one random stream restarts
+        // from the new seed (no allocation, round 4 S3), then Reset.
         public void Reseed(int seed)
         {
-            _rng = new System.Random(seed);
+            _rng.Reseed(seed);
             Reset();
         }
 

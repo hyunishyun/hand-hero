@@ -10,6 +10,10 @@ namespace HandHero.Core
         private readonly List<bool> _shots = new List<bool>(256);
         private readonly List<bool> _started = new List<bool>(256);
 
+        // Off outside a run (round 4, S3): Quick Match holds are not run telemetry,
+        // so the lists never grow there. A new stats object records.
+        public bool Recording { get; set; } = true;
+
         public int Holds => _durations.Count;
         public int ChargesStarted { get; private set; }
         public int ChargeShots { get; private set; }
@@ -19,10 +23,11 @@ namespace HandHero.Core
         // Per hold: did a charge start (slowdown + orb), with or without a charge shot.
         public IReadOnlyList<bool> ChargeStartedFlags => _started;
 
-        // Takes the step a held gesture ended on; any other step is ignored.
+        // Takes the step a held gesture ended on; any other step, or any step while
+        // not recording, is ignored.
         public void Add(ChargeStep step)
         {
-            if (!step.HoldEnded) return;
+            if (!Recording || !step.HoldEnded) return;
             _durations.Add(step.HoldSeconds);
             _shots.Add(step.Released);
             _started.Add(step.ChargeStarted);

@@ -50,6 +50,10 @@ namespace HandHero.Core
         public bool AimHandLost;
         public bool ClutchHandLost;
 
+        // The Meta system gesture (palm toward the headset) is on for the aim hand:
+        // its pinch opens the OS menu, so a held charge is cancelled (round 4, S3).
+        public bool AimSystemGesture;
+
         public Ray AimRay => new Ray(AimOrigin, AimDirection);
 
         public bool Has(HandGestures gesture) => (Gestures & gesture) == gesture;

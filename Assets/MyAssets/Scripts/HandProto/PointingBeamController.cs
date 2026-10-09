@@ -141,6 +141,13 @@ public class PointingBeamController : MonoBehaviour
         _pinchHolds.Clear();
     }
 
+    // Pinch holds are recorded during a run only (round 4, S3): RunDirector turns
+    // this on at run start and off once the run log is written.
+    public void SetHoldRecording(bool on)
+    {
+        _pinchHolds.Recording = on;
+    }
+
     // Cursor back to the arena center, assist lock dropped.
     public void ResetAim()
     {
@@ -173,6 +180,7 @@ public class PointingBeamController : MonoBehaviour
     private void Awake()
     {
         runStats = RunHeroStats.Find(runStats, character);
+        _pinchHolds.Recording = false; // until a run starts (SetHoldRecording)
         if (chargeIndicator != null) chargeIndicator.gameObject.SetActive(false);
         if (reticle != null) _reticleRenderer = reticle.GetComponent<Renderer>();
         if (cursorMarker != null) _cursorRenderer = cursorMarker.GetComponent<Renderer>();

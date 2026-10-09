@@ -118,8 +118,10 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         // curled reads as a full fist and blocked every ASSIST pinch on device.
         // Keeps stepping through a palms charge so a pinch held through it doesn't
         // fire afterwards.
-        // The Meta system gesture's pinch opens the OS menu, never a shot (CR-7).
+        // The Meta system gesture's pinch opens the OS menu, never a shot (CR-7),
+        // and drops a held charge instead of releasing it (round 4, S3).
         float pinchStrength = _systemGesture.Step(aimHand.SystemGesture, aimHand.PinchStrength, pinchResetThreshold);
+        data.AimSystemGesture = _systemGesture.Active;
         PinchState pinch = _pinch.Step(aimHand.IsTracked, pinchStrength, pinchFireThreshold,
             pinchResetThreshold, false, 0f, Time.deltaTime);
 

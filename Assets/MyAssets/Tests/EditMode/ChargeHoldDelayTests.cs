@@ -142,5 +142,32 @@ namespace HandHero.Tests
             Assert.AreEqual(0, stats.Holds);
             Assert.AreEqual(0, stats.Durations.Count);
         }
+
+        // Round 4 (S3): holds are run telemetry only; outside a run (Quick Match)
+        // they are dropped, so the lists never grow there.
+        [Test]
+        public void HoldStats_NotRecording_DropsHolds()
+        {
+            var stats = new PinchHoldStats { Recording = false };
+            for (int i = 0; i < 300; i++)
+                stats.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.6f, ChargeStarted = true, Released = true });
+
+            Assert.AreEqual(0, stats.Holds);
+            Assert.AreEqual(0, stats.ChargesStarted);
+            Assert.AreEqual(0, stats.ChargeShots);
+        }
+
+        [Test]
+        public void HoldStats_RecordingAgain_AddsHolds()
+        {
+            var stats = new PinchHoldStats { Recording = false };
+            stats.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.2f });
+            stats.Recording = true;
+            stats.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.7f, ChargeStarted = true, Released = true });
+
+            Assert.AreEqual(1, stats.Holds);
+            Assert.AreEqual(0.7f, stats.Durations[0], 1e-6f);
+            Assert.AreEqual(1, stats.ChargeShots);
+        }
     }
 }

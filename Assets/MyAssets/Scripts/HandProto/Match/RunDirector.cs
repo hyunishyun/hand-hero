@@ -403,7 +403,9 @@ public class RunDirector : MonoBehaviour
         string aim = aimModeSetting != null ? aimModeSetting.Mode.ToString() : "Unknown";
         string view = viewMode == null ? "Vr" : viewMode.IsTabletop ? "Table" : "Vr";
         _recorder.Begin(_rngSeed, aim, view, System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"));
-        if (playerAim != null) playerAim.ResetShotStats();
+        if (playerAim == null) return;
+        playerAim.ResetShotStats();
+        playerAim.SetHoldRecording(true);
     }
 
     // Victory / Defeat (end screen) or quitting mid-run: never during a fight.
@@ -420,6 +422,8 @@ public class RunDirector : MonoBehaviour
             ChargeShots = playerAim != null ? playerAim.ChargeShotsFired : 0,
             Holds = playerAim != null ? playerAim.PinchHolds : null,
         });
+        // The record copied the holds; menu and Quick Match pinches are not logged.
+        if (playerAim != null) playerAim.SetHoldRecording(false);
         if (record != null && writeRunLog) RunLogFile.Append(RunRecordJson.ToJson(record));
     }
 
