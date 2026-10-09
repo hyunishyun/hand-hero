@@ -15,8 +15,8 @@
 | P9 추적 끊김 표시·시스템 제스처 | DONE | `0492746`. 조준 손 추적이 끊기면 레티클(ASSIST)·커서 표시(CURSOR)가 회색, 잠금 링은 숨김(대상은 기억). 클러치 손이 끊기면 내 바닥 원판·낙하선이 회색(`HandInputData.AimHandLost/ClutchHandLost`, 프로퍼티 블록, 바뀔 때만). XR Hands 1.9.0의 `TryGetAimState` → `MetaAimHandState.aimFlags`의 `SystemGesture`를 손마다 읽고, 시작·끝을 퍼프 로그에 기록. Core `SystemGestureGate`(제스처 중 핀치 0, 끝난 뒤 닫힌 핀치는 한 번 펴야 함) + 테스트 7개(401/401)로 조준 손 발사·차지와 메뉴 포인터 핀치를 거름. 손목 일시정지는 일부러 제외(`QUESTIONS_FOR_HYUN.md`). 나머지 엣지(손·머리·포커스·일시정지·단계)는 P1에서 이미 연결됨. 씬 재생성 배선 오류 0. CR-1, CR-7 해결. 기기 확인: 손을 시야 밖으로 → 회색, 오른손바닥을 얼굴로 핀치 → 발사 없음, 왼손 손목 일시정지는 그대로 동작. |
 | P10 ASSIST 차지 오인 | DONE | `72b59a0`. `ChargeParams.HoldDelay` 0.25초: 핀치를 그만큼 쥐어야 차지가 시작되고(그 전엔 감속·구슬 없음, 떼도 추가 발사 없음), `MinChargeTime` 0.3은 차지 시작부터 센다. 뗀 판정은 `pinchResetThreshold` 0.5 → 0.6(원시 값 대신 고른 이유는 `QUESTIONS_FOR_HYUN.md`). 끝난 핀치마다 쥔 시간·차지 시작·차지샷 여부를 `ChargeStep`에 싣고 `PointingBeamController.PinchHolds`(Core `PinchHoldStats`)에 쌓는다 → P13이 런 기록에 쓴다. 테스트 410/410(새 9개, 기존 `ChargeShotModelTests`는 지연 0으로 곡선만 검사하도록 수정). 씬 재생성 배선 오류 0. CURSOR 방아쇠에도 같이 적용. 기기 확인: ASSIST 빠른 발사 10번 → 차지샷 0, 1초 쥐기 → 차지됨. |
 | P11 합성 효과음 | DONE | `72e9228`. Core `SfxSynth`(사인·삼각·사각·톱니·노이즈, 지수 피치 스윕, 비브라토, 음별 ADSR, 원폴 로우패스, 피크 정규화 ≤ 0.9, 시드 노이즈)·`SfxRecipes`(이벤트 25개 한 파일)·`SfxCues`(단계·팀→소리)·`CountdownTicker`·`SfxRateLimiter` + 테스트 22개(432/432). `SfxPlayer`가 씬 로드 때 한 번 합성(약 6.8초 분량 ≈ 600 KB, 생성 시간은 `perf_log.txt` 헤더 `sfx … ms`), 보이스 12개 풀(월드 3D 0.6·UI 2D), 이벤트마다 볼륨+음원 칸(넣으면 합성 대신 재생). `GameSfxCues`: 카운트다운 3·2·1, FIGHT, 클리어, 상자, VICTORY/DEFEAT, 일시정지/재개. 발사(플레이어·봇 구분)·차지 시작/준비/차지샷·명중 확인(크리 1.35배 피치)·피격·쇼크웨이브·봇 처치·봇 예고 경고음·메뉴 포인트/누름·포털/아이템/구매/리롤/거절. 두 씬 재생성 배선 오류 0. 기기 확인: 소리 크기·톤, 예고 경고음이 회피에 도움 되는지. |
-| P12 피격·처치 타격감 | TODO | |
-| P13 런 기록·요약 스크립트 | TODO | |
+| P12 피격·처치 타격감 | DONE | `6e37ead`. 피격 시 카메라 자식 쿼드(0.3 m 앞)의 붉은 가장자리 비네트: Core `FlashEnvelope`가 알파 ≤ 0.35·≤ 0.25초를 인스펙터 값과 관계없이 강제하고 unscaled 시간으로 꺼진다(일시정지에 멈춰 남지 않음). 편안함 토글 `DamageVignette.flashOnDamage`, 텍스처는 시작 때 64×64로 생성, 값이 바뀔 때만 프로퍼티 블록. 봇 처치 시 큐브 조각 8개가 퍼지며 줄어드는 `KillBurst`(Core `KillBurstMotion`), P5 풀을 프리팹별 여러 개로 일반화(`PooledEffect` 기반 클래스, `KillBurstPool` 미리 4개·최대 8개). 크리는 P11의 노란 빔 + 1.35배 피치 명중음. 테스트 444/444(새 12개), 씬·RunBot 프리팹 재생성 배선 오류 0. 기기 확인: 붉은 번쩍임이 깜빡임 없이 편한지, 쿼드 테두리가 시야에 보이지 않는지, 처치 폭발이 보이는지. |
+| P13 런 기록·요약 스크립트 | TODO | (다음 세션 시작점) |
 | P14 메타 진행 설계 문서 | TODO | |
 | P15 빌더 엄격화·씬·테스트·APK 2종 | TODO | |
 | P16 최종 리뷰·보고서 | TODO | |
@@ -37,3 +37,4 @@
 - 2026-10-08 무인 세션 3: P5, P6 완료. 테스트 367/367, 씬 재생성 배선 오류 0. 막힌 것 없음. ProjectSettings 변경 없음.
 - 2026-10-08 무인 세션 4: P7, P8 완료. 테스트 394/394, 씬 재생성 배선 오류 0. 막힌 것 없음. ProjectSettings 변경: `TimeManager.asset`(P7).
 - 2026-10-08 무인 세션 5: P9, P10 완료. 테스트 410/410, 씬 재생성 배선 오류 0. 막힌 것 없음. ProjectSettings 변경 없음. 튜닝 기본값 변경(승인된 예외): `HoldDelay` 0.25초 신설, `pinchResetThreshold` 0.5 → 0.6.
+- 2026-10-08 무인 세션 6: P11, P12 완료. 테스트 444/444, 씬 재생성 배선 오류 0. 막힌 것 없음. ProjectSettings 변경 없음. 새 생성 에셋: `Generated/FX/KillBurst.prefab`, `Generated/Materials/KillBurst.mat`·`DamageVignette.mat`.

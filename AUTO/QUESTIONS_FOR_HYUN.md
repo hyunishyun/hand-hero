@@ -22,3 +22,6 @@
 - **P11 / 명중 확인음과 피격음은 2D와 3D 중 무엇으로?** → 명중 확인(`HitDealt`)·피격(`HitTaken`)·메뉴·흐름 소리는 2D, 발사·쇼크웨이브·봇 처치·예고음은 그 위치의 3D(공간감 0.6, 8 m까지 최대, 200 m까지 선형 감쇠). 이유: 내 행동의 결과는 거리와 관계없이 분명해야 하고, 월드 사건은 방향을 알려 줘야 한다. 뒤집으려면: 호출부의 `SfxPlayer.Play`/`PlayUi`를 바꾸거나 씬의 `Sfx` 오브젝트에서 `spatialBlend`를 조정한다.
 - **P11 / 상점에서 살 수 없는 물건을 누르면?** → 거절음(`Denied`). 크리스털 부족·매진·일시정지 중 모두 같은 소리. 뒤집으려면: `RunChoiceMenu.Choose`의 `else` 줄을 지운다.
 - **P11 / 퀵 매치 라운드 결과음은?** → 라운드를 이기면 클리어 소리, 지면 소리 없음. 매치 승패는 VICTORY/DEFEAT. 뒤집으려면: `SfxCues.ForMatchPhase`.
+- **P12 / 편안함 토글을 메뉴에 둘까?** → 아니오. 지금은 씬 `Main Camera`의 `DamageVignette.flashOnDamage` 인스펙터 토글과 코드용 `FlashOnDamage` 속성뿐이다. 이유: 메뉴 버튼 추가는 메뉴 배치 변경이라 무인으로 정하기에 디자인 결정이 크다. 뒤집으려면: 메뉴에 버튼을 만들고 `FlashOnDamage`를 바꾸게 한다(PlayerPrefs로 기억).
+- **P12 / 처치 폭발을 플레이어 사망에도 낼까?** → 아니오. 봇(퀵 매치 봇·런 봇)만 낸다. 플레이어 사망은 DEFEAT·부활 연출이 따로 있다. 뒤집으려면: 빌더에서 플레이어 `HeroHealth.deathEffectPrefab`에도 `killBurstPrefab`을 넣는다.
+- **P12 / 비네트를 화면 위에 덮는 방식은?** → 카메라 자식 쿼드(0.3 m 앞, 1.3 m 크기, 시야 약 ±65°), URP Unlit 투명(렌더 큐 3500, 깊이 쓰기 끔). URP Unlit에는 ZTest 속성이 없어서 0.3 m보다 가까운 손은 비네트 앞에 보일 수 있다. 뒤집으려면: 빌더의 `DamageVignette` 쿼드 위치·크기.
