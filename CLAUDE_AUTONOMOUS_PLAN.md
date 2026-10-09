@@ -2,7 +2,7 @@
 
 ## 한국어 요약
 
-- **목표:** RUN 플레이 중 헤드셋 화면이 랜덤하게 멈추는 원인을 **증거로** 잡을 계측을 먼저 넣는다. 감사에서 확인된 스파이크(봇·피격 이펙트 생성/파괴, 머티리얼 누수, 매 프레임 할당)를 없애고, 확인된 버그를 고친다. 리팩토링은 이 일에 필요한 만큼만 한다(Hyun 승인: "추천대로").
+- **목표:** RUN 플레이 중 헤드셋 화면이 랜덤하게 멈추는 원인을 **증거로** 잡을 계측을 먼저 넣는다. 감사에서 확인된 스파이크(봇·피격 이펙트 생성/파괴, 머티리얼 누수, 매 프레임 할당)를 없애고, 확인된 버그를 고친다. 리팩토링은 이 일에 필요한 만큼만 한다(Hyun 승인: "추천대로"). 그다음 ASSIST 차지 오인을 고치고, 효과음·타격감·런 기록을 넣고, 메타 진행 설계 문서를 쓴다.
 - **근거:** `AUTO/PERF_AUDIT.md` — 에이전트 13개가 읽기 전용으로 감사하고 반박 검증까지 했다. 핵심은 세 가지다.
   - 코드 안에 수백 ms 정지를 혼자 설명하는 경로는 없다.
   - 큰 후보는 봇 생성/파괴(봇 하나에 GameObject 12개, 머티리얼 4개 누수)와 피격마다 이펙트 생성/파괴다.
@@ -43,6 +43,11 @@
   - **D10** 리팩토링은 위 작업에 필요한 것만 한다. 큰 클래스 분할은 하지 않는다.
   - **D11** XR·렌더 설정(FFR, MSAA, 지연 모드, 깊이 제출)은 무인으로 바꾸지 않는다. 보고서에 A/B 실험 후보로만 적는다.
   - **D12** 브랜치 `perf/freeze-hunt`, 커밋 `[auto] P<n>: …`, push 금지.
+  - **D13** ASSIST 차지 오인을 고친다. 핀치를 0.25초 넘게 쥐고 있어야 차지를 시작하고, 그 전에는 감속도 표시도 없다. 손을 펴는 판정은 덜 굼뜨게 바꾼다. 쥔 시간 기록을 남겨 수치를 데이터로 조정할 수 있게 한다.
+  - **D14** 코드로 합성한 효과음을 넣는다(에셋·패키지 없음, 짧고 깔끔한 SF 톤). 효과음은 시작할 때 미리 만들어 둔다. 나중에 실제 음원을 칸에 넣으면 그 음원이 대신 나온다.
+  - **D15** 타격감을 넣는다. 피격되면 시야 가장자리가 붉게 번쩍이고(편안함 토글 있음), 봇을 처치하면 작은 폭발이 나온다.
+  - **D16** 런마다 기록(`run_log.jsonl`)을 남기고, 요약 스크립트(`AUTO/tools/run_summary.py`)를 만든다.
+  - **D17** 메타 진행은 설계 문서만 쓴다(코드 없음).
 - **테스트·검증:**
   - 순수 로직은 TDD(EditMode)로 한다. 현재 321개 테스트는 모두 유지한다.
   - 컴파일, 씬 재생성(배선 오류 0), APK 2종 빌드까지 한다.
@@ -101,7 +106,7 @@
 - Commands (Unity must not be running; exit 4 = Unity open → log a blocker, keep coding, mark commits `[unverified]`):
   - Compile: `powershell -NoProfile -ExecutionPolicy Bypass -File "AUTO\tools\compile_check.ps1"`
   - Tests: the same command + `-Tests`
-  - Scenes: the same command + `-ExecuteMethod HandHero.EditorTools.HandHeroSceneBuilder.BuildAll`, then grep `AUTO\logs\execute.log` for `has no field` / `has no array field` (must be empty; after P10 the builder fails instead).
+  - Scenes: the same command + `-ExecuteMethod HandHero.EditorTools.HandHeroSceneBuilder.BuildAll`, then grep `AUTO\logs\execute.log` for `has no field` / `has no array field` (must be empty; after P15 the builder fails instead).
   - APK: the same command + `-BuildTarget Android -TimeoutMinutes 120 -ExecuteMethod HandHero.EditorTools.BuildScript.<Method>` (after P2: `BuildQuestApkDev` and `BuildQuestApkRelease`). The APK build regenerates the scenes; commit them. Always `git checkout -- ProjectSettings/UnityConnectSettings.asset` before committing.
 - **Pure logic goes in `HandHero.Core` with EditMode tests first (TDD)**: write the test, watch it fail, implement, watch it pass. MonoBehaviour wiring and scenes = compile + scene build + a device-checklist item.
 - The test assembly references only `HandHero.Core` (CR-6). So move every rule you want tested (pool reuse contract, spike detection, HUD change keys, spring step, clutch clamp, sampler reset) into Core first; keep MonoBehaviours thin.
@@ -110,7 +115,7 @@
 
 ## 4. Decisions (approval status and details: `AUTO/DECISIONS.md`)
 
-D1 diagnosis first: logger in every build · D2 dev + release APKs with distinct names · D3 chatty logs dev/editor only, release stack traces off for Log/Warning · D4 pool only RunBot and BeamImpact; MaterialPropertyBlock instead of material clones · D5 Max Allowed Timestep 0.1, Fixed Timestep 0.02, frame-rate-independent spring · D6 hand-input robustness fixes · D7 tracking-lost cue · D8 run death/state fixes incl. no bot friendly fire · D9 per-bot seeds and first-shot jitter · D10 refactor only what these need · D11 no XR/render setting changes · D12 branch/commit rules.
+D1 diagnosis first: logger in every build · D2 dev + release APKs with distinct names · D3 chatty logs dev/editor only, release stack traces off for Log/Warning · D4 pool only RunBot and BeamImpact; MaterialPropertyBlock instead of material clones · D5 Max Allowed Timestep 0.1, Fixed Timestep 0.02, frame-rate-independent spring · D6 hand-input robustness fixes · D7 tracking-lost cue · D8 run death/state fixes incl. no bot friendly fire · D9 per-bot seeds and first-shot jitter · D10 refactor only what these need · D11 no XR/render setting changes · D12 branch/commit rules · D13 charge hold delay · D14 synthesized SFX · D15 hit/kill feel · D16 run telemetry + summary script · D17 meta progression: design doc only.
 
 ## 5. Task queue (in order; audit IDs in brackets)
 
@@ -127,7 +132,7 @@ D1 diagnosis first: logger in every build · D2 dev + release APKs with distinct
 - `BuildScript`: `BuildQuestApkDev` (`BuildOptions.Development | AllowDebugging`, optional `ConnectWithProfiler` off) → `HandHero_<yyyyMMdd_HHmm>_dev.apk`; `BuildQuestApkRelease` → `..._release.apk`. Keep `BuildQuestApk` as an alias of release so old commands still work. Both log their output path.
 - A tiny `HHLog` helper in HandProto with `[Conditional("DEVELOPMENT_BUILD"), Conditional("UNITY_EDITOR")]` for chatty logs; route existing per-event `Debug.Log` calls through it (warnings/errors stay as they are).
 - Release stack traces: Log and Warning → None; Error, Assert, Exception keep ScriptOnly (editor script, list the change).
-- DONE: compile; one dev APK build to prove the path (the final builds happen in P10).
+- DONE: compile; one dev APK build to prove the path (the final builds happen in P15).
 
 ### P3. Per-frame waste (D10) [GC-1, GC-2, GM-1…GM-5, GM-7, GC-M2, GM-9, GM-11, GM-12, GC-6…GC-9]
 - `AimAssistTarget.All` loops by index; skip candidate collection when the acquire cone is 0 and no target is held (bots).
@@ -179,12 +184,42 @@ D1 diagnosis first: logger in every build · D2 dev + release APKs with distinct
 - Wire the remaining logger edge events (hand/head tracking, focus, pause, phases).
 - DONE: compile; scenes rebuilt; device items.
 
-### P10. Builder strictness, scenes, tests, APKs [RF-7]
+### P10. ASSIST charge misfire (D13) [Hyun device report 2026-10-08]
+- Symptom (Hyun): in ASSIST, a normal pinch shot is often taken as a charge. Mechanism found in code: the charge starts on the very first pinch frame (`ChargeInputRule` → `ChargeShotModel.Step(held)`: indicator on, hero slowed to 60 %), and `MinChargeTime` is only 0.3 s. Releasing needs the *smoothed* `PinchStrength` (lerped in `HandGestureTracker`) to fall below `pinchResetThreshold` 0.5, i.e. thumb–index > ~3.75 cm, so a quick tap often reads as a ≥ 0.3 s hold and a charge shot fires on release as well.
+- Core (TDD): add `ChargeParams.HoldDelay` (default 0.25 s). The charge only starts after the pinch has been held that long; before that there is no slowdown and no indicator, and a release fires nothing extra. `MinChargeTime` counts from the start of the charge. Tests: a 0.4 s tap fires one normal shot and no charge shot; a 0.25 + 0.3 s hold releases a charge; cancel rules unchanged.
+- Release detection: the pinch *release* edge reads the raw (unsmoothed) pinch strength, or a release threshold of 0.6, whichever is simpler and testable (`PinchTrigger` keeps its hysteresis; log the choice).
+- Expose each finished pinch (hold duration, became a charge or not) as an event/counter in Core; P13 writes it to the run telemetry so Hyun can tune `HoldDelay` from data.
+- Approved tuning-default changes: new `HoldDelay` 0.25 s; the release change above. Existing `MinChargeTime` 0.3 stays.
+- DONE: tests; compile; device item "ten quick shots in ASSIST → zero charge shots; a deliberate 1 s hold still charges".
+
+### P11. Procedural sound effects (D14)
+- The game has no audio at all (no clips assigned anywhere). Add sound without new assets or packages: Core (TDD on parameters only) `SfxSynth` recipes (oscillator types, pitch envelope, noise, ADSR, duration) rendered once at startup into `AudioClip.Create` PCM clips (never mid-fight). A `SfxPlayer` with a small pool of `AudioSource`s (3D for world events at the hero/bot position, 2D for UI), master volume and per-event volume as `[SerializeField]` + `[Tooltip]`.
+- Events: player beam fire, charge start (after `HoldDelay`) + charge-ready ping + charged release, bot telegraph warning (important: helps dodging), hit dealt, hit taken, shockwave, bot down, island start countdown ticks + FIGHT, island cleared, chest open, item pick, shop buy, reroll, not-enough-crystals, portal pick, VICTORY, DEFEAT, menu point/press, pause/resume.
+- Style: short, clean sci-fi synth (blips, zaps, soft thumps); nothing louder than the beam; no harsh high frequencies. Keep recipes in one file so they are easy to swap for real recordings later (each event = one serialized `AudioClip` slot that overrides the synth when assigned).
+- Quick Match, tutorial and RUN all use it. Budget: < 2 MB of generated PCM total, generation < 100 ms at startup (log it in the perf log header).
+- DONE: recipe tests (durations, no clipping: peak ≤ 0.9); compile; scenes rebuilt; device item.
+
+### P12. Hit and kill feel (D15)
+- Damage taken: a short red edge flash in the player's view, rendered by a world-space quad parented to the camera (no XR Origin movement), alpha ≤ 0.35, ≤ 0.25 s, with a comfort toggle. Kill: a small pooled burst (scaled sphere shards or a ring, reuse the P5 pool) at the bot. Crit: the existing yellow beam plus a higher-pitched hit sound.
+- DONE: compile; scenes rebuilt; device item (comfort: no flicker, readable).
+
+### P13. Run telemetry and summary script (D16)
+- Core (TDD): a `RunRecord` built from run events: seed, aim mode, view mode, start time, result (Victory/Defeat/Quit), total time, per-island time and island type, damage taken per island, death island, revives used, items picked (id, level, island), shop buys/rerolls, crystals earned/spent, shots fired, hit rate, charge shots, pinch hold durations (from P10).
+- HandProto: append one JSON line per run to `Application.persistentDataPath/run_log.jsonl` at run end or quit (no writes during fights).
+- `AUTO/tools/run_summary.py` (Python 3, standard library only): reads one or more `run_log.jsonl`, prints run count, win rate, median/max run time vs the 10-minute limit, deaths per island, slowest islands, most-picked items, charge misfire rate (holds that turned into charges under 0.5 s), and suggests which `RunParams` knob to turn first (rule-based, from the round-2 report: `EnemyHealthPerIsland`, `BossHealthMult`, Arena bot count). Include a sample `run_log.jsonl` fixture and run the script on it in the session.
+- DONE: tests; compile; script runs on the fixture; `PERF_REPORT.md` explains how to pull `run_log.jsonl` (adb and editor path).
+
+### P14. Meta progression design doc only (D17)
+- Write `docs/superpowers/specs/2026-10-09-meta-progression-design.md` (starts with `## 한국어 요약`). No code.
+- Content: goal ("one more run" for judges who play 1–3 runs); 2–3 approaches (e.g. A: unlockable starting relic choice after the first win + best-time board; B: a "key" currency spent on permanent unlocks of new items into the pool; C: daily/seeded challenge run) with trade-offs for a ≤ 10-minute judged session; recommendation; data model on PlayerPrefs; UI touch points in the existing menu; risks; open questions for Hyun as D1… each with a recommended answer. Ground it in `docs/crab-champions-systems-analysis.md` and the current catalog.
+- DONE: the doc is committed; `REPORT_FOR_HYUN.md` lists its open questions.
+
+### P15. Builder strictness, scenes, tests, APKs [RF-7]
 - `HandHeroSceneBuilder`: a missing serialized field during wiring throws (fails `BuildAll`) instead of only logging.
 - Rebuild scenes, run all tests, build `BuildQuestApkDev` and `BuildQuestApkRelease`; record both paths and sizes in `PROGRESS.md`.
 - DONE: 0 wiring errors, all tests green, two APKs in `MetaAwards\Build\`.
 
-### P11. Final review and reports
+### P16. Final review and reports
 - One code-review subagent over `19a5942..HEAD` (exclude `.unity`): fix every confirmed Critical/Important finding, re-test, record Minor ones.
 - Write `AUTO/PERF_REPORT.md` and `AUTO/REPORT_FOR_HYUN.md` (section 6), then `STATUS: ALL_DONE`.
 
@@ -192,7 +227,7 @@ D1 diagnosis first: logger in every build · D2 dev + release APKs with distinct
 
 1. **The XR Origin never moves or rotates.** No follow camera.
 2. Don't delete the 20 legacy scripts in the `Scripts\` root or `Networking~`. Don't touch the scenes in `Assets/Scenes/`.
-3. Every gesture threshold uses hysteresis. Every tunable is `[SerializeField]` + `[Tooltip]`. **Don't change existing gameplay tuning defaults** (the Time settings in P7 are the only approved exception).
+3. Every gesture threshold uses hysteresis. Every tunable is `[SerializeField]` + `[Tooltip]`. **Don't change existing gameplay tuning defaults** (approved exceptions: the Time settings in P7 and the charge hold delay/release in P10).
 4. **Quick Match, the tutorial, both aim modes and RUN must keep working.** All existing tests stay green; existing tests may be updated only where a decision above deliberately changes behaviour (say which in the commit).
 5. No account creation, login, payments or sign-ups.
 6. **No `git push`.** No force commands. Never `git reset --hard` committed work.
@@ -215,7 +250,8 @@ D1 diagnosis first: logger in every build · D2 dev + release APKs with distinct
 
 ### `AUTO/REPORT_FOR_HYUN.md`
 1. Task table (done / blocked / not started).
-2. Headset checklist by priority: freeze capture first (standalone APK and Link), then each fix to feel (hitch recovery, wall drag, regrab after tracking loss, revive, no friendly fire, tracking-lost grey cue, wrist pause only with an open hand), then regressions (Quick Match, tutorial, both aim modes, a full RUN).
+2. Headset checklist by priority: freeze capture first (standalone APK and Link), then the charge fix (ten quick ASSIST shots → no charge shot), sound and hit feel, then each fix to feel (hitch recovery, wall drag, regrab after tracking loss, revive, no friendly fire, tracking-lost grey cue, wrist pause only with an open hand), then regressions (Quick Match, tutorial, both aim modes, a full RUN).
 3. Decisions taken for Hyun (summary of `QUESTIONS_FOR_HYUN.md`), each reversible.
 4. Changed settings and tuning (Time settings, Frame Timing Stats, stack traces) and how to undo each.
-5. Three next steps.
+5. How to pull `run_log.jsonl` and run `python AUTO	oolsun_summary.py <file>`; the meta progression doc's open questions.
+6. Three next steps.
