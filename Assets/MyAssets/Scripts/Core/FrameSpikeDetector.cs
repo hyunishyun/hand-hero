@@ -39,6 +39,45 @@ namespace HandHero.Core
         }
     }
 
+    // Small hitches (round 4, S1): round 3's device run dropped frames that were
+    // well under the 50 ms spike threshold. Counts frames over a lower threshold
+    // per flush and flags the first one after each phase change (and after the
+    // start), so the log shows where a run of small hitches began.
+    public class HitchCounter
+    {
+        private bool _armed = true;
+
+        public float ThresholdMs { get; set; }
+        public int Count { get; private set; }
+        public float WorstMs { get; private set; }
+
+        public HitchCounter(float thresholdMs)
+        {
+            ThresholdMs = thresholdMs;
+        }
+
+        // Feed it every frame's real interval. True = the first hitch since the
+        // start or the last PhaseChanged: worth its own log record.
+        public bool Step(float frameMs)
+        {
+            if (frameMs <= ThresholdMs) return false;
+            Count++;
+            if (frameMs > WorstMs) WorstMs = frameMs;
+            if (!_armed) return false;
+            _armed = false;
+            return true;
+        }
+
+        public void PhaseChanged() => _armed = true;
+
+        // After a flush; a phase change still waiting for its first hitch keeps waiting.
+        public void ResetCounts()
+        {
+            Count = 0;
+            WorstMs = 0f;
+        }
+    }
+
     // Edge detector for a tracked / focused / present flag. The first value is
     // only the baseline, so starting up never logs a fake "lost" or "found".
     public class TrackedEdge
@@ -76,6 +115,14 @@ namespace HandHero.Core
         public static bool PeriodicFlushDue(bool inCombat, double now, double lastFlush, double interval)
         {
             return !inCombat && now - lastFlush >= interval;
+        }
+
+        // The header carries the GPU warmup time (S1), so a routine flush before the
+        // header waits for the warmup's few frames. Pause, focus loss and quit
+        // (forced) write at once.
+        public static bool WaitForWarmup(bool headerWritten, bool warmupRunning, bool forced)
+        {
+            return !headerWritten && warmupRunning && !forced;
         }
     }
 }

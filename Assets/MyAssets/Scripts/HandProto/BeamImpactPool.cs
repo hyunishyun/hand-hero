@@ -69,6 +69,15 @@ public class BeamImpactPool : MonoBehaviour
         Destroy(go, 1f);
     }
 
+    // GPU warmup (round 4, S1): one pooled effect handed out without playing, so
+    // RenderWarmup can draw it at scene load; it goes back with ReturnToPool.
+    // Null when no pool serves the prefab or every effect is busy.
+    public static PooledEffect Borrow(GameObject effectPrefab)
+    {
+        BeamImpactPool pool = effectPrefab != null ? Find(effectPrefab) : null;
+        return pool != null ? pool._pool.Get() : null;
+    }
+
     private PooledEffect Create()
     {
         GameObject go = Instantiate(prefab, transform);

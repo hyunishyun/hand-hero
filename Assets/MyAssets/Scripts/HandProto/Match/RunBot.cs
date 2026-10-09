@@ -21,6 +21,9 @@ public class RunBot : MonoBehaviour
     [SerializeField] private BotInputSource input;
     [SerializeField] private PointingBeamController pointing;
 
+    private AimAssistTarget _assistTarget;
+    private Vector3 _baseScale = Vector3.one;
+
     public HeroHealth Health => health;
     public FlyingCharacter Hero => hero;
 
@@ -30,6 +33,8 @@ public class RunBot : MonoBehaviour
     private void Awake()
     {
         if (health != null) health.Died += OnHealthDied;
+        if (hero != null) _assistTarget = hero.GetComponent<AimAssistTarget>();
+        _baseScale = transform.localScale;
     }
 
     private void OnDestroy()
@@ -54,6 +59,22 @@ public class RunBot : MonoBehaviour
     {
         SetControlled(false);
         if (gameObject.activeSelf) gameObject.SetActive(false);
+        // Undo ShowForWarmup while inactive: the assist target registers on the next Activate.
+        transform.localScale = _baseScale;
+        if (_assistTarget != null && !_assistTarget.enabled) _assistTarget.enabled = true;
+    }
+
+    // GPU warmup (round 4, S1): drawn for a few frames at scene load so its
+    // shaders and pipeline states exist before the first run. No controls, and
+    // the aim assist target is switched off before activation so it never
+    // registers. Deactivate undoes all of it.
+    public void ShowForWarmup(Vector3 at, float scale)
+    {
+        SetControlled(false);
+        if (_assistTarget != null) _assistTarget.enabled = false;
+        transform.SetPositionAndRotation(at, Quaternion.identity);
+        transform.localScale = _baseScale * scale;
+        if (!gameObject.activeSelf) gameObject.SetActive(true);
     }
 
     public void Setup(Transform arenaCenter, Transform enemy, IslandSpec spec)

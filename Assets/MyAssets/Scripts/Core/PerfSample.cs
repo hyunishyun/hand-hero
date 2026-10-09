@@ -22,6 +22,7 @@ namespace HandHero.Core
         GameResumed,
         SystemGestureStart, // Detail: hand
         SystemGestureEnd,
+        Hitch,            // the first frame over the hitch threshold after a phase change (round 4)
     }
 
     // One perf log record: what happened plus a snapshot of the game and
@@ -120,8 +121,31 @@ namespace HandHero.Core
                 case PerfRecordKind.GameResumed: return "GAME_RESUME";
                 case PerfRecordKind.SystemGestureStart: return "SYSGESTURE_START";
                 case PerfRecordKind.SystemGestureEnd: return "SYSGESTURE_END";
+                case PerfRecordKind.Hitch: return "HITCH";
                 default: return "?";
             }
+        }
+
+        // The line closing each flush, e.g.
+        // --- flush (menu) records=4 dropped=0 frames=2 spikes=1 worst=138.5ms hitches=3 worst_hitch=31.2ms
+        public static void AppendFlushSummary(StringBuilder sb, string reason, int records, int dropped, int frames,
+            int spikes, float worstMs, int hitches, float worstHitchMs)
+        {
+            sb.Append("--- flush (").Append(reason).Append(") records=");
+            AppendLong(sb, records);
+            sb.Append(" dropped=");
+            AppendLong(sb, dropped);
+            sb.Append(" frames=");
+            AppendLong(sb, frames);
+            sb.Append(" spikes=");
+            AppendLong(sb, spikes);
+            sb.Append(" worst=");
+            AppendFixed(sb, worstMs, 1);
+            sb.Append("ms hitches=");
+            AppendLong(sb, hitches);
+            sb.Append(" worst_hitch=");
+            AppendFixed(sb, worstHitchMs, 1);
+            sb.Append("ms\n");
         }
 
         private static bool HasHand(PerfRecordKind kind)

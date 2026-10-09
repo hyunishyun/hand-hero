@@ -296,6 +296,13 @@ namespace HandHero.EditorTools
             var vignette = camGo.AddComponent<DamageVignette>();
             SetRefs(vignette, ("playerHealth", flying.GetComponent<HeroHealth>()), ("quad", vignetteRenderer));
 
+            // Round 4 (S1): draw a pooled run bot, beams, hit effects, the vignette and the
+            // charge orb for a few frames at scene load so the first run starts warm.
+            var warmup = match.AddComponent<RenderWarmup>();
+            SetRefs(warmup, ("viewCamera", cam), ("run", runDirector), ("beamMaterial", beamMat),
+                ("vignette", vignette), ("chargeOrb", chargeOrb.transform));
+            SetArray(warmup, "effectPrefabs", impactPrefab, killBurstPrefab);
+
             // Seat-space UI (HUD, menus, wrist button, tutorial prompt) lives under the
             // Camera Offset, so the T10 tabletop scale keeps it at the same apparent
             // size and spot. World-fixed, never head-locked.

@@ -14,7 +14,9 @@ using InputDeviceCharacteristics = UnityEngine.XR.InputDeviceCharacteristics;
 // focus, app pause, match / run phase, game pause, system gesture), into a ring
 // buffer of structs. Nothing is written to disk mid-fight: the buffer goes to
 // <persistentDataPath>/perf_log.txt on app pause, focus loss, return to the
-// menu, run end, quit, and every few seconds out of combat. Compiled into
+// menu, run end, quit, and every few seconds out of combat. Round 4 (S1): frames
+// over a lower hitch threshold are counted per flush as well, and the first one
+// after each phase change gets its own record. Compiled into
 // every build (editor, dev, release), because only the release APK has
 // representative timing. Spikes are measured on real time, not deltaTime.
 [DefaultExecutionOrder(-1000)]
@@ -27,6 +29,8 @@ public class PerfSpikeLogger : MonoBehaviour
     [SerializeField] private bool logEnabled = true;
     [Tooltip("A frame whose real interval is longer than this (ms) is logged as a spike")]
     [SerializeField] private float spikeThresholdMs = 50f;
+    [Tooltip("A frame longer than this (ms) counts as a small hitch: counted per flush, the first one after each phase change is logged")]
+    [SerializeField] private float hitchThresholdMs = 25f;
     [Tooltip("Records kept between flushes; the oldest are overwritten (and counted) when full")]
     [SerializeField] private int bufferCapacity = 1024;
     [Tooltip("Seconds between flushes while out of combat (never flushes mid-fight)")]
@@ -43,6 +47,7 @@ public class PerfSpikeLogger : MonoBehaviour
     private static PerfSpikeLogger s_instance;
 
     private FrameSpikeDetector _detector;
+    private HitchCounter _hitches;
     private RingBuffer<PerfSample> _buffer;
     private StringBuilder _text;
     private readonly FrameTiming[] _timings = new FrameTiming[1];
@@ -79,6 +84,7 @@ public class PerfSpikeLogger : MonoBehaviour
     {
         s_instance = this;
         _detector = new FrameSpikeDetector(spikeThresholdMs);
+        _hitches = new HitchCounter(hitchThresholdMs);
         _buffer = new RingBuffer<PerfSample>(Mathf.Max(16, bufferCapacity));
         _text = new StringBuilder(256 * 160); // ~160 chars per line; grows on a big flush only
         _path = LogPath;
@@ -98,7 +104,9 @@ public class PerfSpikeLogger : MonoBehaviour
         double now = Time.realtimeSinceStartupAsDouble;
         FrameTimingManager.CaptureFrameTimings();
         _detector.ThresholdMs = spikeThresholdMs;
+        _hitches.ThresholdMs = hitchThresholdMs;
         bool spike = _detector.Step(now);
+        bool firstHitch = _hitches.Step(_detector.LastFrameMs);
 
         _frames++;
         if (_detector.LastFrameMs > _worstMs) _worstMs = _detector.LastFrameMs;
@@ -106,6 +114,10 @@ public class PerfSpikeLogger : MonoBehaviour
         {
             _spikes++;
             Record(PerfRecordKind.Spike, 0);
+        }
+        else if (firstHitch)
+        {
+            Record(PerfRecordKind.Hitch, 0);
         }
 
         PollTracking();
@@ -118,24 +130,24 @@ public class PerfSpikeLogger : MonoBehaviour
     private void OnApplicationFocus(bool hasFocus)
     {
         Record(hasFocus ? PerfRecordKind.FocusGained : PerfRecordKind.FocusLost, 0);
-        if (!hasFocus) Flush("focus lost");
+        if (!hasFocus) Flush("focus lost", forced: true);
     }
 
     private void OnApplicationPause(bool paused)
     {
         Record(paused ? PerfRecordKind.AppPaused : PerfRecordKind.AppResumed, 0);
-        if (paused) Flush("app pause");
+        if (paused) Flush("app pause", forced: true);
         else _detector.Reset(); // the suspended time is not a frame
     }
 
     private void OnApplicationQuit()
     {
-        Flush("quit");
+        Flush("quit", forced: true);
     }
 
     private void OnDisable()
     {
-        Flush("disabled");
+        Flush("disabled", forced: true);
     }
 
     private void PollTracking()
@@ -175,6 +187,7 @@ public class PerfSpikeLogger : MonoBehaviour
             if (m.Phase != _lastMatch)
             {
                 _lastMatch = m.Phase;
+                _hitches.PhaseChanged();
                 Record(PerfRecordKind.MatchPhase, 0);
                 if (m.Phase == MatchPhase.Menu) Flush("menu");
             }
@@ -184,6 +197,7 @@ public class PerfSpikeLogger : MonoBehaviour
         if (r != null && r.Phase != _lastRun)
         {
             _lastRun = r.Phase;
+            _hitches.PhaseChanged();
             Record(PerfRecordKind.RunPhase, 0);
             if (r.Phase == RunPhase.Victory || r.Phase == RunPhase.Defeat) Flush("run end");
         }
@@ -255,9 +269,11 @@ public class PerfSpikeLogger : MonoBehaviour
     private static float Timing(double ms) => ms > 0.0 ? (float)ms : -1f;
 
     // Allowed to allocate (string, file IO): it only runs at safe moments.
-    private void Flush(string reason)
+    // forced = pause, focus loss, quit: never waits for the GPU warmup.
+    private void Flush(string reason, bool forced = false)
     {
         if (!logEnabled || _buffer == null) return;
+        if (PerfFlushPolicy.WaitForWarmup(_headerWritten, RenderWarmup.IsRunning, forced)) return;
         _lastFlush = Time.realtimeSinceStartupAsDouble;
         if (_buffer.Count == 0 && _headerWritten) return;
 
@@ -271,22 +287,18 @@ public class PerfSpikeLogger : MonoBehaviour
             for (int i = 0; i < _buffer.Count; i++)
                 PerfLogFormatter.AppendLine(_text, _buffer[i], clockAtZero);
             int records = _buffer.Count;
-            _text.Append("--- flush (").Append(reason).Append(") records=").Append(records)
-                .Append(" dropped=").Append(_buffer.Dropped)
-                .Append(" frames=").Append(_frames)
-                .Append(" spikes=").Append(_spikes)
-                .Append(" worst=");
-            PerfLogFormatter.AppendFixed(_text, _worstMs, 1);
-            _text.Append("ms\n");
+            PerfLogFormatter.AppendFlushSummary(_text, reason, records, _buffer.Dropped, _frames, _spikes, _worstMs,
+                _hitches.Count, _hitches.WorstMs);
 
             File.AppendAllText(_path, _text.ToString());
             _headerWritten = true;
-            Debug.Log($"[PerfSpikeLogger] {reason}: {records} records, {_spikes} spikes, worst {_worstMs:F1} ms -> {_path}");
+            Debug.Log($"[PerfSpikeLogger] {reason}: {records} records, {_spikes} spikes, {_hitches.Count} hitches, worst {_worstMs:F1} ms -> {_path}");
 
             _buffer.Clear();
             _frames = 0;
             _spikes = 0;
             _worstMs = 0f;
+            _hitches.ResetCounts();
         }
         catch (Exception e)
         {
@@ -317,11 +329,18 @@ public class PerfSpikeLogger : MonoBehaviour
             .Append(" | refresh ").Append(refresh.ToString("F1")).Append(" Hz")
             .Append(" | unity ").Append(Application.unityVersion)
             .Append(" | spike > ").Append(spikeThresholdMs.ToString("F0")).Append(" ms")
+            .Append(" | hitch > ").Append(hitchThresholdMs.ToString("F0")).Append(" ms")
             .Append(" | frame timing ").Append(FrameTimingManager.IsFeatureEnabled() ? "on" : "off");
         // Startup cost of the synthesized sound bank (P11 budget: < 100 ms, < 2 MB).
         if (SfxPlayer.GenerationMs >= 0f)
             _text.Append(" | sfx ").Append(SfxPlayer.GenerationMs.ToString("F1")).Append(" ms ")
                 .Append((SfxPlayer.GeneratedBytes / 1024).ToString()).Append(" KB");
+        // GPU warmup at scene load (S1): real time over its frames, so it includes their normal frame time.
+        if (RenderWarmup.LastMs >= 0f)
+            _text.Append(" | warmup ").Append(RenderWarmup.LastMs.ToString("F1")).Append(" ms ")
+                .Append(RenderWarmup.LastFrames.ToString()).Append(" frames");
+        else if (RenderWarmup.IsRunning)
+            _text.Append(" | warmup pending");
         _text.Append('\n');
     }
 }

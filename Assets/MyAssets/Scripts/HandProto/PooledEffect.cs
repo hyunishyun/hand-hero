@@ -9,6 +9,9 @@ public abstract class PooledEffect : MonoBehaviour
 
     internal void SetOwner(BeamImpactPool owner) => _owner = owner;
 
+    // For an effect taken with BeamImpactPool.Borrow (the GPU warmup).
+    public void ReturnToPool() => Finish();
+
     protected void Finish()
     {
         if (_owner != null) _owner.Return(this);

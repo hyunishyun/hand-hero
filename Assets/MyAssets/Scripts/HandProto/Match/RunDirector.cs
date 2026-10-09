@@ -51,8 +51,9 @@ public class RunDirector : MonoBehaviour
     private float _spawnTimer;
     private int _nextSpawnPoint;
 
-    // Pooled bots (P6, SP-1/SP-4): prewarmed at run start, reused by Activate /
-    // Deactivate. A downed bot stays visible for corpseTime, then goes back.
+    // Pooled bots (P6, SP-1/SP-4): prewarmed at scene load (round 4, S1: run start
+    // used to hitch for 167 ms on device), reused by Activate / Deactivate. A
+    // downed bot stays visible for corpseTime, then goes back.
     private ObjectPool<RunBot> _botPool;
     private readonly List<RunBot> _corpses = new List<RunBot>();
     private readonly List<float> _corpseTimers = new List<float>();
@@ -102,6 +103,7 @@ public class RunDirector : MonoBehaviour
             _subscribedMatch = match.Match;
             _subscribedMatch.PhaseChanged += OnMatchPhaseChanged;
         }
+        PrewarmBots();
     }
 
     private void OnDestroy()
@@ -281,9 +283,10 @@ public class RunDirector : MonoBehaviour
         return true;
     }
 
-    // Scene load / run start only, never mid-fight: MaxAlive + 1 bots, the extra one
-    // covers a corpse still showing when the next bot spawns. The cap leaves room
-    // for corpses of a whole wave.
+    // Scene load (Start), never mid-fight: MaxAlive + 1 bots, the extra one covers
+    // a corpse still showing when the next bot spawns. The cap leaves room for
+    // corpses of a whole wave. Later calls (run start, spawn) find the pool warm
+    // and create nothing.
     private void PrewarmBots()
     {
         if (botPrefab == null || arena == null) return;
@@ -291,6 +294,21 @@ public class RunDirector : MonoBehaviour
         if (_botPool == null)
             _botPool = new ObjectPool<RunBot>(CreateBot, warm * 2, null, ReleaseBot);
         _botPool.Prewarm(warm);
+    }
+
+    // GPU warmup (S1): one pooled bot for RenderWarmup to draw at scene load,
+    // shown with RunBot.ShowForWarmup and handed back with ReturnWarmupBot. Null
+    // while a run is on or when the pool has none free.
+    public RunBot BorrowWarmupBot()
+    {
+        if (IsRunning) return null;
+        PrewarmBots();
+        return _botPool != null ? _botPool.Get() : null;
+    }
+
+    public void ReturnWarmupBot(RunBot bot)
+    {
+        if (_botPool != null) _botPool.Release(bot);
     }
 
     private RunBot CreateBot()

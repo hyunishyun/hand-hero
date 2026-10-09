@@ -78,6 +78,17 @@ public class DamageVignette : MonoBehaviour
         Show(_flash.Step(Time.unscaledDeltaTime, peakAlpha, duration));
     }
 
+    // GPU warmup (round 4, S1): draws the quad at an invisible alpha. Called after
+    // this LateUpdate (RenderWarmup runs late), which hides it again next frame
+    // unless the warmup calls once more; ShowWarmup(false) hides it for good.
+    public void ShowWarmup(bool on)
+    {
+        if (on && _flash.IsActive) return; // a real flash is showing
+        Show(on ? WarmupAlpha : 0f);
+    }
+
+    private const float WarmupAlpha = 1f / 255f;
+
     // Writes the renderer only when the alpha changes; hidden at 0 (no overdraw).
     private void Show(float alpha)
     {
