@@ -138,7 +138,7 @@ public class HandGestureTracker : MonoBehaviour
 
         if (report == _lastSubsystemReport) return;
         _lastSubsystemReport = report;
-        Debug.Log($"[HandGestureTracker] hand subsystems: {report}");
+        HHLog.Info($"[HandGestureTracker] hand subsystems: {report}");
     }
 
     private void UpdateHand(XRHand hand, ref HandState state, bool isLeft)

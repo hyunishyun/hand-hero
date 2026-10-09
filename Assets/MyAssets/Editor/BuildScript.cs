@@ -11,11 +11,13 @@ using UnityEngine.XR.OpenXR.Features;
 
 namespace HandHero.EditorTools
 {
-    // Quest APK build for the competition (hands only, no controllers needed).
+    // Quest APK builds for the competition (hands only, no controllers needed).
     // Batch mode (the editor must start on Android so no in-process target switch):
     //   Unity.exe -batchmode -quit -buildTarget Android -projectPath <A_4>
-    //     -executeMethod HandHero.EditorTools.BuildScript.BuildQuestApk
-    // Output: <MetaAwards>\Build\HandHero_<yyyyMMdd>.apk
+    //     -executeMethod HandHero.EditorTools.BuildScript.BuildQuestApkRelease (or BuildQuestApkDev)
+    // Output: <MetaAwards>\Build\HandHero_<yyyyMMdd_HHmm>_release.apk / _dev.apk, so the
+    // two never overwrite each other (round 3, D2). Compare perf numbers only
+    // within one build type: a dev build runs slower.
     public static class BuildScript
     {
         public const string ApplicationId = "com.hyun.handhero";
@@ -38,8 +40,20 @@ namespace HandHero.EditorTools
         // Every Android XR (non-Quest) feature is turned off for the Quest APK.
         private const string ConflictingNamespace = "UnityEngine.XR.OpenXR.Features.Android";
 
-        [MenuItem("HandHero/Build Quest APK")]
-        public static void BuildQuestApk()
+        // The representative build: no development overhead, Log / Warning
+        // without stack traces (Error, Assert, Exception keep theirs).
+        [MenuItem("HandHero/Build Quest APK (release)")]
+        public static void BuildQuestApkRelease() => BuildQuestApk(development: false);
+
+        // Development + script debugging; HHLog diagnostics compiled in. The
+        // profiler is attached by hand (Window > Analysis > Profiler), not auto-connected.
+        [MenuItem("HandHero/Build Quest APK (dev)")]
+        public static void BuildQuestApkDev() => BuildQuestApk(development: true);
+
+        // Old command name, kept so earlier scripts still work: the release build.
+        public static void BuildQuestApk() => BuildQuestApkRelease();
+
+        private static void BuildQuestApk(bool development)
         {
             if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
             {
@@ -55,7 +69,8 @@ namespace HandHero.EditorTools
 
             string buildDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "Build"));
             Directory.CreateDirectory(buildDir);
-            string apkPath = Path.Combine(buildDir, $"HandHero_{DateTime.Now:yyyyMMdd}.apk");
+            string suffix = development ? "dev" : "release";
+            string apkPath = Path.Combine(buildDir, $"HandHero_{DateTime.Now:yyyyMMdd_HHmm}_{suffix}.apk");
 
             var options = new BuildPlayerOptions
             {
@@ -63,10 +78,35 @@ namespace HandHero.EditorTools
                 locationPathName = apkPath,
                 target = BuildTarget.Android,
                 targetGroup = BuildTargetGroup.Android,
-                options = BuildOptions.None,
+                options = development ? BuildOptions.Development | BuildOptions.AllowDebugging : BuildOptions.None,
             };
 
-            BuildReport report = BuildPipeline.BuildPlayer(options);
+            // Stack trace types are one project-wide setting (the editor Console
+            // menu edits the same one), so the release build switches them only
+            // for its own duration and the project keeps ScriptOnly everywhere.
+            StackTraceLogType logTrace = PlayerSettings.GetStackTraceLogType(LogType.Log);
+            StackTraceLogType warningTrace = PlayerSettings.GetStackTraceLogType(LogType.Warning);
+            if (!development)
+            {
+                PlayerSettings.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+                PlayerSettings.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
+            }
+
+            Debug.Log($"[BuildScript] Building {suffix} APK -> {apkPath}");
+            BuildReport report;
+            try
+            {
+                report = BuildPipeline.BuildPlayer(options);
+            }
+            finally
+            {
+                if (!development)
+                {
+                    PlayerSettings.SetStackTraceLogType(LogType.Log, logTrace);
+                    PlayerSettings.SetStackTraceLogType(LogType.Warning, warningTrace);
+                    AssetDatabase.SaveAssets();
+                }
+            }
             BuildSummary summary = report.summary;
             if (summary.result != BuildResult.Succeeded)
             {
