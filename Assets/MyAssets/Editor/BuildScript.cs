@@ -50,10 +50,19 @@ namespace HandHero.EditorTools
         [MenuItem("HandHero/Build Quest APK (dev)")]
         public static void BuildQuestApkDev() => BuildQuestApk(development: true);
 
+        // Clean builds (BuildOptions.CleanBuildCache): Gradle's incremental packaging
+        // can append a new libil2cpp.so and keep the old copy inside the APK file
+        // (dev APK 207 MB for 126 MB of entries). A clean build drops the stale bytes.
+        [MenuItem("HandHero/Build Quest APK (dev, clean)")]
+        public static void BuildQuestApkDevClean() => BuildQuestApk(development: true, clean: true);
+
+        [MenuItem("HandHero/Build Quest APK (release, clean)")]
+        public static void BuildQuestApkReleaseClean() => BuildQuestApk(development: false, clean: true);
+
         // Old command name, kept so earlier scripts still work: the release build.
         public static void BuildQuestApk() => BuildQuestApkRelease();
 
-        private static void BuildQuestApk(bool development)
+        private static void BuildQuestApk(bool development, bool clean = false)
         {
             if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
             {
@@ -78,7 +87,8 @@ namespace HandHero.EditorTools
                 locationPathName = apkPath,
                 target = BuildTarget.Android,
                 targetGroup = BuildTargetGroup.Android,
-                options = development ? BuildOptions.Development | BuildOptions.AllowDebugging : BuildOptions.None,
+                options = (development ? BuildOptions.Development | BuildOptions.AllowDebugging : BuildOptions.None)
+                          | (clean ? BuildOptions.CleanBuildCache : BuildOptions.None),
             };
 
             // Stack trace types are one project-wide setting (the editor Console
@@ -92,7 +102,7 @@ namespace HandHero.EditorTools
                 PlayerSettings.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
             }
 
-            Debug.Log($"[BuildScript] Building {suffix} APK -> {apkPath}");
+            Debug.Log($"[BuildScript] Building {suffix}{(clean ? " (clean)" : "")} APK -> {apkPath}");
             BuildReport report;
             try
             {

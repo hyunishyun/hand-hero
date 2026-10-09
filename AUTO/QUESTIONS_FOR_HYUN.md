@@ -132,3 +132,9 @@
 - **질문:** "테이블 근처의 가장 큰 수평면"의 테이블은 어디인가?
 - **택한 답:** 지금 MR TABLE에서 가상 아레나 바닥 중심이 보이는 자리. 그 점에서 수평 1.0 m, 높이 0.5 m 안에 중심이 있는, 위를 보는 평면(또는 박스 윗면) 중 넓이가 가장 큰 것. 로그의 `dy`·`d`는 실제 테이블이 지금 아레나 바닥에서 얼마나 떨어져 있는지 알려 준다(다음 라운드의 "테이블에 맞추기" 기준).
 - **뒤집으려면:** 씬의 `RoomScanProbe` > Near Table Radius / Near Table Height Gap.
+
+## S9-1 개발 APK는 클린 빌드로 다시 만들었다(새 빌드 메서드 2개)
+- **질문:** 개발 APK가 또 커졌을 때(증분 빌드 207.6 MB, zip 항목 합은 126.4 MB) 어떻게 클린 빌드를 할까?
+- **택한 답:** `BuildScript`에 `BuildQuestApkDevClean`·`BuildQuestApkReleaseClean`(메뉴 HandHero > Build Quest APK (dev, clean) / (release, clean))을 더했다. `BuildOptions.CleanBuildCache`만 더 켜고 나머지는 같다. 개발 APK를 클린으로 다시 만들었더니 126.5 MB(파일 크기 = 항목 합)가 됐다. 릴리스는 증분 빌드로도 55.4 MB(항목 합과 같음)라 클린 없이 만들었다.
+- **이유:** `Library/` 안의 Gradle 출력을 손으로 지우는 것보다 Unity가 정한 방법이 안전하고, 다음에도 같은 명령으로 반복할 수 있다. 클린 빌드는 약 1분 더 걸린다(6.4분 vs 5.6분).
+- **뒤집으려면:** 두 메서드와 `clean` 매개변수를 지운다(`BuildScript.cs`). 커진 개발 APK `HandHero_20261009_1917_dev.apk`(207.6 MB)는 지우지 않고 `MetaAwards\Build\`에 남겨 두었다. 설치에는 문제없지만 `_1923_dev`를 쓰면 된다.
