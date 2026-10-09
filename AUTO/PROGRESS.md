@@ -6,7 +6,7 @@
 |---|---|---|
 | S1 첫 런 끊김 | DONE | `c119152`. 런 봇 풀을 씬 로드 때 미리 만들고, `RenderWarmup`이 로드 직후 3프레임 동안 봇·빔 3색·피격·처치 폭발·비네트·차지 구슬을 작게 그린다. 로거에 25 ms 작은 끊김 카운터(`HITCH`, `hitches=`, `worst_hitch=`)와 헤더의 warmup 시간. 테스트 469/469, 씬 재생성. **주의:** 3차 로그를 다시 보니 30초 Stale은 시스템 프로세스의 레이어와 겹친다(`QUESTIONS_FOR_HYUN.md` S1-2). |
 | S2 밸런스 | DONE | `aaee943`. Horde 45→30초, `BossHealthMult` 6→5, 새 `EnemyDamageMult` 1.15(Elite는 1.5×1.15). 옛 값을 고정하던 `IslandSpec_CountsAndEnemyScaling`을 D2에 맞게 고쳤다. 새 테스트 3개, 472/472. 씬이 `RunParams`를 직렬화하므로 씬도 다시 만들었다. `run_summary.py`는 이미 10분 제한 대비 시간을 출력한다(변경 없음). 시간 추정은 아래. |
-| S3 남은 Minor 4건 | TODO | |
+| S3 남은 Minor 4건 | DONE | `d7d363b`. 조준 손의 시스템 제스처가 켜지면 차지를 쏘지 않고 취소한다(ASSIST·CURSOR, 게이트→핀치→규칙→차지 연결 테스트로 버그 재현 후 수정). 로거의 머리 장치 조회 0.25초 + 캐시. 핀치 기록은 런 중에만(`QUESTIONS_FOR_HYUN.md` S3-1). 봇은 Core `SeededRandom` 하나를 스폰마다 다시 시드한다(시드별 난수열은 바뀜, 고정한 테스트 없음). 새 테스트 10개, 482/482. 직렬화 필드 변화 없음 → 씬 재생성 불필요. |
 | S4 메타 진행 Core | TODO | |
 | S5 메타 진행 연결 | TODO | |
 | S6 적 다양성 1단계(생김새·공격) | TODO | |
