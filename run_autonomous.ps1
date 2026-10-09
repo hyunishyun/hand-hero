@@ -61,7 +61,7 @@ Finish at most 2 tasks in this session, update and commit PROGRESS.md, then exit
 Write logs and reports in Korean as the plan says; code comments in English.
 "@
 
-$limitPattern   = '(usage limit|limit reached|limit will reset|resets? at|rate.?limit|429|overloaded)'
+$limitPattern   = '(usage limit|limit reached|hit your [a-z ]*limit|limit will reset|resets? at|resets? \d|rate.?limit|429|overloaded)'
 $consecutiveFast = 0
 $iteration       = 0
 
