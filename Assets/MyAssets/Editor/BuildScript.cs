@@ -113,7 +113,9 @@ namespace HandHero.EditorTools
                 Fail($"Build {summary.result}: {summary.totalErrors} errors. See the log above.");
                 return;
             }
-            Debug.Log($"[BuildScript] BUILD OK {apkPath} ({summary.totalSize / (1024f * 1024f):F1} MB, " +
+            // summary.totalSize is not the APK size (it reported 2 GB for a 207 MB APK).
+            long apkBytes = File.Exists(apkPath) ? new FileInfo(apkPath).Length : 0;
+            Debug.Log($"[BuildScript] BUILD OK {apkPath} ({apkBytes / (1024f * 1024f):F1} MB, " +
                       $"{summary.totalTime.TotalMinutes:F1} min)");
         }
 

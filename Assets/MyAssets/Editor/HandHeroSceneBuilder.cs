@@ -284,8 +284,8 @@ namespace HandHero.EditorTools
             var burstPool = new GameObject("KillBurstPool").AddComponent<BeamImpactPool>();
             SetRefs(burstPool, ("prefab", killBurstPrefab));
             var burstSo = new SerializedObject(burstPool);
-            burstSo.FindProperty("prewarmCount").intValue = 4;
-            burstSo.FindProperty("maxCount").intValue = 8;
+            Prop(burstSo, "prewarmCount").intValue = 4;
+            Prop(burstSo, "maxCount").intValue = 8;
             burstSo.ApplyModifiedPropertiesWithoutUndo();
 
             GameObject vignetteQuad = Primitive(PrimitiveType.Quad, "DamageVignette", camGo.transform,
@@ -329,7 +329,7 @@ namespace HandHero.EditorTools
             SetRefs(pointer, ("tracker", tracker), ("viewCamera", cam), ("ray", pointerRay));
             // The menu ray tests only the button colliders (built-in UI layer, GM-12).
             var pointerSo = new SerializedObject(pointer);
-            pointerSo.FindProperty("buttonLayers").intValue = 1 << MenuButtonLayer;
+            Prop(pointerSo, "buttonLayers").intValue = 1 << MenuButtonLayer;
             pointerSo.ApplyModifiedPropertiesWithoutUndo();
 
             // Panels sit 2.5 m ahead, about 11 degrees below eye level, under the banner.
@@ -441,7 +441,7 @@ namespace HandHero.EditorTools
                 ("telegraph", practiceBeam), ("prompt", tutorialPrompt), ("ghostHand", ghost.transform),
                 ("playerAim", pointing), ("aimModeSetting", aimMode));
             var tutorialSo = new SerializedObject(tutorial);
-            tutorialSo.FindProperty("ringRadius").floatValue = ringRadius;
+            Prop(tutorialSo, "ringRadius").floatValue = ringRadius;
             tutorialSo.ApplyModifiedPropertiesWithoutUndo();
 
             if (xr) ViewModeSwitch(cam, director, arena.transform, viewButton);
@@ -504,8 +504,8 @@ namespace HandHero.EditorTools
             Transform backWall = arena.Find("BackWall");
             if (backWall != null) SetArray(viewMode, "arenaOnly", backWall.gameObject);
             var so = new SerializedObject(viewMode);
-            so.FindProperty("eyeHeight").floatValue = SeatEyeHeight;
-            so.FindProperty("arenaWidth").floatValue = ArenaSize.x;
+            Prop(so, "eyeHeight").floatValue = SeatEyeHeight;
+            Prop(so, "arenaWidth").floatValue = ArenaSize.x;
             so.ApplyModifiedPropertiesWithoutUndo();
             SetRefs(director, ("viewMode", viewMode));
         }
@@ -585,7 +585,7 @@ namespace HandHero.EditorTools
             HandMenuButton button = Button(panel, $"Button_{text}", text, x, y, MenuButtonSize, mat);
             SetRefs(button, ("director", director));
             var so = new SerializedObject(button);
-            so.FindProperty("action").enumValueIndex = (int)action;
+            Prop(so, "action").enumValueIndex = (int)action;
             so.ApplyModifiedPropertiesWithoutUndo();
             return button;
         }
@@ -713,10 +713,10 @@ namespace HandHero.EditorTools
             SetRefs(botPointing, ("character", botHero), ("beam", botBeam), ("inputSource", botInput),
                 ("hitEffectPrefab", impactPrefab), ("audioSource", botHero.GetComponent<AudioSource>()));
             var beamSo = new SerializedObject(botPointing);
-            beamSo.FindProperty("beamColor").colorValue = new Color(1f, 0.25f, 0.2f);
+            Prop(beamSo, "beamColor").colorValue = new Color(1f, 0.25f, 0.2f);
             // No assist for the bot: a snap at fire time would retarget the player's
             // current position and void the telegraph dodge (spec D10).
-            beamSo.FindProperty("assistAngle").floatValue = 0f;
+            Prop(beamSo, "assistAngle").floatValue = 0f;
             beamSo.ApplyModifiedPropertiesWithoutUndo();
             SetRefs(botInput, ("self", botHero), ("puppeteer", botPuppeteer), ("enemy", enemy),
                 ("hitReceiver", botHero.GetComponent<BeamHitReceiver>()), ("difficulty", difficulty));
@@ -854,15 +854,24 @@ namespace HandHero.EditorTools
             rt.localPosition = localPosition;
         }
 
+        // A renamed or removed serialized field must fail BuildAll; logging and carrying
+        // on produced scenes with silently missing wiring.
+        private static SerializedProperty Prop(SerializedObject so, string field)
+        {
+            SerializedProperty prop = so.FindProperty(field);
+            if (prop == null)
+                throw new System.InvalidOperationException(
+                    $"[HandHeroSceneBuilder] {so.targetObject.GetType().Name} has no field '{field}'");
+            return prop;
+        }
+
         private static void SetArray(Object target, string field, params Object[] values)
         {
             var so = new SerializedObject(target);
-            SerializedProperty prop = so.FindProperty(field);
-            if (prop == null || !prop.isArray)
-            {
-                Debug.LogError($"[HandHeroSceneBuilder] {target.GetType().Name} has no array field '{field}'");
-                return;
-            }
+            SerializedProperty prop = Prop(so, field);
+            if (!prop.isArray)
+                throw new System.InvalidOperationException(
+                    $"[HandHeroSceneBuilder] {target.GetType().Name} has no array field '{field}'");
             prop.arraySize = values.Length;
             for (int i = 0; i < values.Length; i++)
                 prop.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
@@ -872,13 +881,7 @@ namespace HandHero.EditorTools
         private static void SetEnum(Object target, string field, int value)
         {
             var so = new SerializedObject(target);
-            SerializedProperty prop = so.FindProperty(field);
-            if (prop == null)
-            {
-                Debug.LogError($"[HandHeroSceneBuilder] {target.GetType().Name} has no field '{field}'");
-                return;
-            }
-            prop.enumValueIndex = value;
+            Prop(so, field).enumValueIndex = value;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -886,15 +889,7 @@ namespace HandHero.EditorTools
         {
             var so = new SerializedObject(target);
             foreach (var (field, value) in refs)
-            {
-                SerializedProperty prop = so.FindProperty(field);
-                if (prop == null)
-                {
-                    Debug.LogError($"[HandHeroSceneBuilder] {target.GetType().Name} has no field '{field}'");
-                    continue;
-                }
-                prop.objectReferenceValue = value;
-            }
+                Prop(so, field).objectReferenceValue = value;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
