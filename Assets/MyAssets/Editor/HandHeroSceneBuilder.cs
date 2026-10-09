@@ -254,6 +254,10 @@ namespace HandHero.EditorTools
             SetArray(runDirector, "botSpawnPoints", runSpawns);
             SetArray(runDirector, "hideDuringRun", botFlying.gameObject, botMarker);
 
+            // Freeze hunt (P1): frame spikes and tracking / focus / phase edges -> perf_log.txt.
+            var perfLogger = match.AddComponent<PerfSpikeLogger>();
+            SetRefs(perfLogger, ("match", director), ("run", runDirector), ("tracker", tracker));
+
             // Seat-space UI (HUD, menus, wrist button, tutorial prompt) lives under the
             // Camera Offset, so the T10 tabletop scale keeps it at the same apparent
             // size and spot. World-fixed, never head-locked.

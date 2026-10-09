@@ -89,6 +89,20 @@ namespace HandHero.EditorTools
             if (PlayerSettings.Android.minSdkVersion < AndroidSdkVersions.AndroidApiLevel32)
                 PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel32;
             EditorUserBuildSettings.buildAppBundle = false;
+            ApplyDiagnosticsSettings();
+        }
+
+        // Freeze hunt (round 3, P1): PerfSpikeLogger needs Frame Timing Stats to
+        // split CPU from GPU time in the release APK. Batch mode:
+        //   -executeMethod HandHero.EditorTools.BuildScript.ApplyDiagnosticsSettings
+        [MenuItem("HandHero/Apply Diagnostics Settings")]
+        public static void ApplyDiagnosticsSettings()
+        {
+            if (!PlayerSettings.enableFrameTimingStats)
+            {
+                PlayerSettings.enableFrameTimingStats = true;
+                Debug.Log("[BuildScript] PlayerSettings.enableFrameTimingStats -> true");
+            }
             AssetDatabase.SaveAssets();
         }
 
