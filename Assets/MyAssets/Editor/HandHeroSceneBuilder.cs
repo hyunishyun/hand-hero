@@ -473,7 +473,7 @@ namespace HandHero.EditorTools
             Prop(tutorialSo, "ringRadius").floatValue = ringRadius;
             tutorialSo.ApplyModifiedPropertiesWithoutUndo();
 
-            if (xr) ViewModeSwitch(cam, director, arena.transform, viewButton);
+            if (xr) ViewModeSwitch(cam, director, arena.transform, viewButton, beamMat);
 
             EditorSceneManager.SaveScene(scene, scenePath);
             AssetDatabase.SaveAssets();
@@ -516,7 +516,7 @@ namespace HandHero.EditorTools
         // AR Session + AR Camera Manager (Meta OpenXR passthrough) stay disabled
         // until the tabletop mode turns them on.
         private static void ViewModeSwitch(Camera cam, MatchDirector director, Transform arena,
-            HandMenuButton viewButton)
+            HandMenuButton viewButton, Material wireMat)
         {
             var sessionGo = new GameObject("AR Session");
             var session = sessionGo.AddComponent<ARSession>();
@@ -537,6 +537,22 @@ namespace HandHero.EditorTools
             Prop(so, "arenaWidth").floatValue = ArenaSize.x;
             so.ApplyModifiedPropertiesWithoutUndo();
             SetRefs(director, ("viewMode", viewMode));
+
+            // Round 4 (S8, D9): MR room-scan spike. The plane and bounding box managers
+            // must sit on the XR Origin; both start disabled and only RoomScanProbe turns
+            // them on (MR TABLE, main menu, scene permission granted, subsystem present).
+            XROrigin xrOrigin = cam.GetComponentInParent<XROrigin>();
+            var planeManager = xrOrigin.gameObject.AddComponent<ARPlaneManager>();
+            planeManager.enabled = false;
+            var boxManager = xrOrigin.gameObject.AddComponent<ARBoundingBoxManager>();
+            boxManager.enabled = false;
+            var probe = director.gameObject.AddComponent<RoomScanProbe>();
+            SetRefs(probe, ("viewMode", viewMode), ("match", director), ("origin", xrOrigin),
+                ("planeManager", planeManager), ("boxManager", boxManager), ("arena", arena),
+                ("wireframeMaterial", wireMat));
+            var probeSo = new SerializedObject(probe);
+            Prop(probeSo, "arenaFloorLocalY").floatValue = -ArenaSize.y * 0.5f;
+            probeSo.ApplyModifiedPropertiesWithoutUndo();
         }
 
         // Greybox hero: collider + BeamHitReceiver + HeroHealth on the root (beams

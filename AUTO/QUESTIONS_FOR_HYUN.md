@@ -105,3 +105,30 @@
 - **질문:** 섬 배치 시드의 "런 시드"로 무엇을 쓸까?
 - **택한 답:** 런 기록의 `seed`(`_rngSeed`)는 씬 로드 때 한 번만 정해져서 같은 세션의 런이 모두 같은 값이다. 그대로 쓰면 런마다 섬 배치가 똑같다. 그래서 런 시작 때 별도 값(`seed`가 0이면 TickCount, 아니면 `seed*53+29`)을 뽑고, 섬마다 `ArenaLayout.IslandSeed(그 값, 섬 번호)`를 쓴다. 상자·포털·상점·봇 스폰 난수열은 하나도 더 쓰지 않는다(예전과 같은 흐름). 재현은 `run_log.jsonl`의 섬별 `layout_seed`로 한다(배치가 적용된 섬에만 기록, 대체 배치면 기록 없음).
 - **뒤집으려면:** `RunDirector.BeginRun`의 `_layoutRunSeed` 한 줄.
+
+## S8-1 방 스캔은 평면 + 바운딩 박스만, 메시는 끔
+- **질문:** Meta OpenXR의 Planes, Bounding Boxes, Meshing 중 무엇을 켤까?
+- **택한 답:** Android에서 `Meta Quest: Planes`와 `Meta Quest: Bounding Boxes`만 켰다(에디터 스크립트 `RoomScanXRSettings.Apply`, `OpenXRPackageSettings.asset`의 `m_enabled` 두 줄). Meshing은 끈 채로 둔다.
+- **이유:** 계획은 메시를 "싸면" 넣으라고 했다. `ARMeshManager`는 XR Origin 자식 + 메시 프리팹 + 렌더링이 필요하고, 방 모양 그대로의 데이터라 개인정보 면에서도 무겁다. 테이블 위 지형 1단계에는 테이블 평면과 가구 박스로 충분하다.
+- **뒤집으려면:** 두 기능을 끄려면 Project Settings > XR Plug-in Management > OpenXR(Android 탭)에서 체크를 해제하거나 그 두 줄을 0으로. 씬의 `Match` > `RoomScanProbe`의 Probe Enabled를 끄면 권한도 묻지 않는다.
+
+## S8-2 프로브는 MR TABLE + 메인 메뉴에서만
+- **질문:** MR TABLE에서 매치·런을 하는 동안에도 평면·박스 매니저를 켜 둘까?
+- **택한 답:** 메인 메뉴에 있을 때만 켠다. 매치(퀵 매치·튜토리얼·RUN)가 시작되면 멈추고 요약을 한 번 남긴다. 메뉴로 돌아오면 다시 켠다(권한은 다시 묻지 않음). 첫 결과 시간은 처음 켠 때만 잰다.
+- **이유:** Meta는 실시간 스캔이 아니라 공간 설정 데이터를 돌려주므로 메뉴에서 몇 초면 다 나온다. 게임 중에는 프레임에 영향이 0이어야 한다(계획: VR·퀵 매치·RUN을 절대 깨뜨리지 않기).
+- **뒤집으려면:** `RoomScanProbe.InMenu()`가 항상 true를 돌려주게 한다.
+
+## S8-3 권한은 세션당 한 번, 거부하면 다시 묻지 않음
+- **질문:** `com.oculus.permission.USE_SCENE`을 언제, 몇 번 물을까?
+- **택한 답:** MR TABLE을 처음 켰을 때 한 번만. 거부하면 그 실행 동안 다시 묻지 않고 매니저를 켜지 않는다(MR TABLE은 지금과 같음). 앱을 다시 켜면 MR TABLE에서 다시 한 번 묻는다(Android가 "다시 묻지 않음"을 기억하면 대화상자 없이 바로 거부로 온다).
+- **뒤집으려면:** Core `RoomScanFlow`의 `PermissionState.Denied` 처리.
+
+## S8-4 perf_log에 짧은 메모를 붙이는 방식
+- **질문:** `PerfSpikeLogger.Mark`는 숫자 하나(detail)만 받는다. 분류·크기 요약은 어떻게 남길까?
+- **택한 답:** `PerfRecordKind.RoomScan`을 새로 만들고 `Mark(kind, detail, note)` 오버로드를 더했다. `PerfSample`에 `Note` 문자열 칸이 생겼고, 줄 끝에 ` | <메모>`로 쓴다. 프레임 기록은 메모가 null이라 할당이 없다(기존 무할당 테스트 그대로 통과).
+- **뒤집으려면:** `PerfSample.Note`와 오버로드를 지우고 `RoomScanProbe.Report`가 Unity 로그에만 쓰게 한다.
+
+## S8-5 "테이블 근처" 기준
+- **질문:** "테이블 근처의 가장 큰 수평면"의 테이블은 어디인가?
+- **택한 답:** 지금 MR TABLE에서 가상 아레나 바닥 중심이 보이는 자리. 그 점에서 수평 1.0 m, 높이 0.5 m 안에 중심이 있는, 위를 보는 평면(또는 박스 윗면) 중 넓이가 가장 큰 것. 로그의 `dy`·`d`는 실제 테이블이 지금 아레나 바닥에서 얼마나 떨어져 있는지 알려 준다(다음 라운드의 "테이블에 맞추기" 기준).
+- **뒤집으려면:** 씬의 `RoomScanProbe` > Near Table Radius / Near Table Height Gap.

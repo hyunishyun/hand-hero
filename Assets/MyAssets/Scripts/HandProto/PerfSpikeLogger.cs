@@ -81,6 +81,13 @@ public class PerfSpikeLogger : MonoBehaviour
         if (s_instance != null) s_instance.Record(kind, detail);
     }
 
+    // The same with a short text note at the end of the line (round 4, S8: the room-scan
+    // spike). Only for rare events outside combat: the caller allocates the string.
+    public static void Mark(PerfRecordKind kind, int detail, string note)
+    {
+        if (s_instance != null) s_instance.Record(kind, detail, note);
+    }
+
     public static string LogPath => Path.Combine(Application.persistentDataPath, FileName);
 
     private void Awake()
@@ -229,7 +236,7 @@ public class PerfSpikeLogger : MonoBehaviour
         return PerfFlushPolicy.InCombat(m.Phase, r != null ? r.Phase : RunPhase.Idle, m.IsPaused);
     }
 
-    private void Record(PerfRecordKind kind, int detail)
+    private void Record(PerfRecordKind kind, int detail, string note = null)
     {
         if (!logEnabled || _buffer == null) return;
 
@@ -250,6 +257,7 @@ public class PerfSpikeLogger : MonoBehaviour
             LeftTracked = _leftTracked,
             RightTracked = _rightTracked,
             HeadTracked = _headTracked,
+            Note = note,
         };
         _lastGcCount = gc;
 

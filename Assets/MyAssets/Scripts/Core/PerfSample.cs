@@ -23,6 +23,7 @@ namespace HandHero.Core
         SystemGestureStart, // Detail: hand
         SystemGestureEnd,
         Hitch,            // the first frame over the hitch threshold after a phase change (round 4)
+        RoomScan,         // MR room-scan spike (round 4, S8). Detail: RoomScanEvent; Note: counts / sizes
     }
 
     // One perf log record: what happened plus a snapshot of the game and
@@ -49,6 +50,7 @@ namespace HandHero.Core
         public bool LeftTracked;
         public bool RightTracked;
         public bool HeadTracked;
+        public string Note;      // optional text at the end of the line (null for frame records)
     }
 
     // Writes one PerfSample per line into a reused StringBuilder without
@@ -71,6 +73,8 @@ namespace HandHero.Core
             AppendFixed(sb, s.Time, 3);
             sb.Append(' ').Append(KindName(s.Kind));
             if (HasHand(s.Kind)) sb.Append(" hand=").Append(s.Detail == 0 ? 'L' : 'R');
+            if (s.Kind == PerfRecordKind.RoomScan)
+                sb.Append(" scan=").Append(RoomScanSummary.EventName((RoomScanEvent)s.Detail));
 
             sb.Append(" frame=");
             AppendFixed(sb, s.FrameMs, 1);
@@ -97,6 +101,7 @@ namespace HandHero.Core
             sb.Append(" L=").Append(s.LeftTracked ? '1' : '0');
             sb.Append(" R=").Append(s.RightTracked ? '1' : '0');
             sb.Append(" head=").Append(s.HeadTracked ? '1' : '0');
+            if (s.Note != null) sb.Append(" | ").Append(s.Note);
             sb.Append('\n');
         }
 
@@ -122,6 +127,7 @@ namespace HandHero.Core
                 case PerfRecordKind.SystemGestureStart: return "SYSGESTURE_START";
                 case PerfRecordKind.SystemGestureEnd: return "SYSGESTURE_END";
                 case PerfRecordKind.Hitch: return "HITCH";
+                case PerfRecordKind.RoomScan: return "ROOM_SCAN";
                 default: return "?";
             }
         }
