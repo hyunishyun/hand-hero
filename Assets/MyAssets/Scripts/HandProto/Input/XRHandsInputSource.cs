@@ -28,8 +28,8 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     [Header("Firing (pinch) thresholds with hysteresis")]
     [Tooltip("Pinch strength above this fires once")]
     [SerializeField] private float pinchFireThreshold = 0.8f;
-    [Tooltip("Pinch strength below this re-arms the next shot")]
-    [SerializeField] private float pinchResetThreshold = 0.5f;
+    [Tooltip("Pinch strength below this re-arms the next shot and ends a charge hold. 0.6 (was 0.5): the smoothed strength reaches it sooner, so a quick shot reads as released sooner (D13)")]
+    [SerializeField] private float pinchResetThreshold = 0.6f;
 
     [Header("CURSOR trigger (index finger) with hysteresis")]
     [Tooltip("Index curl above this pulls the trigger (fires once, holding charges)")]

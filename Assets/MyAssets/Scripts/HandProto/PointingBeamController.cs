@@ -101,6 +101,7 @@ public class PointingBeamController : MonoBehaviour
     private float _beamTimer;
     private float _damageScale = 1f;
     private readonly ChargeShotModel _charge = new ChargeShotModel();
+    private readonly PinchHoldStats _pinchHolds = new PinchHoldStats();
 
     // Assist candidates, rebuilt each frame. The current pick is remembered as the
     // target object, not an index, so list changes never jump the lock elsewhere.
@@ -120,6 +121,8 @@ public class PointingBeamController : MonoBehaviour
     public Vector3 AimPoint => _aimPoint;
     public AimAssistTarget AssistTarget => _assistTarget;
     public AimMode Mode => aimModeSetting != null ? aimModeSetting.Mode : AimMode.Assist;
+    // Every finished pinch / trigger hold: duration and whether it charged (D13, for run telemetry).
+    public PinchHoldStats PinchHolds => _pinchHolds;
 
     // Cursor back to the arena center, assist lock dropped.
     public void ResetAim()
@@ -226,6 +229,7 @@ public class PointingBeamController : MonoBehaviour
         ChargeStep step = default;
         if (action == ChargeInputAction.Cancel) _charge.Cancel();
         else step = _charge.Step(action == ChargeInputAction.Hold, Time.deltaTime, CombatMath.Charge(charge, stats));
+        _pinchHolds.Add(step);
 
         UpdateChargeIndicator(step);
         character.SetChargeSpeedMultiplier(step.Charging ? chargeMoveSpeedMultiplier : 1f);

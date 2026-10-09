@@ -190,7 +190,15 @@ namespace HandHero.Tests
 
     public class ChargeShotModelTests
     {
-        private static readonly ChargeParams P = ChargeParams.Default;
+        // The charge curve itself, without the D13 hold delay (ChargeHoldDelayTests covers it).
+        private static readonly ChargeParams P = NoDelay();
+
+        private static ChargeParams NoDelay()
+        {
+            ChargeParams p = ChargeParams.Default;
+            p.HoldDelay = 0f;
+            return p;
+        }
 
         private static ChargeStep Hold(ChargeShotModel m, float seconds, float dt = 0.05f)
         {

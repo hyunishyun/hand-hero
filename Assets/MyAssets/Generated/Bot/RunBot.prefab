@@ -958,6 +958,7 @@ MonoBehaviour:
   damage: 20
   chargeMoveSpeedMultiplier: 0.6
   charge:
+    HoldDelay: 0.25
     MinChargeTime: 0.3
     MaxChargeTime: 1.5
   chargeMinDamage: 30
