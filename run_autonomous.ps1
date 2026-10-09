@@ -96,6 +96,20 @@ while ((Get-Date) -lt $deadline) {
         if ($text -match 'limit reached\|(\d{10})') {
             $waitUntil = [DateTimeOffset]::FromUnixTimeSeconds([int64]$Matches[1]).LocalDateTime.AddMinutes(1)
         }
+        # Newer versions print a clock time, e.g. "resets 3pm" / "reset at 3:30 PM (America/New_York)".
+        # The time zone is ignored (this PC's local zone is assumed); a past time means tomorrow.
+        # Capped at 5 h 15 min so a misread never parks the runner for a day.
+        elseif ($text -match 'resets?(?:\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*([ap]m)') {
+            $hour = [int]$Matches[1] % 12
+            if ($Matches[3] -ieq 'pm') { $hour += 12 }
+            $minute = 0
+            if ($Matches[2]) { $minute = [int]$Matches[2] }
+            $reset = (Get-Date).Date.AddHours($hour).AddMinutes($minute)
+            if ($reset -le (Get-Date)) { $reset = $reset.AddDays(1) }
+            $cap = (Get-Date).AddMinutes(315)
+            if ($reset -gt $cap) { $reset = $cap }
+            $waitUntil = $reset.AddMinutes(2)
+        }
         if ($waitUntil -and $waitUntil -gt (Get-Date)) {
             Log "Limit hit. Sleeping until $waitUntil"
             while ((Get-Date) -lt $waitUntil -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 60 }
