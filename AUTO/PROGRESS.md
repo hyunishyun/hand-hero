@@ -4,8 +4,8 @@
 
 | 태스크 | 상태 | 메모 |
 |---|---|---|
-| P1 PerfSpikeLogger | TODO | |
-| P2 빌드 2종·로그 정리 | TODO | |
+| P1 PerfSpikeLogger | DONE | `51a5866`. Core에 `FrameSpikeDetector`(실제 시간 간격)·`TrackedEdge`·`PerfFlushPolicy`·`RingBuffer<T>`·`PerfSample`·할당 없는 `PerfLogFormatter` + 테스트 19개(340/340). `PerfSpikeLogger`를 두 씬의 `Match`에 붙임(배선 오류 0). 손·머리 추적, 착용 감지, 포커스, 앱 일시정지, 매치/런 단계, 게임 일시정지 엣지 기록. 튜토리얼도 전투로 보고 그동안은 파일에 안 씀. 시스템 제스처는 `PerfSpikeLogger.Mark`로 P9에서 연결. CR-2, CR-3(코드 부분), RS-1, RS-15 해결. |
+| P2 빌드 2종·로그 정리 | IN_PROGRESS | |
 | P3 매 프레임 낭비 제거 | TODO | |
 | P4 머티리얼·렌더러 캐시 | TODO | |
 | P5 풀 코어 + BeamImpact 풀 | TODO | |
@@ -24,6 +24,8 @@
 ## 바꾼 ProjectSettings
 
 (태스크가 바꿀 때마다 키·이전 값·새 값을 적는다.)
+
+- P1: `ProjectSettings.asset` `enableFrameTimingStats` 0 → 1 (`BuildScript.ApplyDiagnosticsSettings`, `ConfigurePlayer`에서도 호출).
 
 ## 세션 로그
 
