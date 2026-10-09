@@ -23,6 +23,8 @@ public class RunDirector : MonoBehaviour
     [SerializeField] private Transform[] botSpawnPoints;
     [Tooltip("Hidden while a run is on: the Quick Match bot hero and its ground marker")]
     [SerializeField] private GameObject[] hideDuringRun;
+    [Tooltip("Optional (round 4, S7): seeded pillar and spawn point positions per island; today's layout outside runs")]
+    [SerializeField] private ArenaLayoutApplier layout;
 
     [Header("Rules")]
     [SerializeField] private RunParams rules = RunParams.Default;
@@ -67,6 +69,9 @@ public class RunDirector : MonoBehaviour
     // Run telemetry (P13, D16).
     private readonly RunRecorder _recorder = new RunRecorder();
     private int _rngSeed;
+    // Per-run base of the island layout seeds (S7): its own value, so the chest /
+    // portal / shop and bot spawn streams draw exactly what they drew before.
+    private int _layoutRunSeed;
 
     // Meta progression A (round 4, S5 / D4): unlocked starting relics and the
     // personal bests, saved once per run end together with the run log.
@@ -169,6 +174,8 @@ public class RunDirector : MonoBehaviour
     {
         _run.Params = rules;
         _lastMetaChanges = default;
+        // Before StartRun: island 1's intro may come straight away and applies a layout.
+        _layoutRunSeed = seed != 0 ? unchecked(seed * 53 + 29) : System.Environment.TickCount;
         // Before StartRun: it enters island 1's intro, which the recorder logs.
         BeginRecord();
         // Unlocked relics open the STARTING RELIC chest first (S5).
@@ -444,6 +451,7 @@ public class RunDirector : MonoBehaviour
                 // Fresh island: the player back at the spawn point, health carried over.
                 DespawnBots();
                 _spawnTimer = 0f;
+                ApplyIslandLayout();
                 if (playerHealth != null) playerHealth.ReturnToSpawn();
                 break;
 
@@ -471,6 +479,15 @@ public class RunDirector : MonoBehaviour
                 FinishRecord(phase == RunPhase.Victory ? RunResult.Victory : RunResult.Defeat);
                 break;
         }
+    }
+
+    // During the countdown, before any bot spawns (S7): a new seeded layout per island.
+    private void ApplyIslandLayout()
+    {
+        if (layout == null) return;
+        int layoutSeed = ArenaLayout.IslandSeed(_layoutRunSeed, _run.Island);
+        if (layout.Apply(layoutSeed)) _recorder.IslandLayout(layoutSeed);
+        _nextSpawnPoint = 0;
     }
 
     private void BeginRecord()
@@ -514,6 +531,8 @@ public class RunDirector : MonoBehaviour
         _run.ReturnToMenu();
         DespawnBots();
         if (playerStats != null) playerStats.Unbind();
+        // Quick Match and the tutorial keep today's layout.
+        if (layout != null) layout.RestoreDefaults();
         if (playerHealth != null)
         {
             playerHealth.SetAutoRespawn(true);

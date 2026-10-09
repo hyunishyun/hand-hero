@@ -17,6 +17,9 @@ namespace HandHero.Core
         public float FightSeconds;
         public float DamageTaken;
         public int Deaths;
+        // Seeded arena layout of this island (round 4, S7); written only when one was applied.
+        public bool HasLayoutSeed;
+        public int LayoutSeed;
     }
 
     public struct ItemPick
@@ -129,6 +132,14 @@ namespace HandHero.Core
             _island = new IslandRecord { Number = number, Type = type };
             _record.Islands.Add(_island);
             _fightStart = -1f;
+        }
+
+        // The current island's arena layout seed (S7); ignored before the first island.
+        public void IslandLayout(int seed)
+        {
+            if (_island == null) return;
+            _island.HasLayoutSeed = true;
+            _island.LayoutSeed = seed;
         }
 
         // Times are run seconds (RunStateMachine.RunTime).
@@ -266,6 +277,7 @@ namespace HandHero.Core
                 Num(sb, "fight_s", island.FightSeconds);
                 Num(sb, "damage", island.DamageTaken);
                 Int(sb, "deaths", island.Deaths);
+                if (island.HasLayoutSeed) Int(sb, "layout_seed", island.LayoutSeed);
                 sb.Append('}');
             }
             sb.Append(']');

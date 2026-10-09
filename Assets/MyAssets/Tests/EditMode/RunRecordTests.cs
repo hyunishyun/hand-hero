@@ -315,5 +315,36 @@ namespace HandHero.Tests
             StringAssert.Contains("\"kills_by\":{}", json);
             StringAssert.Contains("\"damage_by\":{}", json);
         }
+
+        // Round 4 (S7): the seeded arena layout of every island, written only when one was applied.
+        [Test]
+        public void LayoutSeed_PerIsland_InTheJson()
+        {
+            RunRecorder rec = Begun();
+            rec.IslandStarted(1, IslandType.Arena);
+            rec.IslandLayout(-12345);
+            rec.IslandStarted(2, IslandType.Horde);
+            rec.IslandLayout(777);
+            rec.IslandStarted(3, IslandType.Arena); // no layout applied
+            RunRecord r = Finish(rec, RunResult.Quit, 9f);
+
+            Assert.IsTrue(r.Islands[0].HasLayoutSeed);
+            Assert.AreEqual(-12345, r.Islands[0].LayoutSeed);
+            Assert.AreEqual(777, r.Islands[1].LayoutSeed);
+            Assert.IsFalse(r.Islands[2].HasLayoutSeed);
+            string json = RunRecordJson.ToJson(r);
+            StringAssert.Contains("\"deaths\":0,\"layout_seed\":-12345}", json);
+            StringAssert.Contains("\"n\":2,\"type\":\"Horde\",\"fight_s\":0,\"damage\":0,\"deaths\":0,\"layout_seed\":777}", json);
+            StringAssert.Contains("{\"n\":3,\"type\":\"Arena\",\"fight_s\":0,\"damage\":0,\"deaths\":0}", json);
+        }
+
+        [Test]
+        public void LayoutSeed_IgnoredBeforeTheFirstIsland()
+        {
+            RunRecorder rec = Begun();
+            rec.IslandLayout(5);
+            rec.IslandStarted(1, IslandType.Arena);
+            Assert.IsFalse(Finish(rec, RunResult.Quit, 1f).Islands[0].HasLayoutSeed);
+        }
     }
 }

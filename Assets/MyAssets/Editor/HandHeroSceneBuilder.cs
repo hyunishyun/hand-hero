@@ -136,8 +136,8 @@ namespace HandHero.EditorTools
                 new Vector3(ArenaSize.x, 0.2f, ArenaSize.z), floorMat);
             Cube("BackWall", arena.transform, new Vector3(0f, 0f, ArenaSize.z * 0.5f + 0.1f),
                 new Vector3(ArenaSize.x, ArenaSize.y, 0.2f), wallMat);
-            Cube("Pillar_L", arena.transform, new Vector3(-7f, -5f, 4f), new Vector3(2f, 10f, 2f), wallMat);
-            Cube("Pillar_R", arena.transform, new Vector3(9f, -4f, 9f), new Vector3(2f, 12f, 2f), wallMat);
+            GameObject pillarL = Cube("Pillar_L", arena.transform, new Vector3(-7f, -5f, 4f), new Vector3(2f, 10f, 2f), wallMat);
+            GameObject pillarR = Cube("Pillar_R", arena.transform, new Vector3(9f, -4f, 9f), new Vector3(2f, 12f, 2f), wallMat);
 
             Vector3[] targetSpots =
             {
@@ -146,10 +146,12 @@ namespace HandHero.EditorTools
                 new Vector3(0f, -4f, 11f),
                 new Vector3(-4f, 6f, -5f),
             };
+            var targets = new Object[targetSpots.Length];
             for (int i = 0; i < targetSpots.Length; i++)
             {
                 GameObject target = Cube($"Target_{i + 1}", arena.transform, targetSpots[i], Vector3.one * 2f, targetMat);
                 target.AddComponent<PrototypeTarget>();
+                targets[i] = target.transform;
             }
 
             var flying = Hero("PlayerHero", arena.transform, Vector3.zero, heroMat, noseMat, barMat, isBot: false);
@@ -261,6 +263,18 @@ namespace HandHero.EditorTools
                 runSpawns[i] = spawn.transform;
             }
             SetArray(runDirector, "botSpawnPoints", runSpawns);
+
+            // Terrain variety, first slice (round 4, S7): the pillars and the run spawn
+            // points get a seeded layout per island; the targets stay put and stay clear.
+            var layoutApplier = match.AddComponent<ArenaLayoutApplier>();
+            var layoutSo = new SerializedObject(layoutApplier);
+            Prop(layoutSo, "arenaSize").vector3Value = ArenaSize;
+            Prop(layoutSo, "playerStart").vector3Value = Vector3.zero; // PlayerHero's local position
+            layoutSo.ApplyModifiedPropertiesWithoutUndo();
+            SetArray(layoutApplier, "pieces", pillarL.transform, pillarR.transform);
+            SetArray(layoutApplier, "spawnPoints", runSpawns);
+            SetArray(layoutApplier, "keepClear", targets);
+            SetRefs(runDirector, ("layout", layoutApplier));
             SetArray(runDirector, "hideDuringRun", botFlying.gameObject, botMarker);
 
             // Freeze hunt (P1): frame spikes and tracking / focus / phase edges -> perf_log.txt.
