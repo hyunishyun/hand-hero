@@ -25,3 +25,11 @@
 - **택한 답:** 지금 규칙 그대로 둔다. 방아쇠를 계속 당기고 있으면 차지가 처음부터(0.25초 대기 뒤) 다시 쌓이고, 놓으면 그 차지가 나간다. ASSIST 핀치는 이미 한 번 펴야 다시 쏜다(3차 P9).
 - **이유:** 방아쇠 입력 배선은 3차에서 기기 확인을 마쳤고, 이번 Minor는 "제스처 때 차지가 나가는 것"만 고치는 범위다. 다시 쌓이는 차지는 일부러 계속 당긴 경우에만 나간다.
 - **뒤집으려면:** `XRHandsInputSource.Sample`에서 `_systemGesture.Edge == 1`일 때 `_trigger.RequireReopen()`을 부르면 방아쇠도 한 번 놓아야 다시 쏜다.
+
+## S4-1 메타 진행 저장 키를 설계 문서와 조금 다르게
+- **질문:** 설계 문서 5절의 키 표를 그대로 쓸까?
+- **택한 답:** 두 키를 더하고 두 키를 뺐다.
+  - 더함: `hh.meta.firstWinAim`(첫 승리의 조준 모드. "다른 모드로 승리 → Dividends"를 판정하려면 필요), `hh.meta.aims`(기록이 있는 조준 모드 목록. PlayerPrefs는 키 목록을 못 읽어서, RESET PROGRESS가 모드별 키를 지우려면 필요).
+  - 뺌: `hh.meta.newUnlocks`(끝 화면이 `MetaChanges`를 바로 받으므로 저장할 필요가 없다), `hh.meta.lastStart`(카드 미리 선택 기능이 계획에 없다).
+- **그 밖의 규칙:** `runs`는 끝난 런 수(중도 포기 포함)다. 그 모드의 첫 기록도 `NEW BEST`로 센다(첫 런 끝 화면에 NEW BEST가 뜬다).
+- **뒤집으려면:** `MetaProgress.cs`의 키 상수와 `OnRunEnded`. 첫 기록에 NEW BEST를 안 띄우려면 `BestIsland(aim) > 0`일 때만 `NewBestIsland`를 켠다.
