@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using HandHero.Core;
 using UnityEngine;
 
@@ -5,40 +6,48 @@ using UnityEngine;
 // by every hero (player, Quick Match bot, run bots). Instances are prewarmed at
 // scene load and live under this object, never under a bot, so pooled or
 // despawned bots cannot take them along. An ImpactFlash returns itself here
-// when its pop finishes.
+// when its pop finishes. P12: one pool per effect prefab (a second one serves
+// the kill burst); Play finds the pool by prefab.
 public class BeamImpactPool : MonoBehaviour
 {
-    [Tooltip("The hit effect prefab (needs an ImpactFlash). Shooters whose hitEffectPrefab matches use this pool")]
+    [Tooltip("The effect prefab (needs a PooledEffect such as ImpactFlash or KillBurst). Play calls with this prefab use this pool")]
     [SerializeField] private GameObject prefab;
     [Tooltip("Effects created at scene load")]
     [SerializeField] private int prewarmCount = 8;
     [Tooltip("Most effects alive at once; past this a hit shows no effect")]
     [SerializeField] private int maxCount = 24;
 
-    // The pool of the loaded scene (null when there is none).
-    public static BeamImpactPool Active { get; private set; }
+    // The pools of the loaded scene.
+    private static readonly List<BeamImpactPool> Active = new List<BeamImpactPool>();
 
-    private ObjectPool<ImpactFlash> _pool;
+    private ObjectPool<PooledEffect> _pool;
 
     private void Awake()
     {
-        if (prefab == null || prefab.GetComponent<ImpactFlash>() == null)
+        if (prefab == null || prefab.GetComponent<PooledEffect>() == null)
         {
-            Debug.LogWarning("BeamImpactPool: prefab with an ImpactFlash missing; hits fall back to Instantiate.", this);
+            Debug.LogWarning("BeamImpactPool: prefab with a PooledEffect missing; effects fall back to Instantiate.", this);
             return;
         }
-        _pool = new ObjectPool<ImpactFlash>(Create, maxCount, OnGet, OnRelease);
+        _pool = new ObjectPool<PooledEffect>(Create, maxCount, OnGet, OnRelease);
         _pool.Prewarm(prewarmCount);
     }
 
     private void OnEnable()
     {
-        if (_pool != null) Active = this;
+        if (_pool != null && !Active.Contains(this)) Active.Add(this);
     }
 
     private void OnDisable()
     {
-        if (Active == this) Active = null;
+        Active.Remove(this);
+    }
+
+    private static BeamImpactPool Find(GameObject effectPrefab)
+    {
+        for (int i = 0; i < Active.Count; i++)
+            if (Active[i].prefab == effectPrefab) return Active[i];
+        return null;
     }
 
     // Shows a hit effect. Uses the pool when it serves `effectPrefab`, else the
@@ -46,10 +55,10 @@ public class BeamImpactPool : MonoBehaviour
     public static void Play(GameObject effectPrefab, Vector3 position, Quaternion rotation)
     {
         if (effectPrefab == null) return;
-        BeamImpactPool pool = Active;
-        if (pool != null && pool.prefab == effectPrefab)
+        BeamImpactPool pool = Find(effectPrefab);
+        if (pool != null)
         {
-            ImpactFlash fx = pool._pool.Get();
+            PooledEffect fx = pool._pool.Get();
             if (fx == null) return;   // at the cap: skip rather than allocate mid-fight
             fx.transform.SetPositionAndRotation(position, rotation);
             fx.gameObject.SetActive(true);
@@ -60,25 +69,25 @@ public class BeamImpactPool : MonoBehaviour
         Destroy(go, 1f);
     }
 
-    private ImpactFlash Create()
+    private PooledEffect Create()
     {
         GameObject go = Instantiate(prefab, transform);
         go.name = prefab.name;
-        var fx = go.GetComponent<ImpactFlash>();
+        var fx = go.GetComponent<PooledEffect>();
         fx.SetOwner(this);
         return fx;
     }
 
     // Activation happens in Play after the effect is placed, so OnEnable never
     // runs at the old spot.
-    private static void OnGet(ImpactFlash fx) { }
+    private static void OnGet(PooledEffect fx) { }
 
-    private static void OnRelease(ImpactFlash fx)
+    private static void OnRelease(PooledEffect fx)
     {
         if (fx != null) fx.gameObject.SetActive(false);
     }
 
-    internal void Return(ImpactFlash fx)
+    internal void Return(PooledEffect fx)
     {
         if (_pool == null || !_pool.Release(fx)) fx.gameObject.SetActive(false);
     }

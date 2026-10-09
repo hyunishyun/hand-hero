@@ -558,6 +558,7 @@ MonoBehaviour:
   flashColor: {r: 1, g: 1, b: 1, a: 1}
   flashDuration: 0.12
   stunColor: {r: 0.55, g: 0.35, b: 1, a: 1}
+  deathEffectPrefab: {fileID: 4411213796529574118, guid: 0d65183a6cca52146829b2ecaa00f12b, type: 3}
 --- !u!114 &3183344820395592923
 MonoBehaviour:
   m_ObjectHideFlags: 0

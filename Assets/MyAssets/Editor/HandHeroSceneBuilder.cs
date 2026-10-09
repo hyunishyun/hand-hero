@@ -27,6 +27,7 @@ namespace HandHero.EditorTools
         public const string RunBotPrefabPath = BotDir + "/RunBot.prefab";
         private const string FxDir = "Assets/MyAssets/Generated/FX";
         public const string ImpactPrefabPath = FxDir + "/BeamImpact.prefab";
+        public const string KillBurstPrefabPath = FxDir + "/KillBurst.prefab";
 
         // Heroes stay on the Default layer: PointingBeamController skips its own
         // hero's colliders, so player and bot can hit each other without a
@@ -105,6 +106,9 @@ namespace HandHero.EditorTools
             Material cursorMat = UnlitMaterial("AimCursor", new Color(1f, 0.6f, 0.15f));
             Material cursorMarkerMat = UnlitMaterial("GroundMarker_Cursor", new Color(0.55f, 0.3f, 0.08f));
             GameObject impactPrefab = GetOrCreateImpactPrefab(impactMat);
+            Material killBurstMat = UnlitMaterial("KillBurst", new Color(1f, 0.5f, 0.2f));
+            GameObject killBurstPrefab = GetOrCreateKillBurstPrefab(killBurstMat);
+            Material vignetteMat = TransparentUnlitMaterial("DamageVignette");
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -222,12 +226,13 @@ namespace HandHero.EditorTools
                 isBot: true);
             GameObject botMarker = GroundMarker(botFlying, botMarkerMat, beamMat, new Color(1f, 0.4f, 0.4f, 0.5f));
             var bot = new GameObject("Bot");
-            BotInputSource botInput = BotControllers(bot, botFlying, flying.transform, difficulty, beamMat, impactPrefab);
+            BotInputSource botInput = BotControllers(bot, botFlying, flying.transform, difficulty, beamMat, impactPrefab,
+                killBurstPrefab);
 
             // RUN mode (R8): island bots come from a generated prefab, the Quick
             // Match bot hides while a run is on.
             RunBot runBotPrefab = GetOrCreateRunBotPrefab(botMat, noseMat, barMat, botMarkerMat, beamMat,
-                impactPrefab, difficulty);
+                impactPrefab, killBurstPrefab, difficulty);
 
             // Match loop (T6): heroes act only during the fight; HUD in front of the seat.
             var match = new GameObject("Match");
@@ -273,6 +278,23 @@ namespace HandHero.EditorTools
             sfxGo.AddComponent<SfxPlayer>();
             var flowCues = sfxGo.AddComponent<GameSfxCues>();
             SetRefs(flowCues, ("match", director), ("run", runDirector));
+
+            // P12 (D15): pooled kill bursts (same pool component as the beam hits) and
+            // the red edge flash on a quad parented to the camera (the rig never moves).
+            var burstPool = new GameObject("KillBurstPool").AddComponent<BeamImpactPool>();
+            SetRefs(burstPool, ("prefab", killBurstPrefab));
+            var burstSo = new SerializedObject(burstPool);
+            burstSo.FindProperty("prewarmCount").intValue = 4;
+            burstSo.FindProperty("maxCount").intValue = 8;
+            burstSo.ApplyModifiedPropertiesWithoutUndo();
+
+            GameObject vignetteQuad = Primitive(PrimitiveType.Quad, "DamageVignette", camGo.transform,
+                new Vector3(0f, 0f, 0.3f), new Vector3(1.3f, 1.3f, 1f), vignetteMat);
+            var vignetteRenderer = vignetteQuad.GetComponent<Renderer>();
+            vignetteRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            vignetteRenderer.receiveShadows = false;
+            var vignette = camGo.AddComponent<DamageVignette>();
+            SetRefs(vignette, ("playerHealth", flying.GetComponent<HeroHealth>()), ("quad", vignetteRenderer));
 
             // Seat-space UI (HUD, menus, wrist button, tutorial prompt) lives under the
             // Camera Offset, so the T10 tabletop scale keeps it at the same apparent
@@ -670,8 +692,11 @@ namespace HandHero.EditorTools
         // Shared by the Quick Match bot and the RUN bot prefab. `renderParent` holds
         // the line renderers (null = scene root).
         private static BotInputSource BotControllers(GameObject bot, FlyingCharacter botHero, Transform enemy,
-            BotDifficulty difficulty, Material beamMat, GameObject impactPrefab, Transform renderParent = null)
+            BotDifficulty difficulty, Material beamMat, GameObject impactPrefab, GameObject deathEffectPrefab,
+            Transform renderParent = null)
         {
+            SetRefs(botHero.GetComponent<HeroHealth>(), ("deathEffectPrefab", deathEffectPrefab));
+
             var botBeamGo = new GameObject("BotBeamRenderer");
             botBeamGo.transform.SetParent(renderParent, false);
             var botBeam = botBeamGo.AddComponent<LineRenderer>();
@@ -709,13 +734,15 @@ namespace HandHero.EditorTools
         // starts off and RunDirector turns it on while the island is fought.
         // Rewritten on every build so the asset always matches this code.
         private static RunBot GetOrCreateRunBotPrefab(Material botMat, Material noseMat, Material barMat,
-            Material markerMat, Material beamMat, GameObject impactPrefab, BotDifficulty difficulty)
+            Material markerMat, Material beamMat, GameObject impactPrefab, GameObject deathEffectPrefab,
+            BotDifficulty difficulty)
         {
             EnsureFolder(BotDir);
             var root = new GameObject("RunBot");
             FlyingCharacter hero = Hero("RunBotHero", root.transform, Vector3.zero, botMat, noseMat, barMat, isBot: true);
             GroundMarker(hero, markerMat, beamMat, new Color(1f, 0.4f, 0.4f, 0.5f)).transform.SetParent(root.transform, false);
-            BotInputSource input = BotControllers(root, hero, null, difficulty, beamMat, impactPrefab, root.transform);
+            BotInputSource input = BotControllers(root, hero, null, difficulty, beamMat, impactPrefab, deathEffectPrefab,
+                root.transform);
             input.enabled = false;
 
             var runBot = root.AddComponent<RunBot>();
@@ -757,6 +784,26 @@ namespace HandHero.EditorTools
             temp.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             temp.AddComponent<ImpactFlash>();
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(temp, ImpactPrefabPath);
+            Object.DestroyImmediate(temp);
+            return prefab;
+        }
+
+        // Bot kill burst prefab (P12): eight cube shards at the corners fly outward.
+        // Rewritten on every build like the impact prefab.
+        private static GameObject GetOrCreateKillBurstPrefab(Material mat)
+        {
+            EnsureFolder(FxDir);
+            var temp = new GameObject("KillBurst");
+            const float offset = 0.15f;
+            for (int i = 0; i < 8; i++)
+            {
+                var at = new Vector3((i & 1) == 0 ? -offset : offset, (i & 2) == 0 ? -offset : offset,
+                    (i & 4) == 0 ? -offset : offset);
+                GameObject shard = Primitive(PrimitiveType.Cube, "Shard" + i, temp.transform, at, Vector3.one * 0.3f, mat);
+                shard.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            temp.AddComponent<KillBurst>();
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(temp, KillBurstPrefabPath);
             Object.DestroyImmediate(temp);
             return prefab;
         }
@@ -856,6 +903,27 @@ namespace HandHero.EditorTools
         private static Material UnlitMaterial(string name, Color color)
         {
             return GetOrCreateMaterial(name, "Universal Render Pipeline/Unlit", color);
+        }
+
+        // URP Unlit switched to alpha-blended transparent, drawn after the world
+        // (the damage vignette; its texture and color come from a property block).
+        private static Material TransparentUnlitMaterial(string name)
+        {
+            Material mat = GetOrCreateMaterial(name, "Universal Render Pipeline/Unlit", Color.white);
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", 0f);
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (mat.HasProperty("_SrcBlendAlpha")) mat.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
+            if (mat.HasProperty("_DstBlendAlpha"))
+                mat.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetFloat("_ZWrite", 0f);
+            if (mat.HasProperty("_ZTest")) mat.SetFloat("_ZTest", (float)UnityEngine.Rendering.CompareFunction.Always);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.renderQueue = 3500;
+            EditorUtility.SetDirty(mat);
+            return mat;
         }
 
         // Line renderers tint through vertex colors, so use a particle shader.

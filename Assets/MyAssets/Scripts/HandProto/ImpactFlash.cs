@@ -5,15 +5,12 @@ using UnityEngine;
 // (BeamImpactPool) return themselves to the pool when done; a stray instance
 // just deactivates (its spawner destroys it). Runs on game time, so it freezes
 // while paused.
-public class ImpactFlash : MonoBehaviour
+public class ImpactFlash : PooledEffect
 {
     [SerializeField] private float lifetime = 0.25f;
     [SerializeField] private float maxSize = 1.2f;
 
     private float _age;
-    private BeamImpactPool _owner;
-
-    internal void SetOwner(BeamImpactPool owner) => _owner = owner;
 
     private void OnEnable()
     {
@@ -26,8 +23,7 @@ public class ImpactFlash : MonoBehaviour
         _age += Time.deltaTime;
         if (_age >= lifetime)
         {
-            if (_owner != null) _owner.Return(this);
-            else gameObject.SetActive(false);
+            Finish();
             return;
         }
 

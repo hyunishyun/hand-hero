@@ -41,6 +41,10 @@ public class HeroHealth : MonoBehaviour
     [Tooltip("Hero tint while stunned by a shockwave")]
     [SerializeField] private Color stunColor = new Color(0.55f, 0.35f, 1f);
 
+    [Header("Death Effect (optional)")]
+    [Tooltip("Pooled burst played where this hero goes down (BeamImpactPool with the same prefab; bots only in the generated scenes)")]
+    [SerializeField] private GameObject deathEffectPrefab;
+
     public event Action Damaged;
     public event Action Stunned;
     public event Action Died;
@@ -225,7 +229,9 @@ public class HeroHealth : MonoBehaviour
         if (character != null) character.Kill();
         SetVisible(false);
         Died?.Invoke();
-        if (character != null) SfxPlayer.Play(SfxCues.ForHeroDied(character.Team), transform.position);
+        Vector3 at = character != null ? character.transform.position : transform.position;
+        BeamImpactPool.Play(deathEffectPrefab, at, Quaternion.identity);
+        if (character != null) SfxPlayer.Play(SfxCues.ForHeroDied(character.Team), at);
     }
 
     private void Respawn()
