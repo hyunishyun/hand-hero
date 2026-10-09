@@ -13,6 +13,12 @@ namespace HandHero.Core
 
         public bool IsHeld => _gate.IsOn;
 
+        public void Reset()
+        {
+            _gate.Reset();
+            _lostTime = 0f;
+        }
+
         // Returns true while the palms count as together.
         public bool Step(bool leftTracked, bool rightTracked, Vector3 leftPalm, Vector3 rightPalm,
             float joinDistance, float separateDistance, float lostGraceTime, float dt)
@@ -61,6 +67,17 @@ namespace HandHero.Core
         private Vector3 _lastPosition;
         private bool _hasLast;
 
+        // Longest frame whose palm movement still counts as speed (CR-8). The hand
+        // pose is smoothed across a stall, so one long frame can look like a shove.
+        public const float MaxSpeedDt = 0.1f;
+
+        // Input switched back on (BR-2): the next frame only seeds the position.
+        public void Reset()
+        {
+            _gate.Reset();
+            _hasLast = false;
+        }
+
         // Returns true on the single frame a push is recognized.
         public bool Step(bool tracked, Vector3 palmPosition, Vector3 palmNormal, float fistStrength, float dt,
             PalmPushParams p)
@@ -81,6 +98,12 @@ namespace HandHero.Core
             }
 
             if (dt <= 0f) return false;
+
+            if (dt > MaxSpeedDt)
+            {
+                _lastPosition = palmPosition;
+                return false;
+            }
 
             float speed = Vector3.Dot(palmPosition - _lastPosition, palmNormal.normalized) / dt;
             _lastPosition = palmPosition;

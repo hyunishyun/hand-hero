@@ -130,7 +130,17 @@ public class PointingBeamController : MonoBehaviour
 
     private void OnEnable()
     {
-        if (health != null) health.Respawned += ResetAim;
+        if (health != null) health.Respawned += OnRespawned;
+    }
+
+    // Revive or respawn (BR-1): no charge or buffered shot carries over to the new life.
+    private void OnRespawned()
+    {
+        ResetAim();
+        _charge.Cancel();
+        UpdateChargeIndicator(default);
+        if (character != null) character.SetChargeSpeedMultiplier(1f);
+        _shots.ClearPending();
     }
 
     private void Awake()
@@ -228,7 +238,7 @@ public class PointingBeamController : MonoBehaviour
 
     private void OnDisable()
     {
-        if (health != null) health.Respawned -= ResetAim;
+        if (health != null) health.Respawned -= OnRespawned;
         SetAssistTarget(null);
         _charge.Cancel();
         UpdateChargeIndicator(default);

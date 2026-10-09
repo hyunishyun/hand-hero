@@ -130,6 +130,7 @@ namespace HandHero.EditorTools
                 PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel32;
             EditorUserBuildSettings.buildAppBundle = false;
             ApplyDiagnosticsSettings();
+            ApplyTimeSettings();
         }
 
         // Freeze hunt (round 3, P1): PerfSpikeLogger needs Frame Timing Stats to
@@ -143,6 +144,44 @@ namespace HandHero.EditorTools
                 PlayerSettings.enableFrameTimingStats = true;
                 Debug.Log("[BuildScript] PlayerSettings.enableFrameTimingStats -> true");
             }
+            AssetDatabase.SaveAssets();
+        }
+
+        // Hitch recovery (round 3, P7, D5): a long frame advances the game at most
+        // 0.1 s (was 0.333) so a stall reads as a slowdown, not a jump; no
+        // Rigidbodies, so physics steps at 50 Hz (was 100 Hz). Batch mode:
+        //   -executeMethod HandHero.EditorTools.BuildScript.ApplyTimeSettings
+        public const float MaximumAllowedTimestep = 0.1f;
+        public const float FixedTimestep = 0.02f;
+
+        [MenuItem("HandHero/Apply Time Settings")]
+        public static void ApplyTimeSettings()
+        {
+            UnityEngine.Object[] assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TimeManager.asset");
+            if (assets == null || assets.Length == 0)
+            {
+                Debug.LogError("[BuildScript] TimeManager.asset not found");
+                return;
+            }
+
+            var timeManager = new SerializedObject(assets[0]);
+            SerializedProperty maxStep = timeManager.FindProperty("Maximum Allowed Timestep");
+            if (maxStep != null && !Mathf.Approximately(maxStep.floatValue, MaximumAllowedTimestep))
+            {
+                Debug.Log($"[BuildScript] Maximum Allowed Timestep {maxStep.floatValue} -> {MaximumAllowedTimestep}");
+                maxStep.floatValue = MaximumAllowedTimestep;
+                timeManager.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            // Fixed Timestep is stored as a rational; the Time API converts it.
+            if (!Mathf.Approximately(Time.fixedDeltaTime, FixedTimestep))
+            {
+                Debug.Log($"[BuildScript] Fixed Timestep {Time.fixedDeltaTime} -> {FixedTimestep}");
+                Time.fixedDeltaTime = FixedTimestep;
+            }
+            Time.maximumDeltaTime = MaximumAllowedTimestep;
+
+            EditorUtility.SetDirty(assets[0]);
             AssetDatabase.SaveAssets();
         }
 

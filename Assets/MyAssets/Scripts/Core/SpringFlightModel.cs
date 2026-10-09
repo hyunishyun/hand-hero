@@ -77,9 +77,33 @@ namespace HandHero.Core
     // no target. No gravity. This is the hero flight model and, later, the
     // server-side simulation (ADR 10): input = "where the hand wants me",
     // the model decides how the character actually moves.
+    //
+    // Frame-rate independent (BC-3): damping is exponential, and a frame longer
+    // than 1/60 s is split into ~1/90 s sub-steps (at most MaxSubSteps), so a
+    // hitch never flips the velocity and throws the hero away from its target.
     public static class SpringFlightModel
     {
+        public const int MaxSubSteps = 4;
+        private const float SingleStepMaxDt = 1f / 60f;
+        private const float SubStepDt = 1f / 90f;
+
+        public static int SubStepCount(float dt)
+        {
+            if (dt <= SingleStepMaxDt) return 1;
+            return Mathf.Clamp(Mathf.CeilToInt(dt / SubStepDt - 1e-4f), 1, MaxSubSteps);
+        }
+
         public static FlightState Step(FlightState state, bool hasTarget, Vector3 target,
+            FlightParams p, ArenaBounds bounds, float dt)
+        {
+            int steps = SubStepCount(dt);
+            float h = dt / steps;
+            for (int i = 0; i < steps; i++)
+                state = SingleStep(state, hasTarget, target, p, bounds, h);
+            return state;
+        }
+
+        private static FlightState SingleStep(FlightState state, bool hasTarget, Vector3 target,
             FlightParams p, ArenaBounds bounds, float dt)
         {
             Vector3 velocity = state.Velocity;
@@ -88,11 +112,11 @@ namespace HandHero.Core
             {
                 Vector3 toTarget = target - state.Position;
                 velocity += toTarget * (p.Stiffness * dt);
-                velocity -= velocity * (p.Damping * dt);
+                velocity *= Mathf.Exp(-p.Damping * dt);
             }
             else
             {
-                velocity -= velocity * (p.GlideDrag * dt);
+                velocity *= Mathf.Exp(-p.GlideDrag * dt);
             }
 
             velocity = Vector3.ClampMagnitude(velocity, p.MaxSpeed);

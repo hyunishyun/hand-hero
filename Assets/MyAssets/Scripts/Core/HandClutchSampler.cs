@@ -12,6 +12,13 @@ namespace HandHero.Core
 
         public bool IsHeld => _gate.IsOn;
 
+        // Input switched back on (BR-2): a fist still closed regrabs from where
+        // the hand is now instead of dragging by the gap.
+        public void Reset()
+        {
+            _gate.Reset();
+        }
+
         public bool Step(bool handTracked, float fistStrength, Vector3 palmPosition,
             float grabThreshold, float releaseThreshold, out Vector3 delta)
         {

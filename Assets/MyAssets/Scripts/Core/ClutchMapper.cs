@@ -28,7 +28,8 @@ namespace HandHero.Core
             _clutched = false;
         }
 
-        public ClutchResult Step(bool clutchHeld, Vector3 clutchDelta, Vector3 characterPosition, float positionScale)
+        public ClutchResult Step(bool clutchHeld, Vector3 clutchDelta, Vector3 characterPosition, float positionScale,
+            ArenaBounds bounds = default)
         {
             var result = new ClutchResult();
 
@@ -46,7 +47,9 @@ namespace HandHero.Core
 
             if (_clutched)
             {
-                _target += clutchDelta * positionScale;
+                // Clamped in place (BC-4): dragging past a wall leaves no dead
+                // zone, so reversing the hand moves the target inward at once.
+                _target = bounds.Clamp(_target + clutchDelta * positionScale);
                 result.Clutched = true;
                 result.Target = _target;
             }
@@ -54,7 +57,8 @@ namespace HandHero.Core
             return result;
         }
 
-        public ClutchResult Step(HandInputData input, Vector3 characterPosition, float positionScale)
-            => Step(input.ClutchHeld, input.ClutchDelta, characterPosition, positionScale);
+        public ClutchResult Step(HandInputData input, Vector3 characterPosition, float positionScale,
+            ArenaBounds bounds = default)
+            => Step(input.ClutchHeld, input.ClutchDelta, characterPosition, positionScale, bounds);
     }
 }

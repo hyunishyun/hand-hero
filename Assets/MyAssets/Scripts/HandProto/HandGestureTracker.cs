@@ -170,6 +170,10 @@ public class HandGestureTracker : MonoBehaviour
             return;
         }
 
+        // Reacquired (BR-3): the stored pose is from before the loss. Snap to the
+        // raw values on this frame; smoothing from the stale pose would drag the
+        // clutch and read as a palm push. Smoothing resumes next frame.
+        bool reacquired = !state.IsTracked;
         state.IsTracked = true;
 
         // Session space -> world space.
@@ -177,8 +181,8 @@ public class HandGestureTracker : MonoBehaviour
         Quaternion palmRotWorld = xrOrigin != null ? xrOrigin.rotation * palmPose.rotation : palmPose.rotation;
 
         // Unscaled: hands (and the pause menu) keep working while the game is paused (timeScale 0).
-        float posT = 1f - Mathf.Exp(-positionSmoothing * Time.unscaledDeltaTime);
-        float valT = 1f - Mathf.Exp(-valueSmoothing * Time.unscaledDeltaTime);
+        float posT = reacquired ? 1f : 1f - Mathf.Exp(-positionSmoothing * Time.unscaledDeltaTime);
+        float valT = reacquired ? 1f : 1f - Mathf.Exp(-valueSmoothing * Time.unscaledDeltaTime);
 
         state.PalmPosition = Vector3.Lerp(state.PalmPosition, palmWorld, posT);
         state.TrackingPalmPosition = Vector3.Lerp(state.TrackingPalmPosition, palmPose.position, posT);
@@ -251,7 +255,7 @@ public class HandGestureTracker : MonoBehaviour
             Vector3 knuckleWorld = xrOrigin != null ? xrOrigin.TransformPoint(knucklePose.position) : knucklePose.position;
             Vector3 dir = (knuckleWorld - shoulder).normalized;
 
-            Vector3 smoothedDir = state.AimRay.direction == Vector3.zero
+            Vector3 smoothedDir = state.AimRay.direction == Vector3.zero || reacquired
                 ? dir
                 : Vector3.Slerp(state.AimRay.direction, dir, posT);
             state.AimRay = new Ray(shoulder, smoothedDir);

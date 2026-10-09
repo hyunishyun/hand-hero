@@ -67,10 +67,17 @@ public class XRHandsInputSource : HandInputSourceBehaviour
 
     // Switched back on (resume from pause, round start): the pinch that pressed
     // RESUME (or a pulled trigger) is still closed and must open before it fires or charges.
+    // Clutch and gesture history from before the switch-off is stale (BR-2): the
+    // hand moved meanwhile, which would read as a drag or a palm push.
     private void OnEnable()
     {
         _pinch.RequireReopen();
         _trigger.RequireReopen();
+        _clutch.Reset();
+        _aimClutch.Reset();
+        _leftPush.Reset();
+        _rightPush.Reset();
+        _palmsTogether.Reset();
     }
 
     protected override HandInputData Sample()
@@ -133,7 +140,9 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     {
         HandGestureTracker.HandState left = t.Left;
         HandGestureTracker.HandState right = t.Right;
-        float dt = Time.deltaTime;
+        // The hand poses are smoothed with the unscaled frame time, so palm speed
+        // uses it too (CR-8); paused (timeScale 0) no gesture advances.
+        float dt = Time.timeScale > 0f ? Time.unscaledDeltaTime : 0f;
 
         // Always stepped (state continuity); only charges when enabled.
         bool joined = _palmsTogether.Step(left.IsTracked, right.IsTracked, left.TrackingPalmPosition,

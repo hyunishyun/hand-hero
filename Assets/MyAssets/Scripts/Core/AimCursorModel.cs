@@ -21,7 +21,7 @@ namespace HandHero.Core
 
         public Vector3 Step(bool held, Vector3 delta, float positionScale, ArenaBounds bounds)
         {
-            ClutchResult r = _mapper.Step(held, delta, Position, positionScale);
+            ClutchResult r = _mapper.Step(held, delta, Position, positionScale, bounds);
             if (r.Clutched) Position = bounds.Clamp(r.Target);
             return Position;
         }

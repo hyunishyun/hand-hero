@@ -60,14 +60,15 @@ namespace HandHero.Tests
         }
 
         [Test]
-        public void SingleStep_MatchesOriginalFlyingCharacterMath()
+        public void SingleStep_SpringThenExponentialDamping()
         {
             var s = new FlightState { Position = new Vector3(1f, 0f, 0f), Velocity = new Vector3(0f, 2f, 0f) };
             var target = new Vector3(3f, 0f, 0f);
 
+            // D5: exponential damping instead of explicit Euler (stable for any dt).
             Vector3 v = s.Velocity;
             v += (target - s.Position) * (Defaults.Stiffness * Dt);
-            v -= v * (Defaults.Damping * Dt);
+            v *= Mathf.Exp(-Defaults.Damping * Dt);
             Vector3 expectedPos = s.Position + v * Dt;
 
             FlightState next = SpringFlightModel.Step(s, true, target, Defaults, default, Dt);

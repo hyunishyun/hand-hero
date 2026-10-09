@@ -69,17 +69,35 @@ public class HandPuppeteerController : MonoBehaviour
         // A lost hand arrives as ClutchHeld = false, so the character glides
         // instead of teleporting when the hand comes back somewhere else.
         // Grabbing starts from where the character currently is — no snap.
-        ClutchResult clutch = _clutch.Step(input, character.transform.position, positionScale);
+        // The target stays inside the arena, so reversing at a wall responds at once.
+        ClutchResult clutch = _clutch.Step(input, character.transform.position, positionScale, character.Bounds);
 
         if (clutch.JustGrabbed) OnGrab();
         if (clutch.JustReleased) OnRelease();
         if (clutch.Clutched) character.SetTarget(clutch.Target);
     }
 
+    // Revive in a run (BR-1): the hero teleports to spawn while still alive in
+    // this frame's view, so drop the clutch explicitly; a held fist regrabs there.
+    private HeroHealth _health;
+
+    private void OnEnable()
+    {
+        if (_health == null && character != null) _health = character.GetComponent<HeroHealth>();
+        if (_health != null) _health.Respawned += OnRespawned;
+    }
+
+    private void OnRespawned()
+    {
+        if (_clutch.IsClutched) OnRelease();
+        _clutch.Reset();
+    }
+
     // A pooled bot reused while it was clutching (SP-9), or any disable: let go,
     // so the next grab starts from the hero instead of the old target.
     private void OnDisable()
     {
+        if (_health != null) _health.Respawned -= OnRespawned;
         if (_clutch.IsClutched && character != null) character.ClearTarget();
         _clutch.Reset();
     }
