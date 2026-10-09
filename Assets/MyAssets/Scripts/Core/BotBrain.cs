@@ -79,7 +79,7 @@ namespace HandHero.Core
     // Shooting: lock aim (with error) -> telegraph for TelegraphTime -> fire.
     public class BotBrain
     {
-        private readonly System.Random _rng;
+        private System.Random _rng;
         private BotParams _p;
 
         private bool _grabbed;
@@ -116,6 +116,8 @@ namespace HandHero.Core
         public float TelegraphProgress =>
             _telegraphing && _p.TelegraphTime > 0f ? 1f - _telegraphTimer / _p.TelegraphTime : 0f;
         public Vector3 LockedAimPoint => _lockedAim;
+        // Seconds until the next shot may start its telegraph.
+        public float TimeToNextShot => _fireTimer;
         public Vector3 PerceivedTarget => _perceived;
 
         public BotParams Params
@@ -133,9 +135,30 @@ namespace HandHero.Core
             _telegraphing = false;
             _evadeTimer = 0f;
             _hitPending = false;
-            _fireTimer = _p.FireInterval;
+            // Jittered (D9) so bots spawned or resumed together don't fire in sync.
+            _fireTimer = FirstShotDelay(_p.FireInterval, _rng.NextDouble());
             _strafeTimer = NextStrafeSwitch();
             State = BotState.Idle;
+        }
+
+        // A pooled bot reused for a new spawn (P6): fresh random stream, then Reset.
+        public void Reseed(int seed)
+        {
+            _rng = new System.Random(seed);
+            Reset();
+        }
+
+        // First shot after a reset: FireInterval x U(0.5, 1.0), u in [0, 1].
+        public static float FirstShotDelay(float fireInterval, double u)
+        {
+            return fireInterval * (0.5f + 0.5f * (float)u);
+        }
+
+        // Per-spawn seed drawn from the run's own random stream (never 0, which
+        // BotInputSource reads as "pick one from the clock").
+        public static int SpawnSeed(System.Random runRng)
+        {
+            return runRng.Next(1, int.MaxValue);
         }
 
         // The bot's hero was hit: dodge on the next Step.

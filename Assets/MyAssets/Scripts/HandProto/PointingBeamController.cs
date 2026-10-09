@@ -233,6 +233,10 @@ public class PointingBeamController : MonoBehaviour
         _charge.Cancel();
         UpdateChargeIndicator(default);
         if (character != null) character.SetChargeSpeedMultiplier(1f);
+        // Pooled bots (SP-6): no beam or buffered shot left over for the next spawn.
+        _shots.ClearPending();
+        _beamTimer = 0f;
+        if (beam != null) beam.enabled = false;
     }
 
     private void UpdateChargeIndicator(ChargeStep step)

@@ -76,6 +76,14 @@ public class HandPuppeteerController : MonoBehaviour
         if (clutch.Clutched) character.SetTarget(clutch.Target);
     }
 
+    // A pooled bot reused while it was clutching (SP-9), or any disable: let go,
+    // so the next grab starts from the hero instead of the old target.
+    private void OnDisable()
+    {
+        if (_clutch.IsClutched && character != null) character.ClearTarget();
+        _clutch.Reset();
+    }
+
     private void OnGrab()
     {
         TintClutchIndicator(clutchedColor);

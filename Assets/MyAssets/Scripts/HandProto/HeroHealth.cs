@@ -129,6 +129,13 @@ public class HeroHealth : MonoBehaviour
         Respawn();
     }
 
+    // Pooled run bots (P6, SP-6): where this hero (re)spawns, replacing the
+    // position captured in Awake. Ignored while spawnPoint is set.
+    public void SetSpawnPosition(Vector3 position)
+    {
+        _spawnPosition = position;
+    }
+
     // Run bots (R8): enemy scaling of the base max health, then full health.
     public void SetHealthScale(float scale)
     {

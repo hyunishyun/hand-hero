@@ -42,6 +42,14 @@ public class RunDirector : MonoBehaviour
     private float _spawnTimer;
     private int _nextSpawnPoint;
 
+    // Pooled bots (P6, SP-1/SP-4): prewarmed at run start, reused by Activate /
+    // Deactivate. A downed bot stays visible for corpseTime, then goes back.
+    private ObjectPool<RunBot> _botPool;
+    private readonly List<RunBot> _corpses = new List<RunBot>();
+    private readonly List<float> _corpseTimers = new List<float>();
+    // Per-spawn bot seeds (D9), drawn from the run's own stream.
+    private System.Random _spawnSeeds;
+
     public RunStateMachine Run => _run;
     public bool IsRunning => _run != null && _run.Phase != RunPhase.Idle;
     public int BotsAlive => _bots.Count;
@@ -79,6 +87,8 @@ public class RunDirector : MonoBehaviour
     {
         _run.Params = rules;
         _run.StartRun();
+        PrewarmBots();
+        _spawnSeeds = new System.Random(seed != 0 ? unchecked(seed * 31 + 17) : System.Environment.TickCount);
         if (playerStats != null) playerStats.Bind(_run.Inventory);
         if (playerHealth != null) playerHealth.ResetHealth();
         SetHidden(true);
@@ -113,6 +123,7 @@ public class RunDirector : MonoBehaviour
         SyncPause();
         _run.Params = rules;
         _run.Tick(Time.deltaTime);
+        UpdateCorpses(Time.deltaTime);
 
         if (_run.Phase == RunPhase.Island && !_run.IsPaused) UpdateSpawning(Time.deltaTime);
         ApplyControls();
@@ -163,13 +174,12 @@ public class RunDirector : MonoBehaviour
     {
         bool fighting = _run.Phase == RunPhase.Island && !_run.IsPaused;
         match.SetRunControls(fighting);
-        foreach (RunBot bot in _bots)
-            if (bot != null) bot.SetControlled(fighting);
+        for (int i = 0; i < _bots.Count; i++)
+            if (_bots[i] != null) _bots[i].SetControlled(fighting);
     }
 
     private void UpdateSpawning(float dt)
     {
-        _bots.RemoveAll(b => b == null);
         if (_spawnTimer > 0f)
         {
             _spawnTimer -= dt;
@@ -189,20 +199,61 @@ public class RunDirector : MonoBehaviour
             if (point != null) at = point.position;
         }
 
-        RunBot bot = Instantiate(botPrefab, at, Quaternion.identity, arena);
-        bot.Setup(arena, playerHealth != null ? playerHealth.transform : null, _run.Spec);
-        bot.SetControlled(_run.Phase == RunPhase.Island && !_run.IsPaused);
-        if (bot.Health != null) bot.Health.Died += () => OnBotDied(bot);
+        PrewarmBots();
+        RunBot bot = _botPool.Get();
+        if (bot == null) return false; // every pooled bot busy: try again next frame
+
+        int botSeed = BotBrain.SpawnSeed(_spawnSeeds ??= new System.Random(System.Environment.TickCount));
+        bot.Activate(at, arena, playerHealth != null ? playerHealth.transform : null, _run.Spec, botSeed,
+            _run.Phase == RunPhase.Island && !_run.IsPaused);
         _bots.Add(bot);
         return true;
+    }
+
+    // Scene load / run start only, never mid-fight: MaxAlive + 1 bots, the extra one
+    // covers a corpse still showing when the next bot spawns. The cap leaves room
+    // for corpses of a whole wave.
+    private void PrewarmBots()
+    {
+        if (botPrefab == null || arena == null) return;
+        int warm = Mathf.Max(1, rules.MaxAlive) + 1;
+        if (_botPool == null)
+            _botPool = new ObjectPool<RunBot>(CreateBot, warm * 2, null, ReleaseBot);
+        _botPool.Prewarm(warm);
+    }
+
+    private RunBot CreateBot()
+    {
+        RunBot bot = Instantiate(botPrefab, arena.position, Quaternion.identity, arena);
+        bot.Died += OnBotDied;
+        return bot;
+    }
+
+    private static void ReleaseBot(RunBot bot)
+    {
+        if (bot != null) bot.Deactivate();
     }
 
     private void OnBotDied(RunBot bot)
     {
         if (!_bots.Remove(bot)) return;
         _spawnTimer = respawnInterval;
-        if (bot != null) Destroy(bot.gameObject, corpseTime);
+        _corpses.Add(bot);
+        _corpseTimers.Add(corpseTime);
         _run.ReportBotKilled(); // may clear the island (despawns the rest)
+    }
+
+    // Game time, like the Destroy delay it replaces: a paused corpse waits.
+    private void UpdateCorpses(float dt)
+    {
+        for (int i = _corpses.Count - 1; i >= 0; i--)
+        {
+            _corpseTimers[i] -= dt;
+            if (_corpseTimers[i] > 0f) continue;
+            _botPool.Release(_corpses[i]);
+            _corpses.RemoveAt(i);
+            _corpseTimers.RemoveAt(i);
+        }
     }
 
     private void OnPlayerDied()
@@ -251,11 +302,14 @@ public class RunDirector : MonoBehaviour
         SetHidden(false);
     }
 
+    // Deactivate at once (BR-4a): despawned bots stop updating, lose their
+    // colliders and leave the aim assist registry in this frame.
     private void DespawnBots()
     {
-        foreach (RunBot bot in _bots)
-            if (bot != null) Destroy(bot.gameObject);
+        if (_botPool != null) _botPool.ReleaseAll();
         _bots.Clear();
+        _corpses.Clear();
+        _corpseTimers.Clear();
     }
 
     private void SetHidden(bool hidden)

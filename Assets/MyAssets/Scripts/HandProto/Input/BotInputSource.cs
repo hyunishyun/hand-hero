@@ -40,6 +40,15 @@ public class BotInputSource : HandInputSourceBehaviour
         _fireIntervalScale = Mathf.Max(0.05f, scale);
     }
 
+    // Pooled run bots (P6, D9): a distinct seed per spawn, so bots spawned in the
+    // same frame don't strafe and fire in lock-step. Also resets the brain.
+    public void Reseed(int newSeed)
+    {
+        seed = newSeed;
+        _brain.Params = CurrentParams();
+        _brain.Reseed(newSeed);
+    }
+
     private void Awake()
     {
         _brain = new BotBrain(CurrentParams(), seed != 0 ? seed : System.Environment.TickCount);
