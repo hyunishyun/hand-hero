@@ -1,3 +1,4 @@
+using HandHero.Core;
 using TMPro;
 using UnityEngine;
 
@@ -65,8 +66,13 @@ public class HandMenuButton : MonoBehaviour
 
     public void Press()
     {
+        // Custom actions (run choices) play their own result sound.
         if (_customAction != null) _customAction();
-        else if (director != null) director.HandleMenuAction(action);
+        else if (director != null)
+        {
+            SfxPlayer.PlayUi(SfxId.MenuPress);
+            director.HandleMenuAction(action);
+        }
     }
 
     private void ApplyVisuals()

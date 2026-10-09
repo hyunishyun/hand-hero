@@ -67,26 +67,35 @@ public class RunChoiceMenu : MonoBehaviour
         for (int i = 0; i < Length(portalButtons); i++)
         {
             int index = i;
-            if (portalButtons[i] != null) portalButtons[i].SetCustomAction(() => Choose(() => run.ChoosePortal(index)));
+            if (portalButtons[i] != null)
+                portalButtons[i].SetCustomAction(() => Choose(() => run.ChoosePortal(index), SfxId.PortalPick));
         }
         for (int i = 0; i < Length(chestCards); i++)
         {
             int index = i;
-            if (chestCards[i] != null) chestCards[i].SetCustomAction(() => Choose(() => run.PickChestItem(index)));
+            if (chestCards[i] != null)
+                chestCards[i].SetCustomAction(() => Choose(() => run.PickChestItem(index), SfxId.ItemPick));
         }
         for (int i = 0; i < Length(shopSlots); i++)
         {
             int index = i;
-            if (shopSlots[i] != null) shopSlots[i].SetCustomAction(() => Choose(() => run.BuyShopItem(index)));
+            if (shopSlots[i] != null)
+                shopSlots[i].SetCustomAction(() => Choose(() => run.BuyShopItem(index), SfxId.ShopBuy));
         }
-        if (rerollButton != null) rerollButton.SetCustomAction(() => Choose(() => run.RerollShop()));
-        if (leaveButton != null) leaveButton.SetCustomAction(() => Choose(() => run.LeaveShop()));
+        if (rerollButton != null) rerollButton.SetCustomAction(() => Choose(() => run.RerollShop(), SfxId.Reroll));
+        if (leaveButton != null) leaveButton.SetCustomAction(() => Choose(() => run.LeaveShop(), SfxId.MenuPress));
     }
 
-    private void Choose(System.Func<bool> choice)
+    // A refused choice (not enough crystals, sold out, paused) plays the deny sound.
+    private void Choose(System.Func<bool> choice, SfxId sound)
     {
         if (run == null || Time.unscaledTime < _armedAt) return;
-        if (choice()) _dirty = true;
+        if (choice())
+        {
+            _dirty = true;
+            SfxPlayer.PlayUi(sound);
+        }
+        else SfxPlayer.PlayUi(SfxId.Denied);
     }
 
     private void LateUpdate()

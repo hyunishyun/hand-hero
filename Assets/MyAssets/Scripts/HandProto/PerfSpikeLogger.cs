@@ -317,7 +317,11 @@ public class PerfSpikeLogger : MonoBehaviour
             .Append(" | refresh ").Append(refresh.ToString("F1")).Append(" Hz")
             .Append(" | unity ").Append(Application.unityVersion)
             .Append(" | spike > ").Append(spikeThresholdMs.ToString("F0")).Append(" ms")
-            .Append(" | frame timing ").Append(FrameTimingManager.IsFeatureEnabled() ? "on" : "off")
-            .Append('\n');
+            .Append(" | frame timing ").Append(FrameTimingManager.IsFeatureEnabled() ? "on" : "off");
+        // Startup cost of the synthesized sound bank (P11 budget: < 100 ms, < 2 MB).
+        if (SfxPlayer.GenerationMs >= 0f)
+            _text.Append(" | sfx ").Append(SfxPlayer.GenerationMs.ToString("F1")).Append(" ms ")
+                .Append((SfxPlayer.GeneratedBytes / 1024).ToString()).Append(" KB");
+        _text.Append('\n');
     }
 }

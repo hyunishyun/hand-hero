@@ -973,6 +973,7 @@ MonoBehaviour:
   hitEffectPrefab: {fileID: 5882539841635707091, guid: f55c5f71ab2698e4faf94d4f80fe661e, type: 3}
   audioSource: {fileID: 528934731498721005}
   fireSound: {fileID: 0}
+  critHitPitch: 1.35
 --- !u!114 &7495524838501308414
 MonoBehaviour:
   m_ObjectHideFlags: 0

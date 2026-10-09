@@ -91,7 +91,10 @@ public class PointingBeamController : MonoBehaviour
     [Header("Effects (optional)")]
     [SerializeField] private GameObject hitEffectPrefab;
     [SerializeField] private AudioSource audioSource;
+    [Tooltip("Optional recording played on this hero's AudioSource; empty = SfxPlayer's synthesized shot")]
     [SerializeField] private AudioClip fireSound;
+    [Tooltip("Pitch of the hit-confirm sound on a critical hit (normal hits = 1)")]
+    [SerializeField] private float critHitPitch = 1.35f;
 
     private static readonly RaycastHit[] HitBuffer = new RaycastHit[16];
 
@@ -116,6 +119,8 @@ public class PointingBeamController : MonoBehaviour
     private Renderer _reticleRenderer;
     private Renderer _cursorRenderer;
     private bool _aimLostShown;
+    private bool _chargeSounded;
+    private bool _readySounded;
 
     // Where the hero fires: the reticle point (ASSIST) or the cursor marker (CURSOR).
     public Vector3 AimPoint => _aimPoint;
@@ -232,13 +237,14 @@ public class PointingBeamController : MonoBehaviour
         _pinchHolds.Add(step);
 
         UpdateChargeIndicator(step);
+        UpdateChargeSounds(step);
         character.SetChargeSpeedMultiplier(step.Charging ? chargeMoveSpeedMultiplier : 1f);
 
         if (step.Released && _aimPoint != Vector3.zero)
         {
             Fire(CombatMath.Shot(Mathf.Lerp(chargeMinDamage, chargeMaxDamage, step.Power) * _damageScale, true, stats,
                     CritRoll(stats)),
-                Mathf.Lerp(1.5f, chargeMaxWidthMultiplier, step.Power));
+                Mathf.Lerp(1.5f, chargeMaxWidthMultiplier, step.Power), true);
             return;
         }
 
@@ -247,7 +253,31 @@ public class PointingBeamController : MonoBehaviour
         // aim hand or the hero drops the buffered shot.
         if (!input.HasAim || !character.IsAlive) _shots.ClearPending();
         else if (_shots.Step(input.FireTriggered, Time.time, CombatMath.FireCooldown(fireCooldown, stats)))
-            Fire(CombatMath.Shot(damage * _damageScale, false, stats, CritRoll(stats)), 1f);
+            Fire(CombatMath.Shot(damage * _damageScale, false, stats, CritRoll(stats)), 1f, false);
+    }
+
+    // Player only (D14): a hum when the charge starts (after HoldDelay) and a ping
+    // when releasing would fire. Bots charge silently; their telegraph warns instead.
+    private void UpdateChargeSounds(ChargeStep step)
+    {
+        if (!step.Charging)
+        {
+            _chargeSounded = false;
+            _readySounded = false;
+            return;
+        }
+        if (character.Team != HeroTeam.Player) return;
+        Vector3 at = character.transform.position;
+        if (!_chargeSounded)
+        {
+            _chargeSounded = true;
+            SfxPlayer.Play(SfxId.ChargeStart, at);
+        }
+        if (step.Ready && !_readySounded)
+        {
+            _readySounded = true;
+            SfxPlayer.Play(SfxId.ChargeReady, at);
+        }
     }
 
     private void OnDisable()
@@ -404,7 +434,7 @@ public class PointingBeamController : MonoBehaviour
     // crit items (Quick Match, the bot) leave the random sequence untouched.
     private static double CritRoll(HeroStats stats) => stats.CritChance > 0f ? Random.value : 1.0;
 
-    private void Fire(ShotDamage shot, float widthMultiplier)
+    private void Fire(ShotDamage shot, float widthMultiplier, bool charged)
     {
         float shotDamage = shot.Damage;
         _shots.MarkFired(Time.time);
@@ -428,6 +458,10 @@ public class PointingBeamController : MonoBehaviour
             if (receiver != null)
                 receiver.Receive(new BeamHit { Point = hit.point, Direction = dir, Damage = shotDamage, Shooter = character });
 
+            // Hit confirm for the player only; a crit rings higher (D15).
+            if ((target != null || receiver != null) && character.Team == HeroTeam.Player)
+                SfxPlayer.PlayUi(SfxId.HitDealt, shot.Crit ? critHitPitch : 1f);
+
             BeamImpactPool.Play(hitEffectPrefab, end, Quaternion.LookRotation(-dir));
         }
 
@@ -448,6 +482,10 @@ public class PointingBeamController : MonoBehaviour
         {
             audioSource.pitch = Random.Range(0.95f, 1.1f);
             audioSource.PlayOneShot(fireSound);
+        }
+        else
+        {
+            SfxPlayer.Play(SfxCues.ForShot(character.Team, charged), origin);
         }
     }
 

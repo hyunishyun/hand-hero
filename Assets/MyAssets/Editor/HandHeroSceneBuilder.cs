@@ -267,6 +267,13 @@ namespace HandHero.EditorTools
             var impactPool = new GameObject("BeamImpactPool").AddComponent<BeamImpactPool>();
             SetRefs(impactPool, ("prefab", impactPrefab));
 
+            // P11 (D14): synthesized sound effects, built once at scene load, plus the
+            // match / run flow cues (countdown, FIGHT, cleared, results, pause).
+            var sfxGo = new GameObject("Sfx");
+            sfxGo.AddComponent<SfxPlayer>();
+            var flowCues = sfxGo.AddComponent<GameSfxCues>();
+            SetRefs(flowCues, ("match", director), ("run", runDirector));
+
             // Seat-space UI (HUD, menus, wrist button, tutorial prompt) lives under the
             // Camera Offset, so the T10 tabletop scale keeps it at the same apparent
             // size and spot. World-fixed, never head-locked.

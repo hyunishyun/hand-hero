@@ -1,3 +1,4 @@
+using HandHero.Core;
 using UnityEngine;
 
 // Enemy-beam warning: while the bot's aim is locked (BotBrain telegraph,
@@ -37,6 +38,8 @@ public class BotTelegraphLine : MonoBehaviour
         // state, so it must not leave a frozen warning line behind.
         bool show = bot != null && bot.isActiveAndEnabled && bot.Brain != null && bot.Brain.IsTelegraphing
                     && botHero != null && botHero.IsAlive;
+        // Warning tone as the line appears (D14): the dodge cue also works by ear.
+        if (show && !line.enabled) SfxPlayer.Play(SfxId.BotTelegraph, botHero.transform.position);
         line.enabled = show;
         if (!show) return;
 

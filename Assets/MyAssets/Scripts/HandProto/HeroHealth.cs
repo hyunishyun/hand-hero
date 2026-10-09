@@ -108,6 +108,8 @@ public class HeroHealth : MonoBehaviour
         _flashTimer = flashDuration;
         SetColor(flashColor);
         Damaged?.Invoke();
+        // The player hears their own hits taken, flat (D14); hits on bots ring at the shot.
+        if (character != null) SfxPlayer.PlayUi(SfxCues.ForHeroDamaged(character.Team));
 
         if (outcome == HitOutcome.Killed) Die();
         UpdateBar();
@@ -223,6 +225,7 @@ public class HeroHealth : MonoBehaviour
         if (character != null) character.Kill();
         SetVisible(false);
         Died?.Invoke();
+        if (character != null) SfxPlayer.Play(SfxCues.ForHeroDied(character.Team), transform.position);
     }
 
     private void Respawn()

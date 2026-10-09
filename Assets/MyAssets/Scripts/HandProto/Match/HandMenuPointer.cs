@@ -149,6 +149,10 @@ public class HandMenuPointer : MonoBehaviour
         if (_hovered == button) return;
         if (_hovered != null) _hovered.SetHovered(false);
         _hovered = button;
-        if (_hovered != null) _hovered.SetHovered(true);
+        if (_hovered != null)
+        {
+            _hovered.SetHovered(true);
+            SfxPlayer.PlayUi(SfxId.MenuPoint);
+        }
     }
 }

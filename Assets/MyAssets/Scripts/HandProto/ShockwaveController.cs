@@ -110,6 +110,8 @@ public class ShockwaveController : MonoBehaviour
             hero.ApplyStun(stun, stunMultiplier);
         }
 
+        SfxPlayer.Play(SfxId.Shockwave, center);
+
         if (ring != null)
         {
             _ringTimer = ringDuration;
