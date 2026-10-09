@@ -21,7 +21,8 @@ param(
     [switch]$Tests,
     [string]$ExecuteMethod = "",
     [string]$BuildTarget = "",
-    [string]$ProjectPath = "C:\Users\AISTUDIO\Desktop\Hyun's Playground\MetaAwards\A_4",
+    # Defaults to the project this script lives in (AUTO\tools\..\..), so a clone anywhere works.
+    [string]$ProjectPath = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent),
     [int]$TimeoutMinutes = 60
 )
 

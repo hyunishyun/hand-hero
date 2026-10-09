@@ -13,7 +13,8 @@
 
 param(
     [double]$Hours = 12,
-    [string]$ProjectPath = "C:\Users\AISTUDIO\Desktop\Hyun's Playground\MetaAwards\A_4",
+    # Defaults to the folder this script lives in (the Unity project root), so a clone anywhere works.
+    [string]$ProjectPath = $PSScriptRoot,
     [int]$LimitPollMinutes = 15,
     [int]$MaxTurnsPerSession = 250,
     [switch]$UseSkipPermissions,
