@@ -16,7 +16,9 @@ param(
     [string]$ProjectPath = "C:\Users\AISTUDIO\Desktop\Hyun's Playground\MetaAwards\A_4",
     [int]$LimitPollMinutes = 15,
     [int]$MaxTurnsPerSession = 250,
-    [switch]$UseSkipPermissions
+    [switch]$UseSkipPermissions,
+    # Ultracode: each session runs with --effort ultracode (multi-agent workflows, much higher usage).
+    [switch]$Ultracode
 )
 
 $ErrorActionPreference = "Continue"
@@ -65,7 +67,7 @@ $limitPattern   = '(usage limit|limit reached|hit your [a-z ]*limit|limit will r
 $consecutiveFast = 0
 $iteration       = 0
 
-Log "=== Autonomous run start. Deadline: $deadline ==="
+Log ("=== Autonomous run start. Deadline: {0}{1} ===" -f $deadline, $(if ($Ultracode) { " (ultracode)" } else { "" }))
 
 while ((Get-Date) -lt $deadline) {
 
@@ -80,6 +82,13 @@ while ((Get-Date) -lt $deadline) {
 
     $claudeArgs = @("-p", $prompt, "--max-turns", "$MaxTurnsPerSession", "--output-format", "text")
     if ($UseSkipPermissions) { $claudeArgs += "--dangerously-skip-permissions" }
+    if ($Ultracode) {
+        # The "ultracode" keyword is ignored in -p prompts; the effort flag is the documented switch.
+        # Workflow must be allowed (no one answers prompts), and -p must not cut a running workflow
+        # after its default 10-minute background wait.
+        $claudeArgs += @("--effort", "ultracode", "--allowedTools", "Workflow")
+        $env:CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS = "0"
+    }
 
     $start = Get-Date
     $output = & claude @claudeArgs 2>&1 | Tee-Object -FilePath $sessionLog

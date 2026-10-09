@@ -1,4 +1,4 @@
-# CLAUDE_AUTONOMOUS_PLAN — Round 4: first-run hitch, balance, leftover fixes, meta progression A, enemy/terrain design, MR room-scan spike
+# CLAUDE_AUTONOMOUS_PLAN — Round 4: first-run hitch, balance, leftover fixes, meta progression A, enemy and terrain variety (first slice), MR room-scan spike
 
 ## 한국어 요약
 
@@ -7,7 +7,7 @@
   - 런이 쉽고 길었다(9분 48초, 받은 피해 166). 밸런스를 맞춘다.
   - 리뷰에서 남은 Minor 4건을 고친다.
   - 메타 진행 A안(시작 유물 + 개인 최고 기록)을 **심사용 기능 없이**, 좋은 게임의 기본기로 구현한다.
-  - 다음 큰 줄기를 준비한다: 적 다양성과 지형 다양성은 **설계 문서**로, MR 테이블이 내 방을 스캔해 지형을 만드는 기능은 **가능성 확인용 프로브(스파이크)**로 만든다.
+  - 적 다양성(생김새·공격 방식)과 지형 다양성(지금 지형의 위치 무작위)을 1단계로 구현한다. MR 테이블이 내 방을 스캔해 지형을 만드는 기능은 **가능성 확인용 프로브(스파이크)**로 만든다.
 - **근거:** `AUTO/device_logs/2026-10-09/`
   - `perf_log.txt`: 게임플레이 중 50 ms 넘는 프레임 0개. 메뉴에서만 138·395·167 ms.
   - `freeze_session.txt`: VrApi 기준으로 앱이 빠뜨린 프레임이 앱 시작과 RUN 시작 직후 30초에 몰려 있다.
@@ -16,7 +16,7 @@
   - 첫 런 끊김: 풀·이펙트 미리 만들기(로딩 때), GPU 워밍업, `PerfSpikeLogger` 작은 끊김 카운터
   - 밸런스: `RunParams`(Horde 시간, 보스 체력, 런 봇 데미지 배수)
   - Minor 4건: 시스템 제스처 때 차지 취소, `PerfSpikeLogger`, `PinchHoldStats`, 봇 `Random`
-  - 설계 문서 2개(적, 지형), `RoomScanProbe`(MR TABLE 전용) + OpenXR 평면·바운딩 박스 기능 설정
+  - 적 4종(`BotArchetype`, `BotBrain` 공격부, RunBot 모양), 지형 무작위 배치(`ArenaLayout`, `ArenaLayoutApplier`), `RoomScanProbe`(MR TABLE 전용) + OpenXR 평면·바운딩 박스 기능 설정
   - 메타 진행: Core `MetaProgress` + `IKeyValueStore`(새 파일), `RunStateMachine`(StartRelic 단계), `RunDirector`, `RunChoiceMenu`, `MatchHud`·메뉴·끝 화면·일시정지 패널, `HandHeroSceneBuilder`
 - **결정:**
   - **D1** 첫 런 끊김 제거
@@ -38,8 +38,16 @@
     - 조준 모드별 개인 최고 기록(최고 섬, 최단 승리 시간): 메뉴에 한 줄, 끝 화면에 NEW BEST·UNLOCKED
     - Greed는 넣지 않는다.
   - **D5** 심사 현장용 기능은 넣지 않는다(쇼케이스 해금 토글, 심사위원마다 초기화하는 흐름 없음). 진행 초기화는 일반 게임처럼 일시정지 메뉴의 RESET PROGRESS(확인 한 번 더)로만 한다.
-  - **D7** 적 다양성 설계 문서(코드 없음): 손만 쓰고 앉아서 하는 플레이어에게 서로 다른 대응을 요구하는 적 4–6종 후보, 보스 패턴 2–3개, 먼저 만들 조각(적 2종 + 보스 패턴 1개), Hyun이 정할 질문(추천 답 포함).
-  - **D8** 지형 다양성 설계 문서(코드 없음): 섬마다 엄폐물·통로·높이·위험 요소가 바뀌는 방식. 접근은 직접 만든 모듈 교체 / 규칙 기반 절차 생성 / 혼합 중에서 추천한다. 테이블 크기에서도 동작해야 한다.
+  - **D7** 적 다양성 1단계: **생김새와 공격 방식만 다른** 적 4종을 만든다(이동·체력 규칙은 같다).
+    - Striker: 지금 봇 그대로
+    - Sniper: 예고가 길고, 느리게 쏘지만 아프다
+    - Gunner: 3연발
+    - Lancer: 넓은 차지샷
+    - 섬이 깊어질수록 종류가 늘고, 보스는 Gunner와 Lancer 패턴을 번갈아 쓴다.
+    - 모양은 단순 도형, 색은 프로퍼티 블록, 발사음은 합성음을 변형해서 쓴다.
+  - **D8** 지형 다양성 1단계: 지금 아레나와 기둥은 그대로 두고 **위치만** 섬마다 시드로 무작위 배치한다(봇 스폰 위치도).
+    - 제약: 경계 안, 기둥끼리 거리, 시작 위치와 스폰 주변은 비워 두기, 시작 시야 하나는 열어 두기
+    - 퀵 매치와 튜토리얼은 지금 배치 그대로
   - **D9** MR 방 스캔 스파이크
     - MR TABLE 모드에서만 Meta OpenXR의 평면·바운딩 박스(·메시)를 켜서, 무엇이 얼마나 빨리 잡히는지 `perf_log`에 기록하고 디버그 와이어프레임으로 보여 준다.
     - 이 작업에 한해 해당 OpenXR 기능과 scene 권한 설정 변경을 허용한다. 새 패키지는 넣지 않는다.
@@ -114,7 +122,7 @@
 
 ## 4. Decisions (approval status and details: `AUTO/DECISIONS.md`)
 
-D1 first-run hitch: prewarm pools at scene load + GPU warmup + a 25 ms hitch counter · D2 balance: Horde 30 s, BossHealthMult 5, run-bot damage ×1.15 (Quick Match unchanged) · D3 the four leftover minors · D4 meta progression A · D5 no judge-only features · D6 branch/commit rules · D7 enemy variety design doc · D8 terrain variety design doc · D9 MR room-scan spike (OpenXR plane/bounding-box features + scene permission approved for S8 only).
+D1 first-run hitch: prewarm pools at scene load + GPU warmup + a 25 ms hitch counter · D2 balance: Horde 30 s, BossHealthMult 5, run-bot damage ×1.15 (Quick Match unchanged) · D3 the four leftover minors · D4 meta progression A · D5 no judge-only features · D6 branch/commit rules · D7 enemy variety first slice: looks + attack patterns only · D8 terrain variety first slice: seeded random positions of the current pieces · D9 MR room-scan spike (OpenXR plane/bounding-box features + scene permission approved for S8 only).
 
 ## 5. Task queue (in order)
 
@@ -152,25 +160,33 @@ D1 first-run hitch: prewarm pools at scene load + GPU warmup + a 25 ms hitch cou
 - Write meta progress at the same moment as `run_log.jsonl` (end screen / quit) with one `PlayerPrefs.Save()`; never during a fight.
 - DONE: tests; compile; scenes rebuilt (0 wiring errors).
 
-### S6. Enemy variety design doc (D7) — no gameplay code
-- Write `docs/superpowers/specs/2026-10-09-enemy-variety-design.md` (starts with `## 한국어 요약`; the rest in English).
-- Ground it in the code (`BotBrain`, `BotInputSource`, `RunBot`, `RunRules.Island`, `IslandType`, `HeroHealth`, `PointingBeamController`, `ShockwaveController`) and in `docs/crab-champions-systems-analysis.md`.
-- Content: what the player currently reads and answers (telegraph line → dodge; one archetype); 4–6 candidate archetypes that each ask the hands-only, seated player for a **different answer** (e.g. a shielded bot that must be flanked or shockwaved, a fast swarmer that rewards the shockwave, a sniper with a long telegraph that forces cover, a support that buffs/heals others, a splitter); 2–3 boss pattern ideas with phases; how each archetype reuses the shared hero/beam/health path (same flight model and rules as the player — ADR fairness) vs needs new code; readability in VR (silhouette, color, sound cue from the P11 synth); how islands mix them (`IslandType`, spawn tables per island depth); a first slice to build (2 archetypes + 1 boss pattern) with a rough task list; risks.
-- End with open questions for Hyun as D1… each with a recommended answer.
-- DONE: the doc is committed.
+### S6. Enemy variety, first slice: different looks and attacks (D7)
+- Scope (Hyun, 2026-10-09): bots differ **only in appearance and attack pattern**. Same flight model, health rules, hit receiver and AI movement as today (ADR fairness: bots use the player's rules). No shields, healing, splitting or other new mechanics.
+- Core (TDD): `BotArchetype` data (id, colors, silhouette parameters, attack parameters) plus a per-island spawn table in `RunRules` that picks an archetype per spawn from the run's seeded stream. Archetypes (placeholder English names):
+  - **Striker** = today's bot (unchanged numbers).
+  - **Sniper**: longer telegraph (x1.6), slower fire (x1.8 interval), higher damage (x1.8), thin long-lasting beam, tall needle silhouette, cold color.
+  - **Gunner**: 3-shot burst (short gap, e.g. 0.18 s) after one short telegraph, low damage per shot (x0.45), chunky wide silhouette, warm color.
+  - **Lancer**: a wide charge shot (reuse the charge width visual), long telegraph, high damage (x2.2), slow (x2.5 interval); forces a dodge.
+  - Island table (first guess; log it): islands 1-2 Striker only; 3-4 add Gunner; 5-6 add Sniper; 7-8 add Lancer; Elite = one archetype with the Elite multipliers; Boss alternates Gunner bursts and Lancer shots (switch every N shots).
+- `BotBrain`: only the attack part reads the archetype (telegraph time, burst count/gap, charge shot); movement untouched. TDD burst timing, per-archetype telegraph, boss pattern switching, and that Striker reproduces today's behaviour exactly (existing BotBrain tests stay green unchanged).
+- Visuals: the builder gives RunBot archetype child shapes (simple primitives: needle, block, lance) toggled by `RunBot.Activate(..., archetype)`; colors via the existing MaterialPropertyBlock path; telegraph line color/width per archetype. One pool, reconfigured per activation (keep the S1 prewarm and warmup for every archetype's look).
+- Sound: a per-archetype fire cue variant from the P11 synth (pitch/length) and the existing telegraph warning; no new assets.
+- Telemetry: `run_log.jsonl` records kills and damage taken per archetype.
+- DONE: tests; compile; scenes and RunBot prefab rebuilt (0 wiring errors); device item (each archetype readable at a glance and by sound; damage feels fair).
 
-### S7. Terrain variety design doc (D8) — no gameplay code
-- Write `docs/superpowers/specs/2026-10-09-terrain-variety-design.md` (same format).
-- Read how the arena is built today (`HandHeroSceneBuilder`, `ArenaBounds`, `ViewLayout`, `ArenaViewMode`, cover/occlusion in `PointingBeamController` raycasts, `RunDirector` spawn points) and the comfort rules (XR Origin never moves; seated; tabletop scale).
-- Content: goals (each island reads differently and changes tactics: cover, lanes, height, hazards); approaches — A: a set of hand-authored layout modules swapped per island by the builder/run (seeded pick), B: procedural placement from rules (grid of cover pillars/walls/platforms with constraints: line-of-sight lanes, spawn safety, flight clearance), C: hybrid; how a layout plugs into the run (portal shows the terrain type?), spawn points, bot navigation (bots fly with the same spring model — do they need avoidance?), beam cover, performance on Quest (static batching, colliders, draw calls), and how it must also work at tabletop scale. Recommend one; first slice; risks; open questions with recommended answers.
-- DONE: the doc is committed.
+### S7. Terrain variety, first slice: random placement in the current arena (D8)
+- Scope (Hyun, 2026-10-09): keep the current arena and terrain pieces; **only their positions are randomized** per island, seeded by the run (reproducible). No new terrain types, hazards or modules yet.
+- Core (TDD): an `ArenaLayout` generator: arena bounds, piece sizes (today's `Pillar_L` / `Pillar_R`), player start, bot spawn area and a seed in; positions out, satisfying: inside bounds with a margin; a minimum distance between pieces; a clear sphere around the player start and every bot spawn point; at least one unobstructed line of sight from the player start to the bot side; the same output for the same seed. Bot spawn points are also randomized inside the spawn area under the same constraints. Tests for every constraint and for determinism.
+- Runtime: an `ArenaLayoutApplier` moves the existing pillar and spawn point transforms at each island's Intro (during the countdown, before bots spawn), then calls `Physics.SyncTransforms()` once. Quick Match and the tutorial keep today's fixed layout and get it back when a run ends. Cover, aim assist and raycasts keep working because the same objects move. Positions are arena-local, so tabletop scale works.
+- Telemetry: `run_log.jsonl` stores the layout seed per island.
+- DONE: tests; compile; scenes rebuilt; device item (islands look different; pillars never block the start or overlap a bot; cover still blocks beams).
 
 ### S8. MR room-scan spike (D9) — capability probe, throwaway-safe
 - Question to answer: in this project (Meta OpenXR 2.6.1, AR Foundation 6.6.2, already installed), can MR TABLE mode get the player's room layout — planes (floor, walls, table, couch…), bounding boxes (furniture with classifications) and/or the room mesh — and how fast, so a later round can generate island terrain from it?
 - Probe, kept small and isolated: a `RoomScanProbe` component that only runs in MR TABLE mode, enables `ARPlaneManager` / `ARBoundingBoxManager` (and `ARMeshManager` if cheap) when the matching Meta OpenXR features are on, and writes to `perf_log.txt` (via `PerfSpikeLogger.Mark`) and the Unity log: whether each subsystem started, time to first result, counts and classifications, sizes, and the largest horizontal surface near the table position. A debug wireframe of what it found, toggled by a serialized flag (default on in dev builds, off in release).
 - Settings: enabling the Meta OpenXR Planes / Bounding Boxes (/ Meshing) features for Android and the scene permission the feature requires (`com.oculus.permission.USE_SCENE`, asked at runtime only when MR TABLE is chosen) is **approved for this task only**; change them through an editor script, list every changed key in `PROGRESS.md`. Verify each API name in `Library/PackageCache/com.unity.xr.meta-openxr@*/` and `com.unity.xr.arfoundation@*/` before use. If something cannot be done without a new package or a manifest hand edit, log a blocker and keep only the research.
 - Must not change VR arena mode or Quick Match/RUN behaviour; if the permission is denied, MR TABLE works exactly as today.
-- Add a section to the S7 doc: "Room-based terrain" — what the probe can tell us, how scanned surfaces could become island terrain at tabletop scale (e.g. real table edge = arena edge, furniture boxes → cover blocks), privacy note (scene data stays on device, never logged beyond counts/sizes), and the device steps Hyun needs (Space Setup on Quest).
+- Write `docs/superpowers/specs/2026-10-09-room-terrain-research.md` ("Room-based terrain", starts with `## 한국어 요약`) — what the probe can tell us, how scanned surfaces could become island terrain at tabletop scale (e.g. real table edge = arena edge, furniture boxes → cover blocks), privacy note (scene data stays on device, never logged beyond counts/sizes), and the device steps Hyun needs (Space Setup on Quest).
 - DONE: compile; scenes rebuilt; device item "MR TABLE → allow permission → perf_log shows planes/boxes".
 
 ### S9. Scenes, tests, APKs
@@ -184,7 +200,7 @@ D1 first-run hitch: prewarm pools at scene load + GPU warmup + a 25 ms hitch cou
 
 1. **The XR Origin never moves or rotates.** No follow camera.
 2. Don't delete the 20 legacy scripts in the `Scripts\` root or `Networking~`. Don't touch the scenes in `Assets/Scenes/`.
-3. Every gesture threshold uses hysteresis. Every tunable is `[SerializeField]` + `[Tooltip]`. **Don't change existing gameplay tuning defaults** except the S2 balance values.
+3. Every gesture threshold uses hysteresis. Every tunable is `[SerializeField]` + `[Tooltip]`. **Don't change existing gameplay tuning defaults** except the S2 balance values (archetype and layout values are new tunables).
 4. **Quick Match, the tutorial, both aim modes and RUN must keep working.** All existing tests stay green; existing tests may be updated only where a decision above deliberately changes behaviour (say which in the commit).
 5. No account creation, login, payments or sign-ups.
 6. **No `git push`.** No force commands. Never `git reset --hard` committed work.
@@ -203,9 +219,10 @@ D1 first-run hitch: prewarm pools at scene load + GPU warmup + a 25 ms hitch cou
    - run length and difficulty (`python AUTO\tools\run_summary.py <run_log.jsonl>`)
    - starting relic chest after reaching island 5, the best line on the menu, NEW BEST / UNLOCKED on the end panel, RESET PROGRESS
    - revive and the DEFEAT screen (not tried in round 3)
+   - the four archetypes (readable by look and sound, fair damage) and per-island pillar layouts (fair openings, cover works)
    - MR TABLE room-scan probe (Space Setup first, allow the permission, what perf_log and the wireframe show; MR TABLE still works if denied)
    - regressions: Quick Match, tutorial, both aim modes
 3. Decisions taken for Hyun (summary of `QUESTIONS_FOR_HYUN.md`), each reversible.
 4. Changed values and how to undo each.
-5. The open questions of the enemy and terrain design docs (with recommended answers), so Hyun can answer them in one message.
+5. The room-terrain research findings and open questions (with recommended answers), and the tuning knobs for archetypes and layouts.
 6. Three next steps, game-first.
