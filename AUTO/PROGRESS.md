@@ -19,7 +19,7 @@
 | P13 런 기록·요약 스크립트 | DONE | `4b1e2e2`. Core `RunRecorder`/`RunRecord`/`RunRecordJson`(섬별 전투 시간·피해·사망, 진 섬, 부활, 아이템(상자/상점), 리롤, 크리스털 획득·소비(`CrystalWallet.TotalEarned/TotalSpent`), 발사·명중·차지샷, 핀치 쥔 시간·차지샷 여부) + 테스트 15개(459/459; 지난 세션이 테스트만 써 두고 끊겨서 컴파일 실패로 red 확인 후 구현). `RunDirector`가 런 시작 전에 기록을 열고, VICTORY·DEFEAT 화면 또는 런 중 MENU에서 `run_log.jsonl`에 한 줄을 붙인다(전투 중 쓰기 없음, `writeRunLog` 토글). 빔에 `ShotsFired/ShotsHit/ChargeShotsFired`, 체력에 `LastDamage`. `AUTO/tools/run_summary.py`(표준 라이브러리) + `AUTO/tools/fixtures/run_log_sample.jsonl`로 실행 확인. 가져오는 법은 `AUTO/PERF_REPORT.md`(P16이 나머지를 채움). 씬 재생성 배선 오류 0. 주의: `seed`는 앱 실행마다의 RNG 시드라 두 번째 런부터는 재현용이 아님. 기기 확인: 런 하나 끝낸 뒤 파일이 생기는지. |
 | P14 메타 진행 설계 문서 | DONE | `ad0f3f2`. `docs/superpowers/specs/2026-10-09-meta-progression-design.md`(한국어 요약 먼저, 코드 없음). 접근 A(시작 유물 선택 + 조준 모드별 최고 기록, 추천)·B(열쇠로 아이템 해금)·C(시드 챌린지)를 비교했다. 1–3판 하는 심사위원에게 맞춰 해금 조건은 승리가 아니라 섬 5 도달로 했다. PlayerPrefs 키 표, `MetaProgress`+`IKeyValueStore` Core 설계, 메뉴·끝 화면·런 시작 유물 상자 접점, 위험. Hyun이 정할 D1–D6(추천 답 포함)은 `AUTO/REPORT_FOR_HYUN.md` 5절에 있다(P16이 나머지 절을 채움). 코드 변경 없음(테스트는 P13의 459/459 그대로). |
 | P15 빌더 엄격화·씬·테스트·APK 2종 | DONE | `c6f0e61`. 빌더의 모든 직렬화 필드 찾기를 `Prop()` 하나로 모아, 필드가 없으면 예외로 `BuildAll`(과 APK 빌드)이 실패한다(이전엔 로그만). 씬 재생성 배선 오류 0, 테스트 459/459. APK: `MetaAwards\Build\HandHero_20261009_0359_dev.apk`(207 MB, 5.2분), `HandHero_20261009_0405_release.apk`(55.3 MB, 3.4분). 개발 APK가 P2 때(126 MB)보다 큰 건 내용 때문이 아니다(zip 항목 합은 126 MB로 같다). Gradle 증분 패키징이 `libil2cpp.so`(81 MB)를 끝에 새로 붙이고 옛 사본을 파일 안에 남겼다. 설치에는 문제없다. 작게 하려면 Unity의 Clean Build로 다시 빌드하면 될 것으로 보인다(확인 안 함). 빌드 로그 크기는 `BuildSummary.totalSize`(2152 MB로 틀림) 대신 실제 파일 크기로 고침. RF-7 해결. |
-| P16 최종 리뷰·보고서 | TODO | |
+| P16 최종 리뷰·보고서 | IN_PROGRESS | |
 
 ## 바꾼 ProjectSettings
 
