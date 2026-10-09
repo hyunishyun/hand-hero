@@ -45,6 +45,10 @@ public class HeroHealth : MonoBehaviour
     [Tooltip("Pooled burst played where this hero goes down (BeamImpactPool with the same prefab; bots only in the generated scenes)")]
     [SerializeField] private GameObject deathEffectPrefab;
 
+    [Header("Base color (optional)")]
+    [Tooltip("Run bot archetypes (round 4, S6): renderers SetBaseColor tints, kept under the hit flash and stun tint; also flashed when inactive at load")]
+    [SerializeField] private Renderer[] baseColorRenderers;
+
     public event Action Damaged;
     public event Action Stunned;
     public event Action Died;
@@ -56,6 +60,8 @@ public class HeroHealth : MonoBehaviour
     public bool IsDead => _model.IsDead;
     // Health the latest hit took (after armor, capped at what was left); valid in Damaged.
     public float LastDamage { get; private set; }
+    // Who fired the beam behind the current Damaged event; null for other damage.
+    public FlyingCharacter LastShooter { get; private set; }
     public float SpeedMultiplier => _model.SpeedMultiplier;
     public bool IsStunned => _model.IsStunned;
 
@@ -70,6 +76,10 @@ public class HeroHealth : MonoBehaviour
     private readonly List<Renderer> _renderers = new List<Renderer>();
     private MaterialPropertyBlock _tintBlock;
     private bool _tinted;
+    // Base color (S6): per _renderers entry, whether it takes the base block.
+    private bool[] _takesBase;
+    private MaterialPropertyBlock _baseBlock;
+    private bool _hasBaseColor;
     // Every renderer and collider, cached once for SetVisible (RS-5).
     private Renderer[] _allRenderers;
     private Collider[] _colliders;
@@ -94,6 +104,33 @@ public class HeroHealth : MonoBehaviour
             if (healthBarFill != null && r.transform.IsChildOf(healthBarFill)) continue;
             _renderers.Add(r);
         }
+        // Archetype parts start inactive; they flash and take the base color too.
+        if (baseColorRenderers != null)
+            foreach (Renderer r in baseColorRenderers)
+                if (r != null && !_renderers.Contains(r)) _renderers.Add(r);
+        _takesBase = new bool[_renderers.Count];
+        for (int i = 0; i < _renderers.Count; i++)
+            _takesBase[i] = baseColorRenderers != null && System.Array.IndexOf(baseColorRenderers, _renderers[i]) >= 0;
+    }
+
+    // Run bot archetypes (S6): tint the baseColorRenderers (off = the materials'
+    // own colors). The hit flash and stun tint show over it and return to it.
+    public void SetBaseColor(bool on, Color color)
+    {
+        _hasBaseColor = on;
+        if (on)
+        {
+            _baseBlock ??= new MaterialPropertyBlock();
+            _baseBlock.SetColor(BaseColorId, color);
+            _baseBlock.SetColor(ColorId, color);
+        }
+        if (!_tinted) ApplyBaseColors();
+    }
+
+    private void ApplyBaseColors()
+    {
+        for (int i = 0; i < _renderers.Count; i++)
+            _renderers[i].SetPropertyBlock(_hasBaseColor && _takesBase[i] ? _baseBlock : null);
     }
 
     private void OnEnable()
@@ -197,7 +234,9 @@ public class HeroHealth : MonoBehaviour
         // Backstop for the beam's team filter (BR-6): no friendly fire.
         if (hit.Shooter != null && character != null && hit.Shooter != character &&
             !HeroTeams.CanHit(hit.Shooter.Team, character.Team)) return;
+        LastShooter = hit.Shooter;
         ApplyDamage(hit.Damage);
+        LastShooter = null;
     }
 
     private void Update()
@@ -295,7 +334,7 @@ public class HeroHealth : MonoBehaviour
         _stunTinted = false;
         if (!_tinted) return;
         _tinted = false;
-        for (int i = 0; i < _renderers.Count; i++) _renderers[i].SetPropertyBlock(null);
+        ApplyBaseColors(); // no base color = SetPropertyBlock(null), as before
     }
 
     private void UpdateBar()

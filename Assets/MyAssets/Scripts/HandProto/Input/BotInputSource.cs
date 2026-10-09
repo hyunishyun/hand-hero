@@ -29,6 +29,17 @@ public class BotInputSource : HandInputSourceBehaviour
 
     public BotBrain Brain => _brain;
 
+    // A shot fires this frame (round 4, S6), with the attack it belongs to. Raised
+    // while sampling, so RunBot sets the beam's shot profile before it fires.
+    public event System.Action<BotAttack> ShotFired;
+
+    // Run bot archetypes (S6): attack patterns from the next attack on. Call
+    // before Reseed so the first shot's delay uses the archetype's interval.
+    public void SetArchetype(BotArchetype archetype)
+    {
+        _brain.SetAttacks(archetype.Attack, archetype.AltAttack, archetype.SwitchEvery);
+    }
+
     public void SetEnemy(Transform target)
     {
         enemy = target;
@@ -84,8 +95,10 @@ public class BotInputSource : HandInputSourceBehaviour
 
         _brain.Params = CurrentParams();
         bool hasEnemy = enemy != null && enemy.gameObject.activeInHierarchy && EnemyAlive();
-        return _brain.Step(self.transform.position, hasEnemy, hasEnemy ? enemy.position : Vector3.zero,
+        HandInputData input = _brain.Step(self.transform.position, hasEnemy, hasEnemy ? enemy.position : Vector3.zero,
             self.Bounds, Time.deltaTime);
+        if (input.FireTriggered) ShotFired?.Invoke(_brain.LastShot);
+        return input;
     }
 
     private bool EnemyAlive()

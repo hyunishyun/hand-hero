@@ -279,5 +279,41 @@ namespace HandHero.Tests
             Assert.AreEqual("", next.StartRelic);
             StringAssert.Contains("\"start_relic\":\"\"", RunRecordJson.ToJson(next));
         }
+
+        // Round 4 (S6): kills and damage taken per bot archetype, in first-seen order.
+        [Test]
+        public void PerArchetype_KillsAndDamageTaken()
+        {
+            RunRecorder rec = Begun();
+            rec.IslandStarted(3, IslandType.Arena);
+            rec.BotKilled("Gunner");
+            rec.BotKilled("Striker");
+            rec.BotKilled("Gunner");
+            rec.DamageTaken(10f, "Gunner");
+            rec.DamageTaken(5.5f, "Sniper");
+            rec.DamageTaken(2f, "Gunner");
+            rec.DamageTaken(3f); // shooter unknown: the island total only
+            RunRecord r = Finish(rec, RunResult.Quit, 30f);
+
+            Assert.AreEqual(20.5f, r.Islands[0].DamageTaken, 1e-4f);
+            Assert.AreEqual(2f, r.KillsBy.Get("Gunner"));
+            Assert.AreEqual(12f, r.DamageBy.Get("Gunner"), 1e-4f);
+            Assert.AreEqual(0f, r.DamageBy.Get("Lancer"));
+            string json = RunRecordJson.ToJson(r);
+            StringAssert.Contains("\"kills_by\":{\"Gunner\":2,\"Striker\":1}", json);
+            StringAssert.Contains("\"damage_by\":{\"Gunner\":12,\"Sniper\":5.5}", json);
+        }
+
+        [Test]
+        public void PerArchetype_EmptyWithoutBots_AndResetByBegin()
+        {
+            RunRecorder rec = Begun();
+            rec.BotKilled("Lancer");
+            Finish(rec, RunResult.Quit, 1f);
+
+            string json = RunRecordJson.ToJson(Finish(Begun(), RunResult.Quit, 1f));
+            StringAssert.Contains("\"kills_by\":{}", json);
+            StringAssert.Contains("\"damage_by\":{}", json);
+        }
     }
 }

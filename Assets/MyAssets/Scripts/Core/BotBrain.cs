@@ -77,6 +77,9 @@ namespace HandHero.Core
     // It holds the clutch the whole time and mirrors ClutchMapper's target, so it
     // can steer the hero toward any desired point by emitting hand deltas.
     // Shooting: lock aim (with error) -> telegraph for TelegraphTime -> fire.
+    // Archetypes (round 4, S6) change only the attack: telegraph and interval
+    // multipliers, bursts (later shots re-aim) and the boss's alternating
+    // patterns. The default attack (Striker) is the original bot exactly.
     public class BotBrain
     {
         private readonly SeededRandom _rng;
@@ -101,7 +104,19 @@ namespace HandHero.Core
         private float _fireTimer;
         private bool _telegraphing;
         private float _telegraphTimer;
+        private float _telegraphDuration;
         private Vector3 _lockedAim;
+
+        // Attack patterns (S6): the current attack's shots still to fire, the gap
+        // timer between them, and the boss's pattern switching.
+        private BotAttack _primary = BotArchetypes.StrikerAttack;
+        private BotAttack _alt = BotArchetypes.StrikerAttack;
+        private int _switchEvery;
+        private bool _useAlt;
+        private int _attacksDone;
+        private BotAttack _active = BotArchetypes.StrikerAttack;
+        private int _shotsLeft;
+        private float _burstTimer;
 
         public BotBrain(BotParams p, int seed)
         {
@@ -114,7 +129,13 @@ namespace HandHero.Core
         public bool IsTelegraphing => _telegraphing;
         // 0 at telegraph start, 1 at the moment the beam fires.
         public float TelegraphProgress =>
-            _telegraphing && _p.TelegraphTime > 0f ? 1f - _telegraphTimer / _p.TelegraphTime : 0f;
+            _telegraphing && _telegraphDuration > 0f ? 1f - _telegraphTimer / _telegraphDuration : 0f;
+        // The attack being telegraphed or fired (its look for the telegraph line).
+        public BotAttack ActiveAttack => _active;
+        // The attack of the latest shot: read it on the FireTriggered frame (damage, beam look).
+        public BotAttack LastShot { get; private set; } = BotArchetypes.StrikerAttack;
+        // Between the shots of a burst.
+        public bool IsBursting => _shotsLeft > 0 && !_telegraphing;
         public Vector3 LockedAimPoint => _lockedAim;
         // Seconds until the next shot may start its telegraph.
         public float TimeToNextShot => _fireTimer;
@@ -132,22 +153,38 @@ namespace HandHero.Core
         {
             _grabbed = false;
             _hasPerceived = false;
-            _telegraphing = false;
+            CancelAttack();
             _evadeTimer = 0f;
             _hitPending = false;
             // Jittered (D9) so bots spawned or resumed together don't fire in sync.
-            _fireTimer = FirstShotDelay(_p.FireInterval, _rng.NextDouble());
+            _fireTimer = FirstShotDelay(_p.FireInterval * Current.IntervalMult, _rng.NextDouble());
             _strafeTimer = NextStrafeSwitch();
             State = BotState.Idle;
         }
 
         // A pooled bot reused for a new spawn (P6): its one random stream restarts
-        // from the new seed (no allocation, round 4 S3), then Reset.
+        // from the new seed (no allocation, round 4 S3), then Reset. The boss
+        // pattern starts over with the primary attack.
         public void Reseed(int seed)
         {
             _rng.Reseed(seed);
+            _useAlt = false;
+            _attacksDone = 0;
             Reset();
         }
+
+        // Archetype attacks (S6): `altAttack` takes over every `switchEvery`
+        // finished attacks (0 = only `attack`). Takes effect from the next attack.
+        public void SetAttacks(BotAttack attack, BotAttack altAttack, int switchEvery)
+        {
+            _primary = attack;
+            _alt = altAttack;
+            _switchEvery = Mathf.Max(0, switchEvery);
+            _useAlt = false;
+            _attacksDone = 0;
+        }
+
+        private BotAttack Current => _useAlt && _switchEvery > 0 ? _alt : _primary;
 
         // First shot after a reset: FireInterval x U(0.5, 1.0), u in [0, 1].
         public static float FirstShotDelay(float fireInterval, double u)
@@ -209,7 +246,7 @@ namespace HandHero.Core
             }
             else
             {
-                _telegraphing = false;
+                CancelAttack();
             }
 
             return input;
@@ -288,7 +325,7 @@ namespace HandHero.Core
         {
             if (State == BotState.Evade)
             {
-                _telegraphing = false;
+                CancelAttack(); // a dodge drops the rest of a burst too
                 return false;
             }
 
@@ -297,8 +334,16 @@ namespace HandHero.Core
                 _telegraphTimer -= dt;
                 if (_telegraphTimer > 0f) return false;
                 _telegraphing = false;
-                _fireTimer = _p.FireInterval + (float)_rng.NextDouble() * _p.FireIntervalJitter;
-                return true;
+                return FireShot();
+            }
+
+            // The rest of a burst: no new telegraph, each shot re-aims (with error).
+            if (_shotsLeft > 0)
+            {
+                _burstTimer -= dt;
+                if (_burstTimer > 0f) return false;
+                _lockedAim = _perceived + AimError(self, _perceived);
+                return FireShot();
             }
 
             _fireTimer -= dt;
@@ -306,20 +351,49 @@ namespace HandHero.Core
             if (Vector3.Distance(self, _perceived) > _p.MaxFireRange) return false;
 
             _lockedAim = _perceived + AimError(self, _perceived);
-            if (_p.TelegraphTime <= 0f)
+            _active = Current;
+            _shotsLeft = Mathf.Max(1, _active.BurstCount);
+            float telegraph = _p.TelegraphTime * _active.TelegraphMult;
+            if (telegraph <= 0f) return FireShot();
+
+            _telegraphing = true;
+            _telegraphTimer = telegraph;
+            _telegraphDuration = telegraph;
+            return false;
+        }
+
+        // One shot of the active attack. The last one starts the interval (scaled
+        // by the attack) and counts the attack for the boss's pattern switch.
+        private bool FireShot()
+        {
+            LastShot = _active;
+            _shotsLeft--;
+            if (_shotsLeft > 0)
             {
-                _fireTimer = _p.FireInterval + (float)_rng.NextDouble() * _p.FireIntervalJitter;
+                _burstTimer = _active.BurstGap;
                 return true;
             }
 
-            _telegraphing = true;
-            _telegraphTimer = _p.TelegraphTime;
-            return false;
+            float m = _active.IntervalMult;
+            _fireTimer = _p.FireInterval * m + (float)_rng.NextDouble() * (_p.FireIntervalJitter * m);
+            if (_switchEvery > 0 && ++_attacksDone >= _switchEvery)
+            {
+                _attacksDone = 0;
+                _useAlt = !_useAlt;
+            }
+            return true;
+        }
+
+        // The telegraph and any burst shots left; the interval timer is untouched.
+        private void CancelAttack()
+        {
+            _telegraphing = false;
+            _shotsLeft = 0;
         }
 
         private void StartEvade()
         {
-            _telegraphing = false;
+            CancelAttack();
             _fireTimer = Mathf.Max(_fireTimer, _p.FireInterval * 0.5f);
             _evadeTimer = _p.EvadeDuration;
 

@@ -33,6 +33,10 @@ public class RunDirector : MonoBehaviour
     [Tooltip("Random seed for chests, portals and the shop; 0 = different every run")]
     [SerializeField] private int seed;
 
+    [Header("Enemy archetypes (round 4, S6)")]
+    [Tooltip("Looks and attacks per archetype (Striker = the original bot); the island table is in Rules (GunnerFromIsland ...)")]
+    [SerializeField] private BotArchetype[] archetypes = BotArchetypes.Defaults();
+
     [Header("Run log (D16)")]
     [Tooltip("Append one JSON line per run to <persistentDataPath>/run_log.jsonl at Victory, Defeat or quit (never mid-fight)")]
     [SerializeField] private bool writeRunLog = true;
@@ -333,10 +337,20 @@ public class RunDirector : MonoBehaviour
         if (bot == null) return false; // every pooled bot busy: try again next frame
 
         int botSeed = BotBrain.SpawnSeed(_spawnSeeds ??= new System.Random(System.Environment.TickCount));
+        BotArchetypeId kind = RunRules.PickArchetype(_run.Island, _run.Spec.Type, rules, _spawnSeeds);
         bot.Activate(at, arena, playerHealth != null ? playerHealth.transform : null, _run.Spec, botSeed,
-            _run.Phase == RunPhase.Island && !_run.IsPaused);
+            _run.Phase == RunPhase.Island && !_run.IsPaused, Archetype(kind));
         _bots.Add(bot);
         return true;
+    }
+
+    // The serialized (tunable) entry for this archetype; the built-in one if missing.
+    private BotArchetype Archetype(BotArchetypeId id)
+    {
+        if (archetypes != null)
+            for (int i = 0; i < archetypes.Length; i++)
+                if (archetypes[i].Id == id) return archetypes[i];
+        return BotArchetypes.Get(id);
     }
 
     // Scene load (Start), never mid-fight: MaxAlive + 1 bots, the extra one covers
@@ -382,6 +396,7 @@ public class RunDirector : MonoBehaviour
     private void OnBotDied(RunBot bot)
     {
         if (!_bots.Remove(bot)) return;
+        _recorder.BotKilled(BotArchetypes.Name(bot.Archetype.Id));
         _spawnTimer = respawnInterval;
         _corpses.Add(bot);
         _corpseTimers.Add(corpseTime);
@@ -413,7 +428,11 @@ public class RunDirector : MonoBehaviour
 
     private void OnPlayerDamaged()
     {
-        if (IsRunning && !IsOver) _recorder.DamageTaken(playerHealth.LastDamage);
+        if (!IsRunning || IsOver) return;
+        // Per archetype (S6): the run bot whose beam this was; null = not a run bot.
+        FlyingCharacter shooter = playerHealth.LastShooter;
+        RunBot bot = shooter != null ? shooter.GetComponentInParent<RunBot>() : null;
+        _recorder.DamageTaken(playerHealth.LastDamage, bot != null ? BotArchetypes.Name(bot.Archetype.Id) : null);
     }
 
     private void OnRunPhaseChanged(RunPhase phase)

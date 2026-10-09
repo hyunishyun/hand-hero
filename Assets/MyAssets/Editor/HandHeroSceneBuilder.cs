@@ -766,10 +766,63 @@ namespace HandHero.EditorTools
             var runBot = root.AddComponent<RunBot>();
             SetRefs(runBot, ("hero", hero), ("health", hero.GetComponent<HeroHealth>()), ("input", input),
                 ("pointing", root.GetComponent<PointingBeamController>()));
+            ArchetypeShapes(hero, runBot, botMat);
 
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, RunBotPrefabPath);
             Object.DestroyImmediate(root);
             return prefab.GetComponent<RunBot>();
+        }
+
+        // Round 4 (S6): archetype silhouette parts under the bot's Visual (they turn
+        // with it), inactive until RunBot.Activate shows the archetype's set. No
+        // colliders: the root sphere stays the only hit volume (same hitbox for all).
+        // The body, fins and parts take the archetype color; the nose keeps its own.
+        private static void ArchetypeShapes(FlyingCharacter hero, RunBot runBot, Material mat)
+        {
+            Transform visual = hero.transform.Find("Visual");
+
+            // Sniper: a tall needle and a thin barrel through the nose.
+            GameObject needle = ShapeGroup("Shape_Needle", visual);
+            Primitive(PrimitiveType.Cylinder, "Needle", needle.transform, new Vector3(0f, 0.95f, -0.1f),
+                new Vector3(0.1f, 0.55f, 0.1f), mat);
+            Primitive(PrimitiveType.Cylinder, "Barrel", needle.transform, new Vector3(0f, 0f, 1.25f),
+                new Vector3(0.07f, 0.45f, 0.07f), mat).transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+
+            // Gunner: a chunky wide block across the body.
+            GameObject block = ShapeGroup("Shape_Block", visual);
+            Primitive(PrimitiveType.Cube, "Block", block.transform, new Vector3(0f, -0.05f, -0.1f),
+                new Vector3(1.9f, 0.45f, 0.75f), mat);
+
+            // Lancer: a long lance forward with a cross guard.
+            GameObject lance = ShapeGroup("Shape_Lance", visual);
+            Primitive(PrimitiveType.Cylinder, "Lance", lance.transform, new Vector3(0f, -0.05f, 1.5f),
+                new Vector3(0.18f, 0.9f, 0.18f), mat).transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Primitive(PrimitiveType.Cube, "Guard", lance.transform, new Vector3(0f, -0.05f, 0.65f),
+                new Vector3(0.9f, 0.12f, 0.12f), mat);
+
+            SetArray(runBot, "shapes", needle, block, lance);
+
+            var tinted = new System.Collections.Generic.List<Object>();
+            foreach (string part in new[] { "Body", "Fin_L", "Fin_R" })
+            {
+                Transform t = visual.Find(part);
+                if (t != null) tinted.Add(t.GetComponent<Renderer>());
+            }
+            foreach (GameObject group in new[] { needle, block, lance })
+                foreach (Renderer r in group.GetComponentsInChildren<Renderer>(true))
+                    tinted.Add(r);
+            SetArray(hero.GetComponent<HeroHealth>(), "baseColorRenderers", tinted.ToArray());
+
+            needle.SetActive(false);
+            block.SetActive(false);
+            lance.SetActive(false);
+        }
+
+        private static GameObject ShapeGroup(string name, Transform parent)
+        {
+            var group = new GameObject(name);
+            group.transform.SetParent(parent, false);
+            return group;
         }
 
         // Floor disc + drop line under a hero (depth cue, T12). Lives outside the

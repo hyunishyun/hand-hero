@@ -42,6 +42,12 @@ namespace HandHero.Core
         public float BossFireIntervalMult;
         [Tooltip("Share of max health a revive brings back")]
         [Range(0.1f, 1f)] public float ReviveHealthFraction;
+        [Tooltip("First island where Gunner bots (3-shot burst) spawn; 0 reads as 3")]
+        public int GunnerFromIsland;
+        [Tooltip("First island where Sniper bots (long telegraph, heavy shot) spawn; 0 reads as 5")]
+        public int SniperFromIsland;
+        [Tooltip("First island where Lancer bots (wide heavy shot) spawn; 0 reads as 7")]
+        public int LancerFromIsland;
 
         public static RunParams Default => new RunParams
         {
@@ -57,7 +63,14 @@ namespace HandHero.Core
             EnemyDamageMult = 1.15f, // round 4 (D2): new
             BossFireIntervalMult = 0.7f,
             ReviveHealthFraction = 0.5f,
+            GunnerFromIsland = DefaultGunnerFrom, // round 4 (S6): new
+            SniperFromIsland = DefaultSniperFrom,
+            LancerFromIsland = DefaultLancerFrom,
         };
+
+        public const int DefaultGunnerFrom = 3;
+        public const int DefaultSniperFrom = 5;
+        public const int DefaultLancerFrom = 7;
     }
 
     // What the run director spawns on an island.
@@ -113,6 +126,30 @@ namespace HandHero.Core
             }
             return spec;
         }
+
+        // Round 4 (S6 / D7): which archetype a spawn is, from the run's seeded
+        // spawn stream. Islands 1-2 Striker only, then Gunner, Sniper and Lancer
+        // join (RunParams thresholds), each equally likely; an Elite island is one
+        // of them with the Elite multipliers; the boss island is the Boss.
+        public static BotArchetypeId PickArchetype(int island, IslandType type, RunParams p, System.Random rng)
+        {
+            if (type == IslandType.Boss) return BotArchetypeId.Boss;
+            bool gunner = island >= From(p.GunnerFromIsland, RunParams.DefaultGunnerFrom);
+            bool sniper = island >= From(p.SniperFromIsland, RunParams.DefaultSniperFrom);
+            bool lancer = island >= From(p.LancerFromIsland, RunParams.DefaultLancerFrom);
+            int count = 1 + (gunner ? 1 : 0) + (sniper ? 1 : 0) + (lancer ? 1 : 0);
+            if (count == 1) return BotArchetypeId.Striker; // no draw: islands 1-2 keep the stream as before
+
+            // Pool order: Striker, Gunner, Sniper, Lancer.
+            int pick = rng.Next(count);
+            if (pick == 0) return BotArchetypeId.Striker;
+            if (gunner && --pick == 0) return BotArchetypeId.Gunner;
+            if (sniper && --pick == 0) return BotArchetypeId.Sniper;
+            return BotArchetypeId.Lancer;
+        }
+
+        // A RunParams serialized before round 4 has 0: use the default island.
+        private static int From(int island, int fallback) => island > 0 ? island : fallback;
     }
 
     // Single-player RUN mode (autonomous plan R5, decisions Q2/Q3):

@@ -98,6 +98,24 @@ def summarize(runs):
         out("  by type: " + ", ".join(
             f"{kind} {median(times):.0f} s" for kind, times in sorted(fight_by_type.items())))
 
+    # Round 4 (S6): which bot archetypes were killed and which hurt the player.
+    kills_by = Counter()
+    damage_by = Counter()
+    for r in runs:
+        kills_by.update(r.get("kills_by", {}))
+        damage_by.update(r.get("damage_by", {}))
+    out("")
+    out("By bot archetype (kills / damage taken):")
+    if kills_by or damage_by:
+        for kind in sorted(set(kills_by) | set(damage_by)):
+            out(f"  {kind}: {kills_by[kind]:.0f} / {damage_by[kind]:.0f}")
+    else:
+        out("  none (logs before round 4)")
+
+    starts = Counter(r.get("start_relic") or "none" for r in runs if "start_relic" in r)
+    if starts:
+        out("Starting relics: " + ", ".join(f"{relic} {count}" for relic, count in starts.most_common()))
+
     items = Counter(item.get("id", "?") for r in runs for item in r.get("items", []))
     out("")
     out("Most-picked items:")

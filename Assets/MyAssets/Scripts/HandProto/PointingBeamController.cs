@@ -103,6 +103,13 @@ public class PointingBeamController : MonoBehaviour
     private readonly ShotCooldown _shots = new ShotCooldown();
     private float _beamTimer;
     private float _damageScale = 1f;
+    // Run bot archetypes (round 4, S6): the next shot's damage, beam look and fire
+    // pitch. Neutral (the player, the Quick Match bot, Strikers) = x1, own color.
+    private float _shotDamageMult = 1f;
+    private float _shotWidthMult = 1f;
+    private float _shotDurationMult = 1f;
+    private Color _shotColor = Color.clear;
+    private float _shotPitch = 1f;
     private readonly ChargeShotModel _charge = new ChargeShotModel();
     private readonly PinchHoldStats _pinchHolds = new PinchHoldStats();
 
@@ -203,6 +210,17 @@ public class PointingBeamController : MonoBehaviour
         _damageScale = Mathf.Max(0f, scale);
     }
 
+    // Run bots (S6): set by RunBot right before the bot's shot fires (the bot's
+    // input samples earlier in the frame). color alpha 0 = beamColor.
+    public void SetShotProfile(float damageMult, float widthMult, float durationMult, Color color, float pitch)
+    {
+        _shotDamageMult = Mathf.Max(0f, damageMult);
+        _shotWidthMult = widthMult > 0f ? widthMult : 1f;
+        _shotDurationMult = durationMult > 0f ? durationMult : 1f;
+        _shotColor = color;
+        _shotPitch = pitch > 0f ? pitch : 1f;
+    }
+
     // Code-assigned source (bot, test). Takes priority over the inspector field.
     public void SetInputSource(IHandInputSource source)
     {
@@ -273,7 +291,7 @@ public class PointingBeamController : MonoBehaviour
         // aim hand or the hero drops the buffered shot.
         if (!input.HasAim || !character.IsAlive) _shots.ClearPending();
         else if (_shots.Step(input.FireTriggered, Time.time, CombatMath.FireCooldown(fireCooldown, stats)))
-            Fire(CombatMath.Shot(damage * _damageScale, false, stats, CritRoll(stats)), 1f, false);
+            Fire(CombatMath.Shot(damage * _damageScale * _shotDamageMult, false, stats, CritRoll(stats)), 1f, false);
     }
 
     // Player only (D14): a hum when the charge starts (after HoldDelay) and a ping
@@ -492,15 +510,16 @@ public class PointingBeamController : MonoBehaviour
 
         if (beam != null)
         {
-            beam.startWidth = beamWidth * widthMultiplier;
-            beam.endWidth = beamWidth * 0.5f * widthMultiplier;
-            Color color = shot.Crit ? critBeamColor : beamColor;
+            float width = beamWidth * widthMultiplier * _shotWidthMult;
+            beam.startWidth = width;
+            beam.endWidth = width * 0.5f;
+            Color color = shot.Crit ? critBeamColor : _shotColor.a > 0f ? _shotColor : beamColor;
             beam.startColor = color;
             beam.endColor = color;
             beam.SetPosition(0, origin);
             beam.SetPosition(1, end);
             beam.enabled = true;
-            _beamTimer = beamDuration;
+            _beamTimer = beamDuration * _shotDurationMult;
         }
 
         if (audioSource != null && fireSound != null)
@@ -510,7 +529,7 @@ public class PointingBeamController : MonoBehaviour
         }
         else
         {
-            SfxPlayer.Play(SfxCues.ForShot(character.Team, charged), origin);
+            SfxPlayer.Play(SfxCues.ForShot(character.Team, charged), origin, _shotPitch);
         }
     }
 

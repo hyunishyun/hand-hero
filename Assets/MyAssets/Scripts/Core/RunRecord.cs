@@ -27,6 +27,36 @@ namespace HandHero.Core
         public ItemSource Source;
     }
 
+    // Totals by name in first-seen order (round 4, S6: per bot archetype). A few
+    // names per run, so a linear search beats a dictionary and keeps the order.
+    public class NamedTally
+    {
+        private readonly List<string> _names = new List<string>();
+        private readonly List<float> _values = new List<float>();
+
+        public int Count => _names.Count;
+        public string Name(int i) => _names[i];
+        public float Value(int i) => _values[i];
+
+        public float Get(string name)
+        {
+            int i = _names.IndexOf(name);
+            return i >= 0 ? _values[i] : 0f;
+        }
+
+        public void Add(string name, float amount)
+        {
+            if (string.IsNullOrEmpty(name)) return;
+            int i = _names.IndexOf(name);
+            if (i >= 0) _values[i] += amount;
+            else
+            {
+                _names.Add(name);
+                _values.Add(amount);
+            }
+        }
+    }
+
     // Counters the run keeps elsewhere (state machine, wallet, beam), handed over at the finish.
     public struct RunTotals
     {
@@ -58,6 +88,9 @@ namespace HandHero.Core
         public int ShopBuys;
         public int ShopRerolls;
         public int Kills;
+        // Bot kills and damage taken by the bot archetype that was hit / shot (S6).
+        public readonly NamedTally KillsBy = new NamedTally();
+        public readonly NamedTally DamageBy = new NamedTally();
         public int CrystalsEarned;
         public int CrystalsSpent;
         public int ShotsFired;
@@ -114,6 +147,19 @@ namespace HandHero.Core
         public void DamageTaken(float amount)
         {
             if (_island != null && amount > 0f) _island.DamageTaken += amount;
+        }
+
+        // `source`: the shooter's archetype name; null = unknown (island total only).
+        public void DamageTaken(float amount, string source)
+        {
+            if (_island == null || amount <= 0f) return;
+            _island.DamageTaken += amount;
+            _record.DamageBy.Add(source, amount);
+        }
+
+        public void BotKilled(string archetype)
+        {
+            if (_record != null) _record.KillsBy.Add(archetype, 1f);
         }
 
         public void PlayerDied(bool revived)
@@ -207,6 +253,8 @@ namespace HandHero.Core
             Int(sb, "hits", r.ShotsHit);
             Num(sb, "hit_rate", r.HitRate);
             Int(sb, "charge_shots", r.ChargeShots);
+            Tally(sb, "kills_by", r.KillsBy);
+            Tally(sb, "damage_by", r.DamageBy);
 
             sb.Append(",\"islands\":[");
             for (int i = 0; i < r.Islands.Count; i++)
@@ -248,6 +296,18 @@ namespace HandHero.Core
             Flags(sb, "hold_started", r.HoldStarted);
             sb.Append('}');
             return sb.ToString();
+        }
+
+        private static void Tally(StringBuilder sb, string key, NamedTally tally)
+        {
+            sb.Append(',');
+            Quote(sb, key).Append(":{");
+            for (int i = 0; i < tally.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                Quote(sb, tally.Name(i)).Append(':').Append(Format(tally.Value(i)));
+            }
+            sb.Append('}');
         }
 
         private static void Flags(StringBuilder sb, string key, bool[] flags)

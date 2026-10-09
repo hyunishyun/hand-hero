@@ -51,10 +51,16 @@ public class BotTelegraphLine : MonoBehaviour
         line.SetPosition(0, origin);
         line.SetPosition(1, aim + dir * overshoot);
 
-        float width = Mathf.Lerp(startWidth, endWidth, t);
+        // Archetypes (round 4, S6): the attack's width, and its beam color at the
+        // start of the warning. It always ends in the same red: red = about to fire.
+        BotAttack attack = bot.Brain.ActiveAttack;
+        float width = Mathf.Lerp(startWidth, endWidth, t) * (attack.TelegraphWidthMult > 0f ? attack.TelegraphWidthMult : 1f);
         line.startWidth = width;
         line.endWidth = width;
-        Color color = Color.Lerp(startColor, endColor, t);
+        Color from = attack.BeamColor.a > 0f
+            ? new Color(attack.BeamColor.r, attack.BeamColor.g, attack.BeamColor.b, startColor.a)
+            : startColor;
+        Color color = Color.Lerp(from, endColor, t);
         line.startColor = color;
         line.endColor = color;
     }
