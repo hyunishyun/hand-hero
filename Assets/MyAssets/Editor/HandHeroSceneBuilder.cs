@@ -260,6 +260,11 @@ namespace HandHero.EditorTools
             var perfLogger = match.AddComponent<PerfSpikeLogger>();
             SetRefs(perfLogger, ("match", director), ("run", runDirector), ("tracker", tracker));
 
+            // Freeze hunt (P5): pooled beam hit effects shared by every hero, kept at the
+            // scene root so despawned run bots never take them along.
+            var impactPool = new GameObject("BeamImpactPool").AddComponent<BeamImpactPool>();
+            SetRefs(impactPool, ("prefab", impactPrefab));
+
             // Seat-space UI (HUD, menus, wrist button, tutorial prompt) lives under the
             // Camera Offset, so the T10 tabletop scale keeps it at the same apparent
             // size and spot. World-fixed, never head-locked.

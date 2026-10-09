@@ -388,11 +388,7 @@ public class PointingBeamController : MonoBehaviour
             if (receiver != null)
                 receiver.Receive(new BeamHit { Point = hit.point, Direction = dir, Damage = shotDamage, Shooter = character });
 
-            if (hitEffectPrefab != null)
-            {
-                GameObject fx = Instantiate(hitEffectPrefab, end, Quaternion.LookRotation(-dir));
-                Destroy(fx, 1f);
-            }
+            BeamImpactPool.Play(hitEffectPrefab, end, Quaternion.LookRotation(-dir));
         }
 
         if (beam != null)
