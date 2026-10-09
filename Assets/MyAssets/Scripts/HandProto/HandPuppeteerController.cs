@@ -78,15 +78,27 @@ public class HandPuppeteerController : MonoBehaviour
 
     private void OnGrab()
     {
-        if (clutchIndicator != null)
-            clutchIndicator.material.color = clutchedColor;
+        TintClutchIndicator(clutchedColor);
     }
 
     private void OnRelease()
     {
         character.ClearTarget();
 
-        if (clutchIndicator != null)
-            clutchIndicator.material.color = releasedColor;
+        TintClutchIndicator(releasedColor);
+    }
+
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
+    private MaterialPropertyBlock _indicatorBlock;
+
+    // Property block on the shared material, not a material clone (D4).
+    private void TintClutchIndicator(Color color)
+    {
+        if (clutchIndicator == null) return;
+        _indicatorBlock ??= new MaterialPropertyBlock();
+        _indicatorBlock.SetColor(BaseColorId, color);
+        _indicatorBlock.SetColor(ColorId, color);
+        clutchIndicator.SetPropertyBlock(_indicatorBlock);
     }
 }

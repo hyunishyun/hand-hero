@@ -19,6 +19,10 @@ public class HandMenuButton : MonoBehaviour
     [Tooltip("Scale multiplier while pointed at")]
     [SerializeField] private float hoverScale = 1.08f;
 
+    // Property IDs instead of string names (GM-13).
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
+
     private MaterialPropertyBlock _block;
     private Vector3 _baseScale;
     private bool _hovered;
@@ -73,8 +77,8 @@ public class HandMenuButton : MonoBehaviour
         if (background == null) return;
         _block ??= new MaterialPropertyBlock();
         Color c = _hovered ? hoverColor : idleColor;
-        _block.SetColor("_BaseColor", c);
-        _block.SetColor("_Color", c);
+        _block.SetColor(BaseColorId, c);
+        _block.SetColor(ColorId, c);
         background.SetPropertyBlock(_block);
     }
 }

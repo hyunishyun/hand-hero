@@ -59,9 +59,17 @@ public class HeroHealth : MonoBehaviour
     private float _flashTimer;
     private bool _stunTinted;
     private Vector3 _barScale;
+    // Tinted renderers share their materials: the flash and stun tint go through a
+    // property block, cleared to restore (no material clones, GC-4 / SP-2).
     private readonly List<Renderer> _renderers = new List<Renderer>();
-    private readonly List<Color> _baseColors = new List<Color>();
+    private MaterialPropertyBlock _tintBlock;
+    private bool _tinted;
+    // Every renderer and collider, cached once for SetVisible (RS-5).
+    private Renderer[] _allRenderers;
     private Collider[] _colliders;
+
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
 
     private void Awake()
     {
@@ -72,13 +80,13 @@ public class HeroHealth : MonoBehaviour
         _model = new HeroHealthModel(CurrentParams());
         _spawnPosition = transform.position;
         _colliders = GetComponentsInChildren<Collider>();
+        _allRenderers = GetComponentsInChildren<Renderer>(true);
         if (healthBarFill != null) _barScale = healthBarFill.localScale;
 
         foreach (Renderer r in GetComponentsInChildren<Renderer>())
         {
             if (healthBarFill != null && r.transform.IsChildOf(healthBarFill)) continue;
             _renderers.Add(r);
-            _baseColors.Add(r.material.color);
         }
     }
 
@@ -236,20 +244,28 @@ public class HeroHealth : MonoBehaviour
 
     private void SetVisible(bool visible)
     {
-        foreach (Renderer r in GetComponentsInChildren<Renderer>(true)) r.enabled = visible;
-        foreach (Collider c in _colliders) c.enabled = visible;
+        for (int i = 0; i < _allRenderers.Length; i++)
+            if (_allRenderers[i] != null) _allRenderers[i].enabled = visible;
+        for (int i = 0; i < _colliders.Length; i++)
+            if (_colliders[i] != null) _colliders[i].enabled = visible;
     }
 
     private void SetColor(Color color)
     {
-        foreach (Renderer r in _renderers) r.material.color = color;
+        _tintBlock ??= new MaterialPropertyBlock();
+        _tintBlock.SetColor(BaseColorId, color);
+        _tintBlock.SetColor(ColorId, color);
+        for (int i = 0; i < _renderers.Count; i++) _renderers[i].SetPropertyBlock(_tintBlock);
+        _tinted = true;
     }
 
     private void RestoreColors()
     {
         _flashTimer = 0f;
         _stunTinted = false;
-        for (int i = 0; i < _renderers.Count; i++) _renderers[i].material.color = _baseColors[i];
+        if (!_tinted) return;
+        _tinted = false;
+        for (int i = 0; i < _renderers.Count; i++) _renderers[i].SetPropertyBlock(null);
     }
 
     private void UpdateBar()

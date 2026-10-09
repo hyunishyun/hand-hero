@@ -9,15 +9,19 @@ public class PrototypeTarget : MonoBehaviour
     [SerializeField] private Color flashColor = Color.red;
     [SerializeField] private float flashDuration = 0.15f;
 
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
+
     private Renderer _renderer;
-    private Color _baseColor;
+    // The flash goes through a property block on the shared material (GC-10);
+    // clearing the block restores the material's own color.
+    private MaterialPropertyBlock _block;
     private int _hits;
     private float _flashTimer;
 
     private void Awake()
     {
         _renderer = GetComponentInChildren<Renderer>();
-        if (_renderer != null) _baseColor = _renderer.material.color;
     }
 
     private void Update()
@@ -26,7 +30,7 @@ public class PrototypeTarget : MonoBehaviour
         {
             _flashTimer -= Time.deltaTime;
             if (_flashTimer <= 0f)
-                _renderer.material.color = _baseColor;
+                _renderer.SetPropertyBlock(null);
         }
     }
 
@@ -36,7 +40,10 @@ public class PrototypeTarget : MonoBehaviour
 
         if (_renderer != null)
         {
-            _renderer.material.color = flashColor;
+            _block ??= new MaterialPropertyBlock();
+            _block.SetColor(BaseColorId, flashColor);
+            _block.SetColor(ColorId, flashColor);
+            _renderer.SetPropertyBlock(_block);
             _flashTimer = flashDuration;
         }
 
@@ -51,6 +58,6 @@ public class PrototypeTarget : MonoBehaviour
     private void Respawn()
     {
         gameObject.SetActive(true);
-        if (_renderer != null) _renderer.material.color = _baseColor;
+        if (_renderer != null) _renderer.SetPropertyBlock(null);
     }
 }
