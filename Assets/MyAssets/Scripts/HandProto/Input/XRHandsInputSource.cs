@@ -64,6 +64,7 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     private readonly PalmsTogetherRecognizer _palmsTogether = new PalmsTogetherRecognizer();
     private readonly PalmPushRecognizer _leftPush = new PalmPushRecognizer();
     private readonly PalmPushRecognizer _rightPush = new PalmPushRecognizer();
+    private readonly SystemGestureGate _systemGesture = new SystemGestureGate();
 
     // Switched back on (resume from pause, round start): the pinch that pressed
     // RESUME (or a pulled trigger) is still closed and must open before it fires or charges.
@@ -78,6 +79,7 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         _leftPush.Reset();
         _rightPush.Reset();
         _palmsTogether.Reset();
+        _systemGesture.Reset();
     }
 
     protected override HandInputData Sample()
@@ -89,6 +91,8 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         HandGestureTracker.HandState aimHand = aimUsesRightHand ? t.Right : t.Left;
 
         var data = new HandInputData();
+        data.AimHandLost = !aimHand.IsTracked;
+        data.ClutchHandLost = !clutchHand.IsTracked;
 
         // Tracking loss opens the clutch: the character glides instead of
         // teleporting when the hand comes back somewhere else.
@@ -114,7 +118,9 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         // curled reads as a full fist and blocked every ASSIST pinch on device.
         // Keeps stepping through a palms charge so a pinch held through it doesn't
         // fire afterwards.
-        PinchState pinch = _pinch.Step(aimHand.IsTracked, aimHand.PinchStrength, pinchFireThreshold,
+        // The Meta system gesture's pinch opens the OS menu, never a shot (CR-7).
+        float pinchStrength = _systemGesture.Step(aimHand.SystemGesture, aimHand.PinchStrength, pinchResetThreshold);
+        PinchState pinch = _pinch.Step(aimHand.IsTracked, pinchStrength, pinchFireThreshold,
             pinchResetThreshold, false, 0f, Time.deltaTime);
 
         if (!aimHand.IsTracked)

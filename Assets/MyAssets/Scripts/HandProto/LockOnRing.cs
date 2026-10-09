@@ -22,6 +22,7 @@ public class LockOnRing : MonoBehaviour
     [SerializeField] private float popTime = 0.15f;
 
     private Transform _target;
+    private bool _suppressed;
     private float _popStart;
     private Transform _head;
     // Ring points are rewritten only when the radius or width changes (GC-6).
@@ -35,6 +36,12 @@ public class LockOnRing : MonoBehaviour
         if (target == _target) return;
         _target = target;
         _popStart = Time.unscaledTime;
+    }
+
+    // Hidden while suppressed (aim hand untracked, D7); the target is kept.
+    public void SetSuppressed(bool suppressed)
+    {
+        _suppressed = suppressed;
     }
 
     public void Hide()
@@ -74,7 +81,7 @@ public class LockOnRing : MonoBehaviour
             Camera cam = Camera.main;
             if (cam != null) _head = cam.transform;
         }
-        if (_target == null || !_target.gameObject.activeInHierarchy || _head == null)
+        if (_target == null || _suppressed || !_target.gameObject.activeInHierarchy || _head == null)
         {
             if (line.enabled) line.enabled = false;
             return;

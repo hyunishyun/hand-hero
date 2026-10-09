@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using HandHero.Core;
 using UnityEngine;
 using UnityEngine.XR.Hands;
 
@@ -26,6 +27,7 @@ public class HandGestureTracker : MonoBehaviour
         public float IndexCurl;         // index finger alone (CURSOR trigger), 0..1
         public float PinchStrength;     // 0 = apart, 1 = thumb+index pinched
         public Ray AimRay;              // world space pointing ray
+        public bool SystemGesture;      // Meta system gesture (palm toward the headset): its pinch belongs to the OS
     }
 
     [Header("References")]
@@ -100,12 +102,30 @@ public class HandGestureTracker : MonoBehaviour
                 // Treat "no running subsystem" exactly like tracking loss.
                 _left.IsTracked = false;
                 _right.IsTracked = false;
+                _left.SystemGesture = false;
+                _right.SystemGesture = false;
                 return;
             }
         }
 
         UpdateHand(_subsystem.leftHand, ref _left, isLeft: true);
         UpdateHand(_subsystem.rightHand, ref _right, isLeft: false);
+        UpdateSystemGesture(Handedness.Left, ref _left, 0);
+        UpdateSystemGesture(Handedness.Right, ref _right, 1);
+    }
+
+    // Meta Hand Tracking Aim (XR_FB_hand_tracking_aim, on for Android and Standalone)
+    // flags the system gesture per hand (CR-7). Without the extension the aim state
+    // is invalid and the flag stays off. Edges go to the perf log.
+    private void UpdateSystemGesture(Handedness handedness, ref HandState state, int hand)
+    {
+        bool active = false;
+        if (state.IsTracked && _subsystem.TryGetAimState(handedness, out XRHandAimState aim))
+            active = (new MetaAimHandState(in aim).aimFlags & MetaAimFlags.SystemGesture) != 0;
+
+        if (active == state.SystemGesture) return;
+        state.SystemGesture = active;
+        PerfSpikeLogger.Mark(active ? PerfRecordKind.SystemGestureStart : PerfRecordKind.SystemGestureEnd, hand);
     }
 
     private const float SubsystemRetryInterval = 0.5f;

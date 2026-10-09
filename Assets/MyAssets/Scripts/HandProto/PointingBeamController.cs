@@ -57,6 +57,10 @@ public class PointingBeamController : MonoBehaviour
     [Tooltip("The snap holds until the target is this far from the marker (meters, larger = no flicker)")]
     [SerializeField] private float cursorAssistReleaseRadius = 1.8f;
 
+    [Header("Tracking-lost cue (D7)")]
+    [Tooltip("Reticle (ASSIST) / cursor marker (CURSOR) color while the aim hand is not tracked; the lock-on ring hides meanwhile")]
+    [SerializeField] private Color aimLostColor = new Color(0.45f, 0.45f, 0.45f);
+
     [Header("Firing")]
     [SerializeField] private float fireCooldown = 0.35f;
     [Tooltip("Health removed from a hero (HeroHealth) per beam hit")]
@@ -108,6 +112,9 @@ public class PointingBeamController : MonoBehaviour
     private readonly AimCursorModel _cursor = new AimCursorModel();
     private bool _visualsApplied;
     private AimMode _visualsMode;
+    private Renderer _reticleRenderer;
+    private Renderer _cursorRenderer;
+    private bool _aimLostShown;
 
     // Where the hero fires: the reticle point (ASSIST) or the cursor marker (CURSOR).
     public Vector3 AimPoint => _aimPoint;
@@ -147,6 +154,8 @@ public class PointingBeamController : MonoBehaviour
     {
         runStats = RunHeroStats.Find(runStats, character);
         if (chargeIndicator != null) chargeIndicator.gameObject.SetActive(false);
+        if (reticle != null) _reticleRenderer = reticle.GetComponent<Renderer>();
+        if (cursorMarker != null) _cursorRenderer = cursorMarker.GetComponent<Renderer>();
 
         if (beam != null)
         {
@@ -189,6 +198,7 @@ public class PointingBeamController : MonoBehaviour
 
         AimMode mode = Mode;
         ApplyModeVisuals(mode);
+        ShowAimLost(input.AimHandLost);
 
         // The lock is re-checked only while aiming; a target that died meanwhile
         // (aim hand out of view) must not keep the ring on its hidden body.
@@ -247,6 +257,18 @@ public class PointingBeamController : MonoBehaviour
         _shots.ClearPending();
         _beamTimer = 0f;
         if (beam != null) beam.enabled = false;
+        ShowAimLost(false);
+    }
+
+    // Grey reticle / cursor and no lock-on ring while the aim hand is untracked,
+    // so a tracking dropout never reads as a frozen game (D7). Applied on change only.
+    private void ShowAimLost(bool lost)
+    {
+        if (lost == _aimLostShown) return;
+        _aimLostShown = lost;
+        RendererTint.Set(_reticleRenderer, lost, aimLostColor);
+        RendererTint.Set(_cursorRenderer, lost, aimLostColor);
+        if (lockOnRing != null) lockOnRing.SetSuppressed(lost);
     }
 
     private void UpdateChargeIndicator(ChargeStep step)

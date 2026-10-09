@@ -38,6 +38,7 @@ public class HandMenuPointer : MonoBehaviour
     [SerializeField] private bool mouseFallback = true;
 
     private HysteresisGate _pinch;
+    private readonly SystemGestureGate _systemGesture = new SystemGestureGate();
     private bool _waitForOpenHand;
     private HandMenuButton _hovered;
     private float _rayWidth = -1f;
@@ -54,6 +55,7 @@ public class HandMenuPointer : MonoBehaviour
     {
         Hover(null);
         _pinch.Reset();
+        _systemGesture.Reset();
         if (ray != null) ray.enabled = false;
     }
 
@@ -120,8 +122,10 @@ public class HandMenuPointer : MonoBehaviour
             {
                 r = hand.AimRay;
                 fromHand = true;
-                if (_waitForOpenHand && hand.PinchStrength <= pinchReleaseThreshold) _waitForOpenHand = false;
-                pressed = _pinch.Step(hand.PinchStrength, pinchPressThreshold, pinchReleaseThreshold)
+                // The Meta system gesture's pinch belongs to the OS menu (CR-7).
+                float pinch = _systemGesture.Step(hand.SystemGesture, hand.PinchStrength, pinchReleaseThreshold);
+                if (_waitForOpenHand && pinch <= pinchReleaseThreshold) _waitForOpenHand = false;
+                pressed = _pinch.Step(pinch, pinchPressThreshold, pinchReleaseThreshold)
                     == GateEdge.Rising && !_waitForOpenHand;
                 return true;
             }

@@ -45,6 +45,11 @@ namespace HandHero.Core
 
         public HandGestures Gestures;
 
+        // Hand tracking dropped out (tracking-lost cue, D7). Only hand-tracked sources
+        // set these; keyboard, bot and test input leave them false.
+        public bool AimHandLost;
+        public bool ClutchHandLost;
+
         public Ray AimRay => new Ray(AimOrigin, AimDirection);
 
         public bool Has(HandGestures gesture) => (Gestures & gesture) == gesture;

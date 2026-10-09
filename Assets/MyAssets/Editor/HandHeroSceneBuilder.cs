@@ -149,7 +149,7 @@ namespace HandHero.EditorTools
             }
 
             var flying = Hero("PlayerHero", arena.transform, Vector3.zero, heroMat, noseMat, barMat, isBot: false);
-            GroundMarker(flying, heroMarkerMat, beamMat, new Color(0.4f, 0.7f, 1f, 0.5f));
+            GameObject playerGround = GroundMarker(flying, heroMarkerMat, beamMat, new Color(0.4f, 0.7f, 1f, 0.5f));
             // RUN mode items (R7): neutral until a run binds its inventory.
             var playerStats = flying.gameObject.AddComponent<RunHeroStats>();
 
@@ -181,6 +181,8 @@ namespace HandHero.EditorTools
                 SetRefs(debugInput, ("viewCamera", cam));
                 playerInput = debugInput;
             }
+            // Tracking-lost cue (P9): the player's floor disc greys while the clutch hand is lost.
+            SetRefs(playerGround.GetComponent<HeroGroundMarker>(), ("clutchInput", playerInput));
 
             var controllers = new GameObject("Controllers");
             var puppeteer = controllers.AddComponent<HandPuppeteerController>();

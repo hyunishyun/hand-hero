@@ -340,6 +340,8 @@ MonoBehaviour:
   nearSize: 2.2
   farSize: 0.8
   floorLift: 0.03
+  clutchInput: {fileID: 0}
+  clutchLostColor: {r: 0.4, g: 0.4, b: 0.4, a: 0.5}
 --- !u!1 &1568970362380123226
 GameObject:
   m_ObjectHideFlags: 0
@@ -951,6 +953,7 @@ MonoBehaviour:
   cursorPositionScale: 60
   cursorAssistRadius: 1.2
   cursorAssistReleaseRadius: 1.8
+  aimLostColor: {r: 0.45, g: 0.45, b: 0.45, a: 1}
   fireCooldown: 0.35
   damage: 20
   chargeMoveSpeedMultiplier: 0.6
