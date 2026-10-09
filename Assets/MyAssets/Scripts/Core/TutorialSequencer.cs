@@ -81,7 +81,13 @@ namespace HandHero.Core
 
         public bool IsTelegraphing { get; private set; }
         public Vector3 LockedPoint { get; private set; }
-        public float TelegraphProgress => IsTelegraphing ? Mathf.Clamp01(_dodgeTimer / Params.DodgeTelegraphTime) : 0f;
+        public float TelegraphProgress => IsTelegraphing ? Progress(_dodgeTimer, Params.DodgeTelegraphTime) : 0f;
+
+        // elapsed / duration in 0..1; a zero duration is already complete (BC-9, no NaN).
+        public static float Progress(float elapsed, float duration)
+        {
+            return duration > 0f ? Mathf.Clamp01(elapsed / duration) : 1f;
+        }
 
         // 0..1 for hold steps (fills a progress ring), 0 otherwise.
         public float StepProgress

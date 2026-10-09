@@ -73,6 +73,29 @@ public class RunDirector : MonoBehaviour
         if (playerHealth != null) playerHealth.Died -= OnPlayerDied;
     }
 
+    // After MatchDirector.Awake created the match (BR-9): leaving MatchPhase.Run
+    // ends the run in the same call, not one Update later with items still bound.
+    private MatchStateMachine _subscribedMatch;
+
+    private void Start()
+    {
+        if (match != null && match.Match != null)
+        {
+            _subscribedMatch = match.Match;
+            _subscribedMatch.PhaseChanged += OnMatchPhaseChanged;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (_subscribedMatch != null) _subscribedMatch.PhaseChanged -= OnMatchPhaseChanged;
+    }
+
+    private void OnMatchPhaseChanged(MatchPhase phase)
+    {
+        if (phase != MatchPhase.Run && IsRunning) EndRun();
+    }
+
     // Debug key entry point: straight into a run, no tutorial. Only from the main
     // menu. The RUN button goes through MatchDirector (tutorial first) instead;
     // Update begins the run once the match is in MatchPhase.Run.
@@ -90,7 +113,11 @@ public class RunDirector : MonoBehaviour
         PrewarmBots();
         _spawnSeeds = new System.Random(seed != 0 ? unchecked(seed * 31 + 17) : System.Environment.TickCount);
         if (playerStats != null) playerStats.Bind(_run.Inventory);
-        if (playerHealth != null) playerHealth.ResetHealth();
+        if (playerHealth != null)
+        {
+            playerHealth.SetAutoRespawn(false);
+            playerHealth.ResetHealth();
+        }
         SetHidden(true);
     }
 
@@ -256,9 +283,11 @@ public class RunDirector : MonoBehaviour
         }
     }
 
+    // Every death in a live run is resolved (BC-1): revive or Defeat. Auto
+    // respawn is off, so an ignored death would leave the player dead.
     private void OnPlayerDied()
     {
-        if (_run.Phase != RunPhase.Island) return;
+        if (!IsRunning) return;
         if (_run.ReportPlayerDeath()) playerHealth.Revive(_run.ReviveHealth(playerHealth.MaxHealth));
     }
 
@@ -298,7 +327,11 @@ public class RunDirector : MonoBehaviour
         _run.ReturnToMenu();
         DespawnBots();
         if (playerStats != null) playerStats.Unbind();
-        if (playerHealth != null) playerHealth.ResetHealth();
+        if (playerHealth != null)
+        {
+            playerHealth.SetAutoRespawn(true);
+            playerHealth.ResetHealth();
+        }
         SetHidden(false);
     }
 

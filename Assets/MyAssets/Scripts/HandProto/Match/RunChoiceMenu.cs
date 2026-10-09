@@ -79,8 +79,8 @@ public class RunChoiceMenu : MonoBehaviour
             int index = i;
             if (shopSlots[i] != null) shopSlots[i].SetCustomAction(() => Choose(() => run.BuyShopItem(index)));
         }
-        if (rerollButton != null) rerollButton.SetCustomAction(() => Choose(run.RerollShop));
-        if (leaveButton != null) leaveButton.SetCustomAction(() => Choose(run.LeaveShop));
+        if (rerollButton != null) rerollButton.SetCustomAction(() => Choose(() => run.RerollShop()));
+        if (leaveButton != null) leaveButton.SetCustomAction(() => Choose(() => run.LeaveShop()));
     }
 
     private void Choose(System.Func<bool> choice)

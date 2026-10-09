@@ -50,6 +50,9 @@ namespace HandHero.Core
         }
 
         public HealthParams Params { get; set; }
+        // Off during a run (BR-5, BC-1): a dead hero waits for Revive / Reset
+        // instead of coming back for free after RespawnDelay.
+        public bool AutoRespawn { get; set; } = true;
         public float CurrentHealth { get; private set; }
         public bool IsDead { get; private set; }
         // Bumped per hit (the networked version change-detects this for effects).
@@ -135,7 +138,7 @@ namespace HandHero.Core
             if (_slowTimer > 0f) _slowTimer -= dt;
             if (_stunTimer > 0f) _stunTimer -= dt;
 
-            if (!IsDead) return false;
+            if (!IsDead || !AutoRespawn) return false;
 
             _respawnTimer -= dt;
             if (_respawnTimer > 0f) return false;

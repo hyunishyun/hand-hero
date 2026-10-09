@@ -90,11 +90,11 @@ namespace HandHero.Core
             {
                 case IslandType.Arena:
                     spec.BotCount = island <= 2 ? 1 : island <= 5 ? 2 : 3;
-                    spec.MaxAlive = Mathf.Min(spec.BotCount, p.MaxAlive);
+                    spec.MaxAlive = Mathf.Min(spec.BotCount, Mathf.Max(1, p.MaxAlive));
                     break;
                 case IslandType.Horde:
                     spec.BotCount = 0;
-                    spec.MaxAlive = p.MaxAlive;
+                    spec.MaxAlive = Mathf.Max(1, p.MaxAlive); // 0 would never spawn (BC-7)
                     break;
                 case IslandType.Elite:
                     spec.HealthMult = scale * p.EliteHealthMult;
@@ -196,7 +196,8 @@ namespace HandHero.Core
         // clears Arena / Elite / Boss once every bot is down.
         public bool ReportBotKilled()
         {
-            if (Phase != RunPhase.Island || IsPaused) return false;
+            // Counted while paused too (BR-8): the kill happened.
+            if (Phase != RunPhase.Island) return false;
             Kills++;
             _islandKills++;
             Crystals.Add(Economy.KillReward(Stats));
@@ -211,11 +212,13 @@ namespace HandHero.Core
             return Spec.Type == IslandType.Horde || _islandKills + alive < Spec.BotCount;
         }
 
-        // The player died on an island. Returns true if a revive saved the run
-        // (heal to ReviveHealth); false = ignored or Defeat.
+        // The player died during the run. Returns true if a revive saved the run
+        // (heal to ReviveHealth); false = ignored (no run, or already over) or Defeat.
+        // Resolved in every live phase and while paused (BC-1): a lethal hit is a
+        // fact, and with auto respawn off nothing else would bring the hero back.
         public bool ReportPlayerDeath()
         {
-            if (Phase != RunPhase.Island || IsPaused) return false;
+            if (Phase == RunPhase.Idle || Phase == RunPhase.Victory || Phase == RunPhase.Defeat) return false;
             if (RevivesLeft > 0)
             {
                 _revivesUsed++;

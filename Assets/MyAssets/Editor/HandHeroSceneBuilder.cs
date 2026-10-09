@@ -519,6 +519,8 @@ namespace HandHero.EditorTools
 
             var flying = hero.AddComponent<FlyingCharacter>();
             SetRefs(flying, ("arenaCenter", arena), ("visual", visual.transform));
+            // Bots never hit each other (BR-6); the Quick Match bot is still the player's enemy.
+            SetEnum(flying, "team", (int)(isBot ? HandHero.Core.HeroTeam.Bot : HandHero.Core.HeroTeam.Player));
 
             // Root doesn't rotate (only Visual does), so the bar stays level.
             GameObject bar = Primitive(PrimitiveType.Cube, "HealthBar", hero.transform,
@@ -805,6 +807,19 @@ namespace HandHero.EditorTools
             prop.arraySize = values.Length;
             for (int i = 0; i < values.Length; i++)
                 prop.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetEnum(Object target, string field, int value)
+        {
+            var so = new SerializedObject(target);
+            SerializedProperty prop = so.FindProperty(field);
+            if (prop == null)
+            {
+                Debug.LogError($"[HandHeroSceneBuilder] {target.GetType().Name} has no field '{field}'");
+                return;
+            }
+            prop.enumValueIndex = value;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 

@@ -70,7 +70,8 @@ namespace HandHero.Core
                 IsVisible = _dwell >= p.ShowDelay;
             }
 
-            return wasVisible && IsVisible && pinched;
+            // A fist closing for the clutch reads as a pinch too (BC-5): open hand only.
+            return wasVisible && IsVisible && pinched && fistStrength <= p.MaxFistStrength;
         }
     }
 }

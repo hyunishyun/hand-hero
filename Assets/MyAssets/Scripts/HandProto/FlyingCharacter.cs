@@ -22,6 +22,10 @@ public class FlyingCharacter : MonoBehaviour
     [Tooltip("Optional. Run items (SpeedMult); empty = one on this object, none = neutral")]
     [SerializeField] private RunHeroStats runStats;
 
+    [Header("Team")]
+    [Tooltip("Beams never hit a hero of the same team (run bots shoot through each other)")]
+    [SerializeField] private HeroTeam team = HeroTeam.Player;
+
     [Header("Arena Bounds")]
     [SerializeField] private Transform arenaCenter;
     [SerializeField] private Vector3 arenaSize = new Vector3(35f, 20f, 35f);
@@ -37,6 +41,7 @@ public class FlyingCharacter : MonoBehaviour
     public ArenaBounds Bounds => GetArenaBounds();
     // False between death and respawn (HeroHealth): no flight, no control, no firing.
     public bool IsAlive => _alive;
+    public HeroTeam Team => team;
 
     private Vector3 _velocity;
     private Vector3 _target;

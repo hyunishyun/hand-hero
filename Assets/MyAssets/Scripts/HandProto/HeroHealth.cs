@@ -121,6 +121,13 @@ public class HeroHealth : MonoBehaviour
         Stunned?.Invoke();
     }
 
+    // Run (BR-5, BC-1): off while a run is on, so a dead player comes back only
+    // through Revive / ResetHealth (never behind the DEFEAT screen).
+    public void SetAutoRespawn(bool on)
+    {
+        _model.AutoRespawn = on;
+    }
+
     // Full health, alive, at the spawn point (round start).
     public void ResetHealth()
     {
@@ -177,6 +184,9 @@ public class HeroHealth : MonoBehaviour
 
     private void OnBeamHit(BeamHit hit)
     {
+        // Backstop for the beam's team filter (BR-6): no friendly fire.
+        if (hit.Shooter != null && character != null && hit.Shooter != character &&
+            !HeroTeams.CanHit(hit.Shooter.Team, character.Team)) return;
         ApplyDamage(hit.Damage);
     }
 

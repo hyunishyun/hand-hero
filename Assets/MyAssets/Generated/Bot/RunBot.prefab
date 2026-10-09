@@ -526,6 +526,7 @@ MonoBehaviour:
   maxSpeed: 25
   glideDrag: 0.8
   runStats: {fileID: 0}
+  team: 1
   arenaCenter: {fileID: 1626584775171113931}
   arenaSize: {x: 35, y: 20, z: 35}
   visual: {fileID: 2826007427026016865}

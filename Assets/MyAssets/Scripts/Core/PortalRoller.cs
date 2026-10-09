@@ -39,6 +39,10 @@ namespace HandHero.Core
         // so every run starts with a build direction (§2.2).
         public static readonly Portal FirstIsland = new Portal(IslandType.Arena, ChestType.Damage);
 
+        // Offered when every rolled portal would open an empty chest (BC-6), so the
+        // portal choice always has a way on. An empty chest is skipped on opening.
+        public static readonly Portal Fallback = new Portal(IslandType.Arena, ChestType.Random);
+
         private static readonly (IslandType island, float weight)[] IslandWeights =
         {
             (IslandType.Arena, 0.5f),
@@ -79,6 +83,7 @@ namespace HandHero.Core
                 if (ChestRoller.Pool(chest, inventory).Count == 0) continue; // would open empty
                 portals.Add(portal);
             }
+            if (portals.Count == 0) portals.Add(Fallback);
             return portals;
         }
 

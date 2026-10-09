@@ -439,6 +439,9 @@ public class PointingBeamController : MonoBehaviour
             RaycastHit h = HitBuffer[i];
             if (h.collider.transform.IsChildOf(self)) continue;
             if (found && h.distance >= nearest.distance) continue;
+            // Same team (BR-6): the beam passes through, no hit, no dodge, no kill reward.
+            FlyingCharacter other = h.collider.GetComponentInParent<FlyingCharacter>();
+            if (other != null && !HeroTeams.CanHit(character.Team, other.Team)) continue;
             nearest = h;
             found = true;
         }

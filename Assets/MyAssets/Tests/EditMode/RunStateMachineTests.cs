@@ -186,15 +186,14 @@ namespace HandHero.Tests
         }
 
         [Test]
-        public void ReportBotKilled_IgnoredOutsideIslandOrPaused()
+        public void ReportBotKilled_IgnoredOutsideIsland_CountedWhilePaused()
         {
             var run = NewRun();
             Assert.IsFalse(run.ReportBotKilled()); // Intro
             Advance(run, run.Params.IntroTime + 0.2f);
             run.Pause();
-            Assert.IsFalse(run.ReportBotKilled());
+            Assert.IsTrue(run.ReportBotKilled()); // D8 (BR-8): a paused-frame kill counts
             run.Resume();
-            Assert.IsTrue(run.ReportBotKilled());
             Assert.AreEqual(1, run.Kills);
         }
 
@@ -285,8 +284,7 @@ namespace HandHero.Tests
         public void Death_WithoutRevive_IsDefeat()
         {
             var run = NewRun();
-            Assert.IsFalse(run.ReportPlayerDeath()); // not in an island: ignored
-            Assert.AreEqual(RunPhase.Intro, run.Phase);
+            // D8 (BC-1): a death outside the island is resolved too (RunStateFixesTests).
             Advance(run, run.Params.IntroTime + 0.2f);
             Assert.IsFalse(run.ReportPlayerDeath());
             Assert.AreEqual(RunPhase.Defeat, run.Phase);

@@ -59,7 +59,7 @@ namespace HandHero.Core
                     RequireReopen(); // grip just changed: a full fist
                     return default;
                 }
-                if (!_grip.IsOn)
+                if (!_grip.IsOn && gripSettleTime > 0f)
                 {
                     _pending = gripSettleTime; // wait: the grip may still be closing
                     return default;
