@@ -8,6 +8,7 @@ namespace HandHero.Core
     {
         private readonly List<float> _durations = new List<float>(256);
         private readonly List<bool> _shots = new List<bool>(256);
+        private readonly List<bool> _started = new List<bool>(256);
 
         public int Holds => _durations.Count;
         public int ChargesStarted { get; private set; }
@@ -15,6 +16,8 @@ namespace HandHero.Core
         public IReadOnlyList<float> Durations => _durations;
         // Per hold, in the same order as Durations: did it fire a charge shot.
         public IReadOnlyList<bool> ChargeShotFlags => _shots;
+        // Per hold: did a charge start (slowdown + orb), with or without a charge shot.
+        public IReadOnlyList<bool> ChargeStartedFlags => _started;
 
         // Takes the step a held gesture ended on; any other step is ignored.
         public void Add(ChargeStep step)
@@ -22,6 +25,7 @@ namespace HandHero.Core
             if (!step.HoldEnded) return;
             _durations.Add(step.HoldSeconds);
             _shots.Add(step.Released);
+            _started.Add(step.ChargeStarted);
             if (step.ChargeStarted) ChargesStarted++;
             if (step.Released) ChargeShots++;
         }
@@ -39,6 +43,7 @@ namespace HandHero.Core
         {
             _durations.Clear();
             _shots.Clear();
+            _started.Clear();
             ChargesStarted = 0;
             ChargeShots = 0;
         }

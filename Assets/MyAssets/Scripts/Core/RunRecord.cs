@@ -65,6 +65,8 @@ namespace HandHero.Core
         public float[] HoldSeconds = Array.Empty<float>();
         // Per hold: did it fire a charge shot (same order as HoldSeconds).
         public bool[] HoldCharged = Array.Empty<bool>();
+        // Per hold: did a charge start (slowdown + orb), shot or not (same order).
+        public bool[] HoldStarted = Array.Empty<bool>();
     }
 
     // Collects run events into a RunRecord. Begin at run start, then island /
@@ -152,6 +154,7 @@ namespace HandHero.Core
             {
                 r.HoldSeconds = Copy(totals.Holds.Durations);
                 r.HoldCharged = Copy(totals.Holds.ChargeShotFlags);
+                r.HoldStarted = Copy(totals.Holds.ChargeStartedFlags);
             }
 
             _record = null;
@@ -231,14 +234,23 @@ namespace HandHero.Core
                 if (i > 0) sb.Append(',');
                 sb.Append(Format(r.HoldSeconds[i]));
             }
-            sb.Append("],\"hold_charged\":[");
-            for (int i = 0; i < r.HoldCharged.Length; i++)
+            sb.Append(']');
+            Flags(sb, "hold_charged", r.HoldCharged);
+            Flags(sb, "hold_started", r.HoldStarted);
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        private static void Flags(StringBuilder sb, string key, bool[] flags)
+        {
+            sb.Append(',');
+            Quote(sb, key).Append(":[");
+            for (int i = 0; i < flags.Length; i++)
             {
                 if (i > 0) sb.Append(',');
-                sb.Append(r.HoldCharged[i] ? '1' : '0');
+                sb.Append(flags[i] ? '1' : '0');
             }
-            sb.Append("]}");
-            return sb.ToString();
+            sb.Append(']');
         }
 
         private static void Int(StringBuilder sb, string key, int value)

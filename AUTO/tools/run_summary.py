@@ -18,7 +18,7 @@ import sys
 from collections import Counter, defaultdict
 
 RUN_LIMIT_S = 600.0       # judged session: a full run must fit in 10 minutes
-QUICK_HOLD_S = 0.5        # a charge shot from a shorter hold was probably meant as a normal shot
+QUICK_HOLD_S = 0.5        # a charge started by a shorter hold was probably meant as a normal shot
 BOSS_ISLAND = 9
 
 
@@ -106,18 +106,21 @@ def summarize(runs):
     if not items:
         out("  none")
 
-    # Charge misfires: quick pinches (< QUICK_HOLD_S) that still fired a charge shot.
+    # Charge misfires: quick pinches (< QUICK_HOLD_S) that still started a charge
+    # (slowdown + orb), shot or not. Logs written before "hold_started" existed
+    # only have "hold_charged" (a charge shot fired), which undercounts.
     quick = misfires = holds = 0
     for r in runs:
-        for held, charged in zip(r.get("hold_s", []), r.get("hold_charged", [])):
+        started = r.get("hold_started", r.get("hold_charged", []))
+        for held, charging in zip(r.get("hold_s", []), started):
             holds += 1
             if held < QUICK_HOLD_S:
                 quick += 1
-                if charged:
+                if charging:
                     misfires += 1
     out("")
     if quick:
-        out(f"Charge misfire rate: {misfires}/{quick} pinches under {QUICK_HOLD_S} s fired a charge shot"
+        out(f"Charge misfire rate: {misfires}/{quick} pinches under {QUICK_HOLD_S} s started a charge"
             f" ({misfires / quick:.0%}); {holds} pinches in total")
     else:
         out(f"Charge misfire rate: no pinches under {QUICK_HOLD_S} s recorded")
@@ -157,7 +160,7 @@ def suggest(runs, finished, win_rate, win_times, fight_by_type, lost_on, quick, 
         return "few runs are won: lower RunParams.EnemyHealthPerIsland (0.15) first."
 
     if quick >= 10 and misfires / quick > 0.1:
-        return ("over 10% of quick pinches fired a charge shot:"
+        return ("over 10% of quick pinches started a charge:"
                 " raise ChargeParams.HoldDelay (0.25 s) on the player's PointingBeamController.")
 
     if len(finished) >= 3 and win_rate > 0.8 and win_times and median(win_times) < 0.6 * RUN_LIMIT_S:

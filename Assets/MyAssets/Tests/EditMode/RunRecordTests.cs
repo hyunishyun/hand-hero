@@ -227,5 +227,30 @@ namespace HandHero.Tests
             holds.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.7f, Released = true });
             CollectionAssert.AreEqual(new[] { false, true }, holds.ChargeShotFlags);
         }
+
+        // A hold that started a charge (slowdown + orb) but was released before the
+        // charge was ready is the misfire D13 targets; it fires no charge shot.
+        [Test]
+        public void PinchHoldStats_ExposesWhichHoldsStartedACharge()
+        {
+            var holds = new PinchHoldStats();
+            holds.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.2f });
+            holds.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.4f, ChargeStarted = true });
+            holds.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.9f, ChargeStarted = true, Released = true });
+            CollectionAssert.AreEqual(new[] { false, true, true }, holds.ChargeStartedFlags);
+            holds.Clear();
+            Assert.AreEqual(0, holds.ChargeStartedFlags.Count);
+        }
+
+        [Test]
+        public void Json_HasPerHoldChargeStartedFlags()
+        {
+            var holds = new PinchHoldStats();
+            holds.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.4f, ChargeStarted = true });
+            holds.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.1f });
+            RunRecord r = Begun().Finish(RunResult.Quit, 1f, new RunTotals { Holds = holds });
+            CollectionAssert.AreEqual(new[] { true, false }, r.HoldStarted);
+            StringAssert.Contains("\"hold_started\":[1,0]", RunRecordJson.ToJson(r));
+        }
     }
 }
