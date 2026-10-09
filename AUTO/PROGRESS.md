@@ -4,8 +4,8 @@
 
 | 태스크 | 상태 | 메모 |
 |---|---|---|
-| S1 첫 런 끊김 | TODO | |
-| S2 밸런스 | TODO | |
+| S1 첫 런 끊김 | DONE | `c119152`. 런 봇 풀을 씬 로드 때 미리 만들고, `RenderWarmup`이 로드 직후 3프레임 동안 봇·빔 3색·피격·처치 폭발·비네트·차지 구슬을 작게 그린다. 로거에 25 ms 작은 끊김 카운터(`HITCH`, `hitches=`, `worst_hitch=`)와 헤더의 warmup 시간. 테스트 469/469, 씬 재생성. **주의:** 3차 로그를 다시 보니 30초 Stale은 시스템 프로세스의 레이어와 겹친다(`QUESTIONS_FOR_HYUN.md` S1-2). |
+| S2 밸런스 | IN_PROGRESS | |
 | S3 남은 Minor 4건 | TODO | |
 | S4 메타 진행 Core | TODO | |
 | S5 메타 진행 연결 | TODO | |
