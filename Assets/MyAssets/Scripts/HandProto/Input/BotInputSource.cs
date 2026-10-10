@@ -28,6 +28,7 @@ public class BotInputSource : HandInputSourceBehaviour
     private BotBrain _brain;
     private FlyingCharacter _enemyHero;
     private float _fireIntervalScale = 1f;
+    private float _handSpeedScale = 1f; // Round 5 T4
 
     public BotBrain Brain => _brain;
 
@@ -60,6 +61,13 @@ public class BotInputSource : HandInputSourceBehaviour
     public void SetFireIntervalScale(float scale)
     {
         _fireIntervalScale = Mathf.Max(0.05f, scale);
+    }
+
+    // Round 5 T4: demo bots fly slower (< 1). Never above 1: the hand speed cap
+    // keeps every bot within human reach (fairness). 1 = the difficulty asset's cap.
+    public void SetHandSpeedScale(float scale)
+    {
+        _handSpeedScale = Mathf.Clamp(scale, 0.05f, 1f);
     }
 
     // Pooled run bots (P6, D9): a distinct seed per spawn, so bots spawned in the
@@ -125,6 +133,7 @@ public class BotInputSource : HandInputSourceBehaviour
         if (puppeteer != null) p.PositionScale = puppeteer.PositionScale;
         p.FireInterval *= _fireIntervalScale;
         p.FireIntervalJitter *= _fireIntervalScale;
+        p.MaxHandSpeed *= _handSpeedScale; // Round 5 T4
         return p;
     }
 }

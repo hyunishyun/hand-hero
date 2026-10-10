@@ -38,8 +38,9 @@ public class MatchHud : MonoBehaviour
 
         if (scoreLine != null)
         {
+            // Round 5 T4: the demo has no score or timer line (its banner stays empty too).
             bool inMatch = m.Phase != MatchPhase.Menu && m.Phase != MatchPhase.Boot && m.Phase != MatchPhase.Tutorial
-                && m.Phase != MatchPhase.Run;
+                && m.Phase != MatchPhase.Run && m.Phase != MatchPhase.Demo;
             bool inRun = r != null && r.Phase != RunPhase.Victory && r.Phase != RunPhase.Defeat;
             SetActive(scoreLine, inMatch || inRun);
             if (inMatch)

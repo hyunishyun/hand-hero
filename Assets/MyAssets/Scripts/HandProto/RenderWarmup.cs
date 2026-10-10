@@ -6,8 +6,9 @@ using UnityEngine;
 // building shader pipeline states the first time a run's objects are drawn.
 // For a few frames after the scene loads, while the menu opens, this draws one
 // pooled run bot, a beam in each beam color, a beam impact, a kill burst, the
-// damage vignette at an invisible alpha and the charge orb, small and far in
-// front of the camera, then hands everything back to its pool.
+// damage vignette at an invisible alpha, the charge orb and (round 5, T4) the
+// demo's ghost hand and a gesture caption, small and far in front of the
+// camera, then hands everything back to its pool.
 //
 // Drawing the real objects in the real frame is the warmup that matches the
 // device's render pass. Unity's GraphicsStateCollection needs a collection
@@ -44,6 +45,10 @@ public class RenderWarmup : MonoBehaviour
     [SerializeField] private DamageVignette vignette;
     [Tooltip("The player's charge orb (inactive until a charge)")]
     [SerializeField] private Transform chargeOrb;
+    [Tooltip("Round 5 T4: the demo's ghost hands (a row of joints and bone lines with their material)")]
+    [SerializeField] private GhostHands ghostHands;
+    [Tooltip("Round 5 T4: the demo's gesture captions (one label with its outline material)")]
+    [SerializeField] private GestureCaptions captions;
 
     // For PerfSpikeLogger's session header.
     public static bool IsRunning { get; private set; }
@@ -56,6 +61,8 @@ public class RenderWarmup : MonoBehaviour
     private RunBot _bot;
     private Vector3 _spot;
     private Vector3 _up = Vector3.up;
+    private Vector3 _right = Vector3.right;
+    private Quaternion _facing = Quaternion.identity;
     private Vector3 _orbScale = Vector3.one;
     private double _start;
     private int _frame;
@@ -96,6 +103,8 @@ public class RenderWarmup : MonoBehaviour
         _spot = view.position + view.forward * distance;
         _up = view.up;
         Vector3 right = view.right;
+        _right = right;
+        _facing = view.rotation;
 
         if (run != null)
         {
@@ -152,6 +161,8 @@ public class RenderWarmup : MonoBehaviour
             chargeOrb.localScale = Vector3.one * scale;
         }
         if (vignette != null) vignette.ShowWarmup(true);
+        if (ghostHands != null) ghostHands.ShowWarmup(true, _spot - _right * 0.3f - _up * 0.2f, _right, scale * 0.5f);
+        if (captions != null) captions.ShowWarmup(true, _spot - _up * 0.3f, _facing, scale);
     }
 
     private void End()
@@ -183,6 +194,8 @@ public class RenderWarmup : MonoBehaviour
             if (chargeOrb.gameObject.activeSelf) chargeOrb.gameObject.SetActive(false);
         }
         if (vignette != null) vignette.ShowWarmup(false);
+        if (ghostHands != null) ghostHands.ShowWarmup(false, Vector3.zero, Vector3.right, 0f);
+        if (captions != null) captions.ShowWarmup(false, Vector3.zero, Quaternion.identity, 0f);
 
         LastMs = (float)((Time.realtimeSinceStartupAsDouble - _start) * 1000.0);
         LastFrames = _frame;

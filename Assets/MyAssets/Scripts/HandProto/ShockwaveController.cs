@@ -43,6 +43,9 @@ public class ShockwaveController : MonoBehaviour
     private Vector2[] _ringUnit;
     private Vector3[] _ringPoints;
 
+    // Round 5 T4: a shockwave just fired (the demo's PUSH = SHOCKWAVE caption).
+    public event System.Action Fired;
+
     // With run items applied (the tuned radius when there are none).
     public float Radius => CombatMath.ShockwaveRadius(radius, RunHeroStats.StatsOf(runStats));
     public bool IsReady => Time.time - _lastFireTime >= cooldown;
@@ -111,6 +114,7 @@ public class ShockwaveController : MonoBehaviour
         }
 
         SfxPlayer.Play(SfxId.Shockwave, center);
+        Fired?.Invoke(); // Round 5 T4
 
         if (ring != null)
         {

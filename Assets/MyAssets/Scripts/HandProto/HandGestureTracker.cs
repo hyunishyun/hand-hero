@@ -90,6 +90,13 @@ public class HandGestureTracker : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
+    // Round 5 T4: GhostHands (demo mode) reads every joint. The running hand
+    // subsystem or null (check .running before reading joints: a stopped one's
+    // joint arrays are disposed), and the tracking space that maps joint poses to
+    // world space (null = joints are already world space).
+    public XRHandSubsystem Subsystem => _subsystem;
+    public Transform TrackingSpace => xrOrigin;
+
     private void Update()
     {
         if (_subsystem == null || !_subsystem.running)

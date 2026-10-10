@@ -25,6 +25,7 @@ public class MatchDirector : MonoBehaviour
         ToggleViewMode,    // VR arena <-> passthrough tabletop, main menu only (T10)
         ToggleAimMode,     // ASSIST <-> CURSOR aim, main menu only
         StartRun,          // RUN mode (R10); tutorial first like StartMatch
+        StartDemo,         // demo / practice mode (round 5, T4), main menu only, never the tutorial
     }
 
     private const string TutorialSeenKey = "HandHero.TutorialSeen";
@@ -55,7 +56,7 @@ public class MatchDirector : MonoBehaviour
     [SerializeField] private bool pauseOnHeadsetRemoved = true;
 
     [Header("Debug keys (editor / desktop)")]
-    [Tooltip("Enter = start from the menu / skip the tutorial or result screen, T = tutorial, M = aim mode (menu), Esc = back to the menu, P = pause/resume")]
+    [Tooltip("Enter = start from the menu / skip the tutorial or result screen, T = tutorial, G = demo (menu), M = aim mode (menu), Esc = back to the menu, P = pause/resume")]
     [SerializeField] private bool debugKeys = true;
 
     private MatchStateMachine _match;
@@ -121,6 +122,12 @@ public class MatchDirector : MonoBehaviour
         _runFighting = fighting;
         ApplyControlGating();
     }
+
+    // Round 5 T4: demo mode (D6). DemoDirector runs it while the match is in
+    // MatchPhase.Demo; this keeps pause, focus loss and menu return. Returns false
+    // outside the main menu.
+    public bool StartDemo() => _match.StartDemo();
+
     public void ReturnToMenu() => _match.ReturnToMenu();
     public void Pause() => _match.Pause();
     public void Resume() => _match.Resume();
@@ -139,6 +146,7 @@ public class MatchDirector : MonoBehaviour
             case MenuAction.ToggleViewMode: ToggleViewMode(); break;
             case MenuAction.ToggleAimMode: ToggleAimMode(); break;
             case MenuAction.StartRun: StartRun(withTutorial: !TutorialSeen); break;
+            case MenuAction.StartDemo: StartDemo(); break;
         }
     }
 
@@ -187,6 +195,10 @@ public class MatchDirector : MonoBehaviour
         else if (keyboard.tKey.wasPressedThisFrame && _match.Phase == MatchPhase.Menu)
         {
             StartMatch(withTutorial: true);
+        }
+        else if (keyboard.gKey.wasPressedThisFrame && _match.Phase == MatchPhase.Menu)
+        {
+            StartDemo();
         }
         else if (keyboard.mKey.wasPressedThisFrame)
         {
@@ -249,7 +261,8 @@ public class MatchDirector : MonoBehaviour
         bool fighting = _match.Phase == MatchPhase.Fight && !_match.IsPaused;
         bool practicing = _match.Phase == MatchPhase.Tutorial && !_match.IsPaused;
         bool running = _match.Phase == MatchPhase.Run && !_match.IsPaused && _runFighting;
-        SetEnabled(fightOnly, fighting || practicing || running);
+        bool demo = _match.Phase == MatchPhase.Demo && !_match.IsPaused; // Round 5 T4
+        SetEnabled(fightOnly, fighting || practicing || running || demo);
         SetEnabled(opponentOnly, fighting);
     }
 

@@ -139,6 +139,8 @@ public class PointingBeamController : MonoBehaviour
     public int ShotsFired { get; private set; }
     public int ShotsHit { get; private set; }
     public int ChargeShotsFired { get; private set; }
+    // Round 5 T4: the charge is building (past HoldDelay), for the demo's HOLD = CHARGE caption.
+    public bool IsCharging { get; private set; }
 
     public void ResetShotStats()
     {
@@ -278,6 +280,7 @@ public class PointingBeamController : MonoBehaviour
         UpdateChargeIndicator(step);
         UpdateChargeSounds(step);
         character.SetChargeSpeedMultiplier(step.Charging ? chargeMoveSpeedMultiplier : 1f);
+        IsCharging = step.Charging; // Round 5 T4
 
         if (step.Released && _aimPoint != Vector3.zero)
         {
@@ -324,6 +327,7 @@ public class PointingBeamController : MonoBehaviour
         if (health != null) health.Respawned -= OnRespawned;
         SetAssistTarget(null);
         _charge.Cancel();
+        IsCharging = false; // Round 5 T4
         UpdateChargeIndicator(default);
         if (character != null) character.SetChargeSpeedMultiplier(1f);
         // Pooled bots (SP-6): no beam or buffered shot left over for the next spawn.
