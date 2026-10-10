@@ -49,6 +49,7 @@ public class FlyingCharacter : MonoBehaviour
     private bool _alive = true;
     private float _speedMultiplier = 1f;
     private float _chargeSpeedMultiplier = 1f;
+    private float _paceSpeedMultiplier = 1f; // Round 5 deep review (DR-1)
 
     private void Awake()
     {
@@ -80,6 +81,15 @@ public class FlyingCharacter : MonoBehaviour
     public void SetChargeSpeedMultiplier(float multiplier)
     {
         _chargeSpeedMultiplier = Mathf.Clamp01(multiplier);
+    }
+
+    // Round 5 deep review (DR-1): a bot flown slower than the run's (the demo's
+    // Strikers, through BotInputSource.SetPace). A third channel beside the hit
+    // slow and the charge slow; the three multiply. Kept across respawns; never
+    // above 1. 1 = full speed (every other hero).
+    public void SetPaceSpeedMultiplier(float multiplier)
+    {
+        _paceSpeedMultiplier = Mathf.Clamp01(multiplier);
     }
 
     public void Kill()
@@ -119,7 +129,7 @@ public class FlyingCharacter : MonoBehaviour
         {
             Stiffness = stiffness,
             Damping = damping,
-            MaxSpeed = maxSpeed * _speedMultiplier * _chargeSpeedMultiplier
+            MaxSpeed = maxSpeed * _speedMultiplier * _chargeSpeedMultiplier * _paceSpeedMultiplier
                 * CombatMath.SpeedMultiplier(RunHeroStats.StatsOf(runStats)),
             GlideDrag = glideDrag,
         };

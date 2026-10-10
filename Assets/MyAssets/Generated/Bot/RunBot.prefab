@@ -1189,6 +1189,10 @@ MonoBehaviour:
   difficulty: {fileID: 11400000, guid: 4812ac8c0b8ea434cbcc6dc13ce8b189, type: 2}
   seed: 0
   obstacleClearance: 1
+  keepInSeatView: 1
+  seatEye: {x: 0, y: -0.8, z: -20}
+  seatMaxYaw: 45
+  seatMinDistance: 8
 --- !u!114 &4331799118844838986
 MonoBehaviour:
   m_ObjectHideFlags: 0

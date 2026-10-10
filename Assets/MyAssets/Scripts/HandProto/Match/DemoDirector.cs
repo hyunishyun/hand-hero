@@ -129,7 +129,7 @@ public class DemoDirector : MonoBehaviour
         {
             RunBot bot = _pool[i];
             if (bot == null) continue;
-            if (_poolInputs[i] != null) _poolInputs[i].SetHandSpeedScale(speedScale);
+            if (_poolInputs[i] != null) _poolInputs[i].SetPace(speedScale);
             bot.Activate(SpawnPoint(i), arena, enemy, spec, BotBrain.SpawnSeed(seeds), _controlled, archetype);
             _bots.Add(bot);
         }

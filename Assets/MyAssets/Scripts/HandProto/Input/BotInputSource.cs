@@ -25,10 +25,20 @@ public class BotInputSource : HandInputSourceBehaviour
     [Tooltip("Run bots (round 5): how far a dash or hold spot keeps from a terrain piece, meters (the hero collider's radius is 0.9)")]
     [SerializeField] private float obstacleClearance = 1f;
 
+    [Header("Seat view (round 5 deep review)")]
+    [Tooltip("Bots that keep their range (Sniper, Gunner, Lancer, boss) stay where the VR seat looks: off = they may circle beside the player or fly right in front of their face. Strikers ignore it")]
+    [SerializeField] private bool keepInSeatView = true;
+    [Tooltip("The VR seat's eye, arena-local meters (the arena center is at world (0, 2, 20), the eye at world (0, 1.2, 0)); the seat faces the arena center")]
+    [SerializeField] private Vector3 seatEye = new Vector3(0f, -0.8f, -20f);
+    [Tooltip("Degrees off the seat's forward, seen from above, that a range keeper may go (the Quest 3 view reaches about 55)")]
+    [SerializeField] private float seatMaxYaw = 45f;
+    [Tooltip("Level meters a range keeper keeps from the seat's eye")]
+    [SerializeField] private float seatMinDistance = 8f;
+
     private BotBrain _brain;
     private FlyingCharacter _enemyHero;
     private float _fireIntervalScale = 1f;
-    private float _handSpeedScale = 1f; // Round 5 T4
+    private float _pace = 1f; // Round 5 T4, deep review DR-1
 
     public BotBrain Brain => _brain;
 
@@ -63,11 +73,14 @@ public class BotInputSource : HandInputSourceBehaviour
         _fireIntervalScale = Mathf.Max(0.05f, scale);
     }
 
-    // Round 5 T4: demo bots fly slower (< 1). Never above 1: the hand speed cap
-    // keeps every bot within human reach (fairness). 1 = the difficulty asset's cap.
-    public void SetHandSpeedScale(float scale)
+    // Round 5 T4: demo bots fly slower (< 1). Deep review DR-1: the hand speed
+    // cap alone never slowed them, so this scales what sets the flight speed
+    // (BotParams.Paced: strafe lead, evade jump, weave, hand speed cap) and the
+    // bot hero's max speed. Never above 1 (fairness). 1 = the difficulty asset's bot.
+    public void SetPace(float scale)
     {
-        _handSpeedScale = Mathf.Clamp(scale, 0.05f, 1f);
+        _pace = Mathf.Clamp(scale, BotParams.MinPace, 1f);
+        if (self != null) self.SetPaceSpeedMultiplier(_pace);
     }
 
     // Pooled run bots (P6, D9): a distinct seed per spawn, so bots spawned in the
@@ -113,9 +126,11 @@ public class BotInputSource : HandInputSourceBehaviour
         }
 
         _brain.Params = CurrentParams();
+        ArenaBounds bounds = self.Bounds;
+        _brain.SetSeat(Seat(bounds));
         bool hasEnemy = enemy != null && enemy.gameObject.activeInHierarchy && EnemyAlive();
         HandInputData input = _brain.Step(self.transform.position, hasEnemy, hasEnemy ? enemy.position : Vector3.zero,
-            self.Bounds, Time.deltaTime);
+            bounds, Time.deltaTime);
         if (input.FireTriggered) ShotFired?.Invoke(_brain.LastShot);
         return input;
     }
@@ -127,13 +142,20 @@ public class BotInputSource : HandInputSourceBehaviour
         return _enemyHero == null || _enemyHero.IsAlive;
     }
 
+    // Deep review DR-2: the VR seat in world space (the arena box is axis-aligned
+    // around the arena center), facing the arena center. No arena: no seat.
+    private BotSeat Seat(ArenaBounds bounds)
+    {
+        if (!keepInSeatView || !bounds.Enabled) return default;
+        return BotSeat.At(bounds.Center + seatEye, -seatEye, seatMaxYaw, seatMinDistance);
+    }
+
     private BotParams CurrentParams()
     {
         BotParams p = difficulty != null ? difficulty.Params : BotParams.Default;
         if (puppeteer != null) p.PositionScale = puppeteer.PositionScale;
         p.FireInterval *= _fireIntervalScale;
         p.FireIntervalJitter *= _fireIntervalScale;
-        p.MaxHandSpeed *= _handSpeedScale; // Round 5 T4
-        return p;
+        return p.Paced(_pace); // Round 5 T4, deep review DR-1
     }
 }

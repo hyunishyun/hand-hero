@@ -12,7 +12,7 @@ namespace HandHero.Core
     {
         [Tooltip("Strikers flying in the demo (0-2); each comes back after a KO like any hero")]
         public int BotCount;
-        [Tooltip("x the bots' max hand speed (BotParams.MaxHandSpeed), 0.1-1: below 1 = slower than the run's Strikers")]
+        [Tooltip("x how fast the bots fly, 0.1-1: below 1 = slower than the run's Strikers (BotParams.Paced: strafe lead, evade jump, weave and hand speed cap, plus the bot hero's max speed)")]
         public float BotSpeedScale;
         [Tooltip("x the Striker telegraph time: above 1 = a longer warning")]
         public float TelegraphMult;
@@ -69,7 +69,8 @@ namespace HandHero.Core
             };
         }
 
-        // Never faster than the run's bots (the hand speed cap is the fairness rule).
+        // The demo bots' pace (BotInputSource.SetPace). Never faster than the run's
+        // bots (the hand speed cap is the fairness rule).
         public static float SpeedScale(DemoParams p)
         {
             return p.BotSpeedScale > 0f ? Mathf.Clamp(p.BotSpeedScale, 0.1f, 1f) : 1f;

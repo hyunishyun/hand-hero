@@ -59,6 +59,29 @@ namespace HandHero.Core
             MaxHandSpeed = 1.5f,
             PositionScale = 60f,
         };
+
+        // Slowest pace Paced applies (a pace of 0 or less reads as 1).
+        public const float MinPace = 0.05f;
+
+        // Round 5 deep review (DR-1): these knobs for a bot flying at `pace` x
+        // the speed (the demo's Strikers). A clutched hero's speed comes from the
+        // flight spring chasing the point the bot steers to, which strafing keeps
+        // StrafeLead ahead of the hero (steady speed about stiffness / damping x
+        // the lead), so the hand speed cap alone never bound it. Scales the
+        // strafe lead, the evade jump, the weave and the hand speed cap. A fast
+        // approach is the hero's max speed (FlyingCharacter.SetPaceSpeedMultiplier).
+        // 1 or more (or 0 or less) = unchanged: never faster than the difficulty's bot.
+        public BotParams Paced(float pace)
+        {
+            if (!(pace > 0f && pace < 1f)) return this;
+            pace = Mathf.Max(pace, MinPace);
+            BotParams p = this;
+            p.StrafeLead *= pace;
+            p.EvadeDistance *= pace;
+            p.VerticalWeave *= pace;
+            p.MaxHandSpeed *= pace;
+            return p;
+        }
     }
 
     public enum BotState
@@ -151,6 +174,9 @@ namespace HandHero.Core
         private int _obstacleCount;
         private float _obstacleClearance;
 
+        // Round 5 deep review (DR-2): where the player sits (range keepers stay in its view).
+        private BotSeat _seat;
+
         public BotBrain(BotParams p, int seed)
         {
             _p = p;
@@ -238,6 +264,15 @@ namespace HandHero.Core
             if (count > 0) Array.Copy(boxes, _obstacles, count);
             _obstacleCount = count;
             _obstacleClearance = Mathf.Max(0f, clearance);
+        }
+
+        // Round 5 deep review (DR-2): the player's seat. A bot that keeps its range
+        // (BotMovement.KeepRange) keeps its strafe, approach, dash and evade points
+        // inside the seat's view (BotSeat); Striker movement ignores it. Kept across
+        // Reset and Reseed; default = no seat.
+        public void SetSeat(BotSeat seat)
+        {
+            _seat = seat;
         }
 
         // Round 5 (T2-P4): inside a terrain piece grown by the clearance.
@@ -389,7 +424,7 @@ namespace HandHero.Core
             if (dist > range + _p.RangeTolerance)
             {
                 State = BotState.Approach;
-                return ring;
+                return SeatLimits(m) ? _seat.Limit(ring, _perceived) : ring;
             }
 
             State = BotState.Strafe;
@@ -402,8 +437,18 @@ namespace HandHero.Core
             if (m.KeepRange) desired = _perceived + (desired - _perceived).normalized * range;
             desired.y += Mathf.Sin(_time * 0.9f) * (_p.VerticalWeave * m.WeaveScale);
 
-            // Pinned against a wall: go the other way round.
-            if (bounds.Enabled && (bounds.Clamp(desired) - desired).sqrMagnitude > 1f
+            // Deep review DR-2: a range keeper circles only where the seat looks: at
+            // the edge of its view it is held back on the edge (turned back the way
+            // it came, never across the part out of view) until it turns round.
+            bool atSeatEdge = false;
+            if (SeatLimits(m) && !_seat.Allows(desired))
+            {
+                desired = _seat.Limit(desired, _perceived, -_strafeSign);
+                atSeatEdge = true;
+            }
+
+            // Pinned against a wall (or the edge of the seat's view): go the other way round.
+            if ((atSeatEdge || bounds.Enabled && (bounds.Clamp(desired) - desired).sqrMagnitude > 1f)
                 && _strafeTimer < _p.StrafeSwitchInterval * m.SwitchScale * 0.5f)
                 FlipStrafe();
 
@@ -436,8 +481,9 @@ namespace HandHero.Core
             {
                 _dash = DashPhase.Hold;
                 // Stopped short: hold right here, unless that is inside a terrain
-                // piece (T2-P4); then keep making for the clear spot.
-                if (!arrived && !InsideObstacle(self)) _dashSpot = self;
+                // piece (T2-P4) or out of the seat's view (DR-2); then keep making
+                // for the clear spot.
+                if (!arrived && !InsideObstacle(self) && SeatAllows(m, self)) _dashSpot = self;
                 State = BotState.Hold;
                 return true;
             }
@@ -483,10 +529,26 @@ namespace HandHero.Core
                 }
             }
 
+            // Deep review DR-2: a spot out of the seat's view gives way to the
+            // other side, else to the nearest spot round the enemy in view.
+            if (!SeatAllows(m, clamped))
+            {
+                Vector3 other = _bounds.Clamp(SphereSpot(radial, -side * radians, range, up));
+                if (_seat.Allows(other))
+                {
+                    side = -side;
+                    clamped = other;
+                }
+                else
+                {
+                    clamped = _bounds.Clamp(_seat.Limit(clamped, _perceived));
+                }
+            }
+
             if (_obstacleCount > 0 && InsideObstacle(clamped)
-                && !ClearSpot(radial, range, up, -side, radians, ref side, ref clamped)
-                && !ClearSpot(radial, range, up, side, radians * 0.5f, ref side, ref clamped)
-                && !ClearSpot(radial, range, up, -side, radians * 0.5f, ref side, ref clamped))
+                && !ClearSpot(radial, range, up, -side, radians, m, ref side, ref clamped)
+                && !ClearSpot(radial, range, up, side, radians * 0.5f, m, ref side, ref clamped)
+                && !ClearSpot(radial, range, up, -side, radians * 0.5f, m, ref side, ref clamped))
             {
                 NoDash(phase);
                 return;
@@ -498,12 +560,13 @@ namespace HandHero.Core
         }
 
         // Round 5 (T2-P4): the spot `radians` toward `trySide`, inside the arena;
-        // when it is clear of the terrain pieces it becomes the dash's spot and side.
-        private bool ClearSpot(Vector3 radial, float range, float up, float trySide, float radians,
+        // when it is clear of the terrain pieces (and, DR-2, in the seat's view)
+        // it becomes the dash's spot and side.
+        private bool ClearSpot(Vector3 radial, float range, float up, float trySide, float radians, BotMovement m,
             ref float side, ref Vector3 spot)
         {
             Vector3 candidate = _bounds.Clamp(SphereSpot(radial, trySide * radians, range, up));
-            if (InsideObstacle(candidate)) return false;
+            if (InsideObstacle(candidate) || !SeatAllows(m, candidate)) return false;
             side = trySide;
             spot = candidate;
             return true;
@@ -656,8 +719,30 @@ namespace HandHero.Core
             float up = (float)_rng.NextDouble() - 0.5f;
             Vector3 dir = (Tangent(_lastRadial) * side + Vector3.up * up).normalized;
             _evadeAnchor = _lastSelf + dir * _p.EvadeDistance;
+
+            // Deep review DR-2: a range keeper dodges the way that stays in the
+            // seat's view, else to the nearest point round the enemy in view.
+            if (!SeatAllows(Move, _evadeAnchor))
+            {
+                Vector3 other = _lastSelf + (Tangent(_lastRadial) * -side + Vector3.up * up).normalized * _p.EvadeDistance;
+                if (_seat.Allows(other))
+                {
+                    side = -side;
+                    _evadeAnchor = other;
+                }
+                else
+                {
+                    _evadeAnchor = _seat.Limit(_evadeAnchor, _perceived);
+                }
+            }
             _strafeSign = side;
         }
+
+        // Deep review DR-2: the seat limits this movement (a range keeper, with a seat set).
+        private bool SeatLimits(BotMovement m) => _seat.Enabled && m.KeepRange;
+
+        // In the seat's view, or not limited by it.
+        private bool SeatAllows(BotMovement m, Vector3 p) => !SeatLimits(m) || _seat.Allows(p);
 
         // Random offset perpendicular to the line of fire, inside the error cone.
         private Vector3 AimError(Vector3 self, Vector3 aimPoint)

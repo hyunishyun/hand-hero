@@ -69,6 +69,7 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 
 7. DEMO를 누른다.
    - 점수와 타이머 없이 느린 Striker 2마리와 주황 과녁 4개가 나와야 한다.
+   - 데모 Striker가 RUN의 Striker보다 눈에 띄게 느리게 나는지 본다. 시뮬레이션으로는 평균 약 0.63배이고, 멀리서 다가올 때 최고 15 m/s다(딥 리뷰 DR-1, 4.1의 54번).
    - 맞아도 체력이 줄지 않는다. 번쩍임, 소리, 감속은 나온다.
    - 쓰러진 봇은 3초, 과녁은 2초 뒤 다시 나온다.
 8. 반투명 손이 VR ARENA와 MR TABLE 모두에서 실제 손에 붙어 있는지 본다. 주먹을 쥐면 초록, 핀치를 하면 노랑이다.
@@ -95,6 +96,8 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
     - 멀리서 들어온 Lancer가 예고 중에 미끄러지는지 본다(리뷰 T2-R1-2).
     - Gunner의 빨간 예고선이 예고 동안 크게 돌아가서 피하기 어려운지 본다(리뷰 T2-R2-2).
 16. 기둥이나 벽 근처에서 Lancer와 보스가 조각 안에 멈춰 쏘지 않는지 본다. Sniper가 경기장 벽에 붙어 있는 시간이 거슬리는지도 본다.
+    - Sniper, Gunner, Lancer, 보스가 플레이어 옆(정면에서 45° 넘게)이나 얼굴 앞(8 m 안)으로 오지 않는지 본다. 영웅을 좌석 쪽으로 몰아도 마찬가지여야 한다(딥 리뷰 DR-2, 4.1의 55번).
+    - 시야 끝에서 되돌아갈 때 멈칫하는 모습이 거슬리는지, Sniper가 늘 영웅 뒤쪽에만 있어서 단조로운지 본다. 거슬리면 `RunBot` 프리팹 `BotInputSource`의 `Seat Max Yaw`를 50–55로 넓힌다.
 17. Gunner의 연두가 과녁·CURSOR 주황과 헷갈리지 않는지 본다.
     - **ASSIST 조준점(노랑)이 Gunner 몸 위에서 잘 보이는지** 특히 본다. 밝기 차이가 작다(리뷰 T1-R2-1). Dusk·Ember 섬에서는 색상도 더 가까워진다(F3-2).
     - 모든 원형의 지느러미는 빨강이어야 한다.
@@ -228,6 +231,8 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | 23 | Lancer는 공격 0.9초 전에 돌진을 시작한다. 그래서 발사 빈도가 4차와 같다. | `Movement.DashLeadTime` = 0 |
 | 24 | 돌진할 자리와 멈출 자리는 지형 조각을 피한다(히어로 반지름 1 m). | `RunDirector.SpawnBot`의 `bot.SetObstacles(...)`를 지운다. |
 | 25 | Sniper의 18 m 구가 경기장 밖으로 나가도 그대로 둔다(목표점이 안쪽으로 잘린다). | Sniper `RangeMult`를 1.3으로 |
+| 54 | 딥 리뷰 DR-1: 데모 속도 배수는 옆으로 끌기, 피하기 거리, 상하 흔들기, 손 속도 상한, 히어로 최고 속도를 함께 줄인다. 손 속도 상한만 줄이던 예전 값은 봇을 느리게 하지 못했다(9.44 대 9.49 m/s). | `DemoDirector` > `Rules` > `Bot Speed Scale` 1 |
+| 55 | 딥 리뷰 DR-2: 사거리를 지키는 원형(Sniper, Gunner, Lancer, 보스)은 좌석 정면 45° 안, 눈에서 수평 8 m 밖에서만 돈다. 예전에는 Sniper가 시간의 39%를 45° 밖에 있었고 눈에서 2.5 m까지 왔다. Striker는 그대로다. | `BotInputSource` > `Keep In Seat View`, `Seat Max Yaw`, `Seat Min Distance` |
 | 26–27 | Striker는 4차 골든 기록과 비교하는 테스트로 지킨다. 보스 테스트는 패턴별 거리를 본다. | (테스트만 해당) |
 | 28–29 | 발판은 다른 조각 위에 걸쳐도 된다. 단, 위아래 2.5 m 통로가 있어야 한다. 발판 중심은 2–8 m(실제 상한 7.2 m)다. | `PlacePieces`의 `VerticalGap` 조건, `Rules`의 `Platform Min/Max Y`·`Flight Lane Clearance` |
 | 30–31 | 섬 깊이별 조각 표(섬 1–2 최대 1/1/1 … 섬 7–8 최대 2/2/2, 보스 1/1/1). 낮은 벽은 돌리지 않는다. | `ArenaLayoutApplier` > `Piece Table`의 모든 `Max`를 0으로 두면 4차 아레나다. |
@@ -236,7 +241,7 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | 36 | 발판은 VR 좌석 눈과 TABLE 눈에서도 스폰 하나 이상을 가리지 않아야 배치가 통과한다. | `Rules` > `Viewer Eyes`를 비운다. |
 | 52 | 영웅이 단단한 콜라이더(조각, 기둥, 과녁) 안에서 쏘면 빔이 그 자리에서 막힌다. 플레이어와 봇이 같다. | `PointingBeamController.Fire`의 `OriginInsideCover` 분기를 지운다. |
 | 37, 46 | 데모는 새 단계 `MatchPhase.Demo`다. 메뉴에서만 들어간다. DEMO 버튼은 아랫줄 왼쪽에 있다. | 빌더에서 DEMO 버튼을 뺀다. |
-| 38–39 | 데모 봇은 Striker 2마리다. 손 속도 ×0.6, 예고 ×1.8, 발사 간격 ×1.6, 피해 ×0.4. 무적이어도 피격 반응은 그대로 나온다. | `Demo` > `DemoDirector` > `Rules`, `HeroHealthModel.ApplyDamage`의 `Invulnerable` 블록 |
+| 38–39 | 데모 봇은 Striker 2마리다. 속도 ×0.6(54번), 예고 ×1.8, 발사 간격 ×1.6, 피해 ×0.4. 무적이어도 피격 반응은 그대로 나온다. | `Demo` > `DemoDirector` > `Rules`, `HeroHealthModel.ApplyDamage`의 `Invulnerable` 블록 |
 | 40 | 연습 과녁은 기존 주황 과녁 4개다. ASSIST 조준 보조는 데모에서만 붙는다. | 빌더 데모 블록의 `demoAssistTargets`를 빈 배열로 |
 | 41–43, 53 | 캡션은 0.8초 + 0.3초 동안 뜬다. 손 바깥쪽 7 cm, 위 4 cm에 둔다. 영웅을 가리면 영웅 반대쪽으로 먼저 비킨다. 외곽선 재질 `DemoCaption.mat`을 쓴다. | `GestureCaptions` > `Timing`·`Layout`, 빌더의 `captionMat` 줄 |
 | 44–45 | 반투명 손은 손마다 관절 구 26개와 뼈 선 6개다. 로드 워밍업에 손과 캡션을 더했다. | `GhostHands` 필드, 씬 `RenderWarmup`의 `Ghost Hands`·`Captions` |
@@ -260,6 +265,8 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | 섬 테마 | 없음(빛 1.2, 흰색) → Dusk 1.05 / Frost 1.15 / Ember 1.1 | `ArenaThemeApplier` > `Themes` | 배열을 비운다. |
 | 조각 안에서 쏘는 빔 | 밖으로 나감 → 그 자리에서 막힘 | `PointingBeamController.Fire` | `OriginInsideCover` 분기를 지운다. |
 | 데모 | 새 값: 봇 2마리, 속도 ×0.6, 예고 ×1.8, 간격 ×1.6, 피해 ×0.4, 캡션 0.8 + 0.3초 | `DemoDirector` > `Rules`, `GestureCaptions` | 4.1의 37–47번 |
+| 데모 속도 배수(딥 리뷰 DR-1) | 손 속도 상한만 → 옆으로 끌기·피하기·상하 흔들기·손 속도 상한·히어로 최고 속도 | `BotParams.Paced`, `BotInputSource.SetPace`, `FlyingCharacter.SetPaceSpeedMultiplier` | 4.1의 54번 |
+| 봇 좌석 시야(딥 리뷰 DR-2) | 없음 → 사거리를 지키는 원형은 좌석 정면 45° 안, 눈에서 8 m 밖 | `RunBot` 프리팹 `BotInputSource` > Seat view(빌더 기본값) | `keepInSeatView` 끄기, 4.1의 55번 |
 | 새 재질 | `Generated/Materials/GhostHands.mat`, `DemoCaption.mat` | 빌더가 만든다. | 빌더 데모 블록 |
 
 ProjectSettings, 매니페스트, 패키지, XR·렌더 설정은 바뀌지 않았다. 퀵 매치와 튜토리얼의 수치와 배치도 그대로다. 4차 게임 수치(`HordeTime`, 보스 체력, `EnemyDamageMult`, 원형 공격 숫자)도 그대로다.

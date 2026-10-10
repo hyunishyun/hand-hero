@@ -901,6 +901,236 @@ namespace HandHero.Tests
             return archetype.AltMovement.DashDistance > 0f ? archetype.AltMovement : archetype.Movement;
         }
 
+        // --- pace (deep review DR-1) ---
+
+        [Test]
+        public void Paced_ScalesWhatSetsTheFlightSpeed_AndNeverSpeedsUp()
+        {
+            BotParams run = BotParams.Default;
+            foreach (float same in new[] { 1f, 2f, 0f, -1f })
+                Assert.AreEqual(run, run.Paced(same), $"pace {same}: the difficulty's bot");
+
+            BotParams slow = run.Paced(0.6f);
+            Assert.AreEqual(run.StrafeLead * 0.6f, slow.StrafeLead, 1e-5f);
+            Assert.AreEqual(run.EvadeDistance * 0.6f, slow.EvadeDistance, 1e-5f);
+            Assert.AreEqual(run.VerticalWeave * 0.6f, slow.VerticalWeave, 1e-5f);
+            Assert.AreEqual(run.MaxHandSpeed * 0.6f, slow.MaxHandSpeed, 1e-5f, "the fairness cap goes down with it");
+
+            // Everything else is the difficulty's: range, aim, shots, reaction.
+            BotParams rest = slow;
+            rest.StrafeLead = run.StrafeLead;
+            rest.EvadeDistance = run.EvadeDistance;
+            rest.VerticalWeave = run.VerticalWeave;
+            rest.MaxHandSpeed = run.MaxHandSpeed;
+            Assert.AreEqual(run, rest);
+
+            Assert.AreEqual(run.StrafeLead * BotParams.MinPace, run.Paced(0.001f).StrafeLead, 1e-5f, "floor");
+        }
+
+        // Mean flight speed over 60 s against a moving enemy, after the first 3 s;
+        // `hits` = a hit (an evade) every 2 s.
+        private static float MeanSpeed(BotParams p, int seed, bool hits)
+        {
+            Sim sim = Make(BotArchetypeId.Striker, p, Center + new Vector3(6f, 3f, 12f), Arena, seed);
+            float sum = 0f;
+            int n = 0;
+            Vector3 prev = sim.Position;
+            for (int i = 0; i < 72 * 60; i++)
+            {
+                if (hits && i % 144 == 143) sim.Brain.NotifyHit();
+                Vector3 enemy = Center + new Vector3(Mathf.Sin(i * 0.01f) * 6f, Mathf.Sin(i * 0.007f) * 2f,
+                    Mathf.Cos(i * 0.013f) * 4f);
+                sim.Step(enemy);
+                if (i >= 72 * 3)
+                {
+                    sum += (sim.Position - prev).magnitude / Dt;
+                    n++;
+                }
+                prev = sim.Position;
+            }
+            return sum / n;
+        }
+
+        // Review DR-1: the demo scaled only the hand speed cap (1.5 x 60 = 90 m/s
+        // of clutch travel, far above the ~10 m/s the flight spring settles at
+        // while strafing), so its "slow" Strikers flew exactly as fast as a run's.
+        // Same hero max speed for both here: the brain alone has to slow it.
+        [Test]
+        public void DemoStrikers_FlySlowerThanTheRunsStriker()
+        {
+            float pace = DemoRules.SpeedScale(DemoParams.Default);
+            Assert.Less(pace, 0.9f);
+            BotParams demo = BotParams.Default.Paced(pace);
+            foreach (bool hits in new[] { false, true })
+            {
+                float run = 0f, slow = 0f;
+                foreach (int seed in new[] { 1, 2, 3 })
+                {
+                    run += MeanSpeed(BotParams.Default, seed, hits);
+                    slow += MeanSpeed(demo, seed, hits);
+                }
+                string speeds = $"hits {hits}: run {run / 3f:F2} m/s, demo {slow / 3f:F2} m/s";
+                Assert.Less(slow, run * (pace + 0.15f), speeds);
+                Assert.Greater(slow, run * (pace - 0.2f), $"{speeds}: still flies");
+            }
+        }
+
+        // --- the seat (deep review DR-2) ---
+
+        // The VR seat: the eye at world (0, 1.2, 0) (arena-local (0, -0.8, -20)),
+        // facing the arena center; BotInputSource's defaults.
+        private static readonly Vector3 SeatEye = new Vector3(0f, 1.2f, 0f);
+        private static readonly BotSeat Seat = BotSeat.At(SeatEye, Vector3.forward, 45f, 8f);
+
+        // Degrees off the seat's forward and level meters from the eye.
+        private static float SeatYaw(Vector3 p) => Mathf.Abs(Mathf.Atan2(p.x - SeatEye.x, p.z - SeatEye.z)) * Mathf.Rad2Deg;
+
+        private static float SeatDistance(Vector3 p) => new Vector2(p.x - SeatEye.x, p.z - SeatEye.z).magnitude;
+
+        private static float LevelDistance(Vector3 a, Vector3 b) => new Vector2(a.x - b.x, a.z - b.z).magnitude;
+
+        // `meters` from the eye, `degrees` to the right of the seat's forward (level).
+        private static Vector3 FromSeat(float degrees, float meters, float up = 0f)
+        {
+            float r = degrees * Mathf.Deg2Rad;
+            return SeatEye + new Vector3(Mathf.Sin(r) * meters, up, Mathf.Cos(r) * meters);
+        }
+
+        [Test]
+        public void Seat_AllowsOnlyWhatTheSeatLooksAt()
+        {
+            Assert.IsTrue(Seat.Allows(FromSeat(0f, 20f)), "straight ahead");
+            Assert.IsTrue(Seat.Allows(FromSeat(40f, 20f)), "40 degrees right");
+            Assert.IsTrue(Seat.Allows(FromSeat(-40f, 9f)), "40 degrees left, 9 m");
+            Assert.IsFalse(Seat.Allows(FromSeat(50f, 20f)), "50 degrees right");
+            Assert.IsFalse(Seat.Allows(FromSeat(-50f, 20f)), "50 degrees left");
+            Assert.IsFalse(Seat.Allows(FromSeat(0f, 5f)), "in the player's face");
+            Assert.IsFalse(Seat.Allows(FromSeat(180f, 10f)), "behind the seat");
+            Assert.IsTrue(Seat.Allows(FromSeat(10f, 9f, 9f)), "heights are free");
+            Assert.IsFalse(Seat.Allows(FromSeat(0f, 5f, 9f)), "distance is level");
+
+            BotSeat none = default;
+            Assert.IsTrue(none.Allows(FromSeat(0f, 1f)), "no seat: no limit");
+            Assert.AreEqual(FromSeat(90f, 3f), none.Limit(FromSeat(90f, 3f), Center));
+        }
+
+        [Test]
+        public void Seat_Limit_TurnsAboutThePivot_ToTheNearestBearingInView()
+        {
+            Vector3 hero = Center; // 20 m in front of the eye, the hero's start
+            foreach (float side in new[] { 1f, -1f })
+            {
+                // On the Sniper's 18 m circle around the hero, beside the seat.
+                Vector3 p = hero + new Vector3(side * 17f, 1.5f, -6f);
+                Assert.Greater(SeatYaw(p), 50f);
+                Vector3 limited = Seat.Limit(p, hero);
+                Assert.IsTrue(Seat.Allows(limited), $"side {side}: {limited}");
+                Assert.That(SeatYaw(limited), Is.InRange(44f, 45f), $"side {side}: at the edge of the view");
+                Assert.AreEqual(LevelDistance(p, hero), LevelDistance(limited, hero), 1e-3f, "same circle");
+                Assert.AreEqual(p.y, limited.y, 1e-5f, "same height");
+                Assert.Greater(limited.x * side, 0f, "turned the short way, not across to the other edge");
+                Assert.Less(Vector3.Distance(p, limited), 5f, "the nearest edge (4 m round the circle)");
+            }
+
+            // In the player's face: the circle round a hero nearer the seat is in view farther out.
+            Vector3 near = SeatEye + new Vector3(0f, 0.8f, 8f);
+            Vector3 face = SeatEye + new Vector3(1f, 0.5f, 3f);
+            Vector3 out1 = Seat.Limit(face, near);
+            Assert.IsTrue(Seat.Allows(out1), $"{out1}");
+            Assert.GreaterOrEqual(SeatDistance(out1), 8f - 1e-3f);
+            Assert.AreEqual(LevelDistance(face, near), LevelDistance(out1, near), 1e-3f, "same circle");
+
+            Vector3 inView = FromSeat(20f, 15f);
+            Assert.AreEqual(inView, Seat.Limit(inView, hero), "in view: unchanged");
+        }
+
+        [Test]
+        public void Seat_Limit_NoBearingInViewOnTheCircle_GoesToTheEdgeOfTheView()
+        {
+            // A hero in the near right corner: its small circle never comes within 45 degrees.
+            Vector3 hero = SeatEye + new Vector3(17f, 0f, 2.5f);
+            Vector3 p = hero + new Vector3(-3f, 2f, 0f);
+            Vector3 limited = Seat.Limit(p, hero);
+            Assert.IsTrue(Seat.Allows(limited), $"{limited}");
+            Assert.That(SeatYaw(limited), Is.InRange(44f, 45f), "the edge of the view");
+            Assert.Greater(limited.x, 0f, "on the hero's side");
+            Assert.GreaterOrEqual(SeatDistance(limited), 8f - 1e-3f);
+            Assert.AreEqual(p.y, limited.y, 1e-5f, "same height");
+        }
+
+        // Review DR-2: the near wall is 2.5 m in front of the eye, so the Sniper's
+        // 18 m circle around a hero at its start never met a wall it could turn at
+        // and orbited beside the seat (39% of the time over 45 degrees off, 2.5 m
+        // from the eye). Every range keeper, with shots and hits, a hero at its
+        // start, higher, nearer the seat and moving about: in the seat's view and
+        // never in the player's face. Its dash and hold spots are in view.
+        [Test]
+        public void RangeKeepers_StayInTheSeatsView()
+        {
+            Vector3[] heroes = { Center, Center + new Vector3(0f, 3f, 0f), Center + new Vector3(0f, 0f, -8f) };
+            foreach (BotArchetypeId id in new[]
+                         { BotArchetypeId.Sniper, BotArchetypeId.Gunner, BotArchetypeId.Lancer, BotArchetypeId.Boss })
+            foreach (Vector3 hero in heroes)
+            foreach (int seed in new[] { 1, 2 })
+            {
+                Sim sim = Make(id, BotParams.Default, Center + new Vector3(6f, 3f, 12f), Arena, seed);
+                sim.Brain.SetSeat(Seat);
+                int frames = 0, wide = 0;
+                float widest = 0f, nearest = float.MaxValue, range = 0f;
+                for (int i = 0; i < 72 * 60; i++)
+                {
+                    if (i % 216 == 215) sim.Brain.NotifyHit();
+                    Vector3 enemy = hero + new Vector3(Mathf.Sin(i * 0.01f) * 3f, Mathf.Sin(i * 0.007f) * 2f,
+                        Mathf.Cos(i * 0.013f) * 3f);
+                    sim.Step(enemy);
+                    string at = $"{id}, hero {hero - Center}, seed {seed}, frame {i}";
+                    BotState state = sim.Brain.State;
+                    if (state == BotState.Dash || state == BotState.Hold)
+                        Assert.IsTrue(Seat.Allows(sim.Brain.DashSpot), $"{at}: {state} spot {sim.Brain.DashSpot}");
+
+                    float yaw = SeatYaw(sim.Position);
+                    frames++;
+                    if (yaw > 47f) wide++;
+                    widest = Mathf.Max(widest, yaw);
+                    nearest = Mathf.Min(nearest, SeatDistance(sim.Position));
+                    range += Vector3.Distance(sim.Position, enemy);
+                }
+                string run = $"{id}, hero {hero - Center}, seed {seed}";
+                Assert.Less(wide, frames / 100, $"{run}: {wide} of {frames} frames over 47 degrees");
+                Assert.Less(widest, 52f, run);
+                Assert.Greater(nearest, 7f, $"{run}: in the player's face");
+                if (id == BotArchetypeId.Sniper && hero == Center)
+                    Assert.Greater(range / frames, 15f, $"{run}: still keeps far");
+            }
+        }
+
+        // The seat is for range keepers only: Striker (round 4's bot, and the
+        // demo's) moves exactly as without one, also where the seat would turn it.
+        [Test]
+        public void Striker_IgnoresTheSeat()
+        {
+            Vector3 hero = Center + new Vector3(0f, 0f, -8f);
+            Sim free = Make(BotArchetypeId.Striker, BotParams.Default, Center + new Vector3(6f, 3f, 12f), Arena, 5);
+            Sim seated = Make(BotArchetypeId.Striker, BotParams.Default, Center + new Vector3(6f, 3f, 12f), Arena, 5);
+            seated.Brain.SetSeat(Seat);
+            int outside = 0;
+            for (int i = 0; i < 72 * 30; i++)
+            {
+                if (i % 216 == 215)
+                {
+                    free.Brain.NotifyHit();
+                    seated.Brain.NotifyHit();
+                }
+                HandInputData a = free.Step(hero);
+                HandInputData b = seated.Step(hero);
+                Assert.IsTrue(a.ClutchDelta.Equals(b.ClutchDelta), $"move, frame {i}");
+                Assert.AreEqual(a.FireTriggered, b.FireTriggered, $"fire, frame {i}");
+                Assert.IsTrue(free.Position.Equals(seated.Position), $"position, frame {i}");
+                if (!Seat.Allows(free.Position)) outside++;
+            }
+            Assert.Greater(outside, 0, "the seat would have turned a range keeper here");
+        }
+
         [Test]
         public void SameSeed_SameMovement()
         {
