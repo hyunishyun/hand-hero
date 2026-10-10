@@ -23,7 +23,7 @@ public class RunDirector : MonoBehaviour
     [SerializeField] private Transform[] botSpawnPoints;
     [Tooltip("Hidden while a run is on: the Quick Match bot hero and its ground marker")]
     [SerializeField] private GameObject[] hideDuringRun;
-    [Tooltip("Optional (round 4, S7): seeded pillar and spawn point positions per island; today's layout outside runs")]
+    [Tooltip("Optional (round 4 S7, round 5 T3): seeded pillar, extra piece and spawn point positions and a colour theme per island; today's layout and look outside runs")]
     [SerializeField] private ArenaLayoutApplier layout;
 
     [Header("Rules")]
@@ -482,11 +482,13 @@ public class RunDirector : MonoBehaviour
     }
 
     // During the countdown, before any bot spawns (S7): a new seeded layout per island.
+    // Round 5 T3: plus the island's extra pieces (depth table) and colour theme, logged per island.
     private void ApplyIslandLayout()
     {
         if (layout == null) return;
-        int layoutSeed = ArenaLayout.IslandSeed(_layoutRunSeed, _run.Island);
-        if (layout.Apply(layoutSeed)) _recorder.IslandLayout(layoutSeed);
+        ArenaIslandTerrain terrain = layout.ApplyIsland(_layoutRunSeed, _run.Island);
+        if (!terrain.UsedFallback) _recorder.IslandLayout(terrain.LayoutSeed);
+        _recorder.IslandTerrain(terrain.Theme, terrain.Pieces);
         _nextSpawnPoint = 0;
     }
 

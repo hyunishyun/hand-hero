@@ -112,6 +112,9 @@ def summarize(runs):
     else:
         out("  none (logs before round 4)")
 
+    # Round 5 (T3): island themes and extra terrain pieces.
+    lines.extend(terrain_lines(runs))
+
     starts = Counter(r.get("start_relic") or "none" for r in runs if "start_relic" in r)
     if starts:
         out("Starting relics: " + ", ".join(f"{relic} {count}" for relic, count in starts.most_common()))
@@ -151,6 +154,34 @@ def summarize(runs):
     out("")
     out("Suggestion: " + suggest(runs, finished, win_rate, win_times, fight_by_type, lost_on, quick, misfires))
     return "\n".join(lines)
+
+
+def terrain_lines(runs):
+    """Round 5 (T3): theme mix, extra pieces per island and fallback layouts.
+    An island with a theme but no layout_seed fell back to today's two pillars."""
+    lines = ["", "Terrain per island (round 5: theme / extra pieces):"]
+    islands = [i for r in runs for i in r.get("islands", []) if "theme" in i]
+    if not islands:
+        lines.append("  none (logs before round 5)")
+        return lines
+
+    by_theme = defaultdict(list)
+    for island in islands:
+        by_theme[island.get("theme") or "default"].append(island)
+    for theme, group in sorted(by_theme.items()):
+        fights = [i.get("fight_s", 0.0) for i in group]
+        damage = [i.get("damage", 0.0) for i in group]
+        lines.append(f"  {theme}: {len(group)} islands, median fight {median(fights):.0f} s,"
+                     f" median damage taken {median(damage):.0f}")
+
+    def mean(key):
+        return sum(i.get(key, 0) for i in islands) / len(islands)
+
+    fallbacks = sum(1 for i in islands if "layout_seed" not in i)
+    lines.append(f"  extra pieces per island (mean): low walls {mean('low_walls'):.1f},"
+                 f" platforms {mean('platforms'):.1f}, thin pillars {mean('thin_pillars'):.1f}")
+    lines.append(f"  fallback layouts (today's two pillars): {fallbacks}/{len(islands)}")
+    return lines
 
 
 def suggest(runs, finished, win_rate, win_times, fight_by_type, lost_on, quick, misfires):
