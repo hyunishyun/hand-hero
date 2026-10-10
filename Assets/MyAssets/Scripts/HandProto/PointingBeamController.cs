@@ -97,6 +97,11 @@ public class PointingBeamController : MonoBehaviour
     [SerializeField] private float critHitPitch = 1.35f;
 
     private static readonly RaycastHit[] HitBuffer = new RaycastHit[16];
+    private static readonly Collider[] OverlapBuffer = new Collider[8];
+    // How far inside a collider's bounds the shot origin must be to count as inside
+    // it: a hero clamped onto the arena floor or back wall sits exactly on their
+    // surface and still fires.
+    private const float CoverInset = 0.001f;
 
     private Vector3 _aimPoint;
     private IHandInputSource _sourceOverride;
@@ -492,7 +497,15 @@ public class PointingBeamController : MonoBehaviour
         float dist = Vector3.Distance(origin, _aimPoint);
         Vector3 end = _aimPoint;
 
-        if (RaycastIgnoringSelf(new Ray(origin, dir), dist + 0.5f, out RaycastHit hit))
+        if (OriginInsideCover(origin))
+        {
+            // Blocked at the hero (review T3-R2-1): the cover it sits in takes the
+            // shot, no damage. Shots at it stop on the cover's face the same way.
+            end = origin;
+            BeamImpactPool.Play(hitEffectPrefab, end,
+                dir != Vector3.zero ? Quaternion.LookRotation(-dir) : Quaternion.identity);
+        }
+        else if (RaycastIgnoringSelf(new Ray(origin, dir), dist + 0.5f, out RaycastHit hit))
         {
             end = hit.point;
 
@@ -536,6 +549,29 @@ public class PointingBeamController : MonoBehaviour
         {
             SfxPlayer.Play(SfxCues.ForShot(character.Team, charged), origin, _shotPitch);
         }
+    }
+
+    // Round 5 review (T3-R2-1): the shot starts inside solid cover - any non-trigger
+    // collider on the aim mask that is not a hero (terrain pieces, pillars, targets).
+    // Heroes don't collide with terrain, and the damage raycast never reports a
+    // collider that contains its origin, so a hero inside a floating platform fired
+    // out freely while shots at it stopped on the slab. One overlap query per shot,
+    // the same rule for the player and the bots (ADR fairness).
+    private bool OriginInsideCover(Vector3 origin)
+    {
+        int count = Physics.OverlapSphereNonAlloc(origin, CoverInset, OverlapBuffer, aimMask,
+            QueryTriggerInteraction.Ignore);
+        Transform self = character.transform;
+        for (int i = 0; i < count; i++)
+        {
+            Collider c = OverlapBuffer[i];
+            if (c == null || c.transform.IsChildOf(self)) continue;
+            if (c.GetComponentInParent<FlyingCharacter>() != null) continue;
+            Bounds inside = c.bounds;
+            inside.Expand(-2f * CoverInset);
+            if (inside.Contains(origin)) return true;
+        }
+        return false;
     }
 
     // Nearest hit that is not this controller's own hero, so a hero never

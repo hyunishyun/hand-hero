@@ -325,6 +325,61 @@ namespace HandHero.Tests
             AssertNear(normal, DemoCaptionLayout.Place(Head, RightPalm, Vector3.right, false, true, hero, 1f, none));
         }
 
+        // Review fix (T4-R2-1): with the hero below the caption (low and near in the VR
+        // arena, or under the hands on the MR table) every step down moved the caption
+        // further onto it, and after 6 steps it stayed 26 cm under the palm, still over
+        // the hero. The reviewer's pose: hero at (3.1, -3, 5), inside the arena.
+        [Test]
+        public void Place_HeroBelowTheCaption_StepsUpOffIt()
+        {
+            Vector3 normal = DemoCaptionLayout.Place(Head, RightPalm, Vector3.right, false, false, Vector3.zero, 1f, L);
+            var hero = new Vector3(3.1f, -3f, 5f);
+            Assert.IsTrue(DemoCaptionLayout.CoversHero(Head, normal, Vector3.right, hero, 1f, L));
+
+            Vector3 at = DemoCaptionLayout.Place(Head, RightPalm, Vector3.right, false, true, hero, 1f, L);
+            Assert.IsFalse(DemoCaptionLayout.CoversHero(Head, at, Vector3.right, hero, 1f, L), "ends clear of the hero");
+            Assert.Greater(at.y, normal.y, "moved up, away from the hero");
+            Assert.AreEqual(normal.x, at.x, 1e-4f, "stays beside the same hand");
+        }
+
+        [TestCase(5f)]
+        [TestCase(6f)]
+        [TestCase(7f)]
+        public void Place_Hero5mAwayBelowTheCaption_EndsClearAndAbove(float degreesBelow)
+        {
+            Vector3 normal = DemoCaptionLayout.Place(Head, RightPalm, Vector3.right, false, false, Vector3.zero, 1f, L);
+            Vector3 middle = normal + Vector3.right * (L.LabelWidth * 0.5f);
+            Vector3 hero = Head + BelowMiddle(middle, degreesBelow) * 5f;
+            Assert.AreEqual(degreesBelow, Vector3.Angle(middle - Head, hero - Head), 0.01f);
+            Assert.IsTrue(DemoCaptionLayout.CoversHero(Head, normal, Vector3.right, hero, 1f, L));
+
+            Vector3 at = DemoCaptionLayout.Place(Head, RightPalm, Vector3.right, false, true, hero, 1f, L);
+            Assert.IsFalse(DemoCaptionLayout.CoversHero(Head, at, Vector3.right, hero, 1f, L), "ends clear of the hero");
+            Assert.Greater(at.y, normal.y, "moved up, away from the hero");
+        }
+
+        // No spot within MaxSteps either way clears a hero this close: the caption
+        // stays beside the palm it labels instead of the farthest step.
+        [TestCase(0f)]
+        [TestCase(3f)]
+        public void Place_NoClearSpotWithinMaxSteps_StaysBesideThePalm(float degreesBelow)
+        {
+            Vector3 normal = DemoCaptionLayout.Place(Head, RightPalm, Vector3.right, false, false, Vector3.zero, 1f, L);
+            Vector3 middle = normal + Vector3.right * (L.LabelWidth * 0.5f);
+            // 2 m away the hero spans about 31 degrees each side of its center.
+            Vector3 hero = Head + BelowMiddle(middle, degreesBelow) * 2f;
+            Assert.IsTrue(DemoCaptionLayout.CoversHero(Head, normal, Vector3.right, hero, 1f, L));
+
+            AssertNear(normal, DemoCaptionLayout.Place(Head, RightPalm, Vector3.right, false, true, hero, 1f, L));
+        }
+
+        // The direction from the head that is `degrees` below the caption's middle.
+        private static Vector3 BelowMiddle(Vector3 middle, float degrees)
+        {
+            Vector3 toMiddle = (middle - Head).normalized;
+            return Vector3.RotateTowards(toMiddle, Vector3.down, degrees * Mathf.Deg2Rad, 0f).normalized;
+        }
+
         [Test]
         public void CoversHero_HeroAtTheHead_IsFalse()
         {

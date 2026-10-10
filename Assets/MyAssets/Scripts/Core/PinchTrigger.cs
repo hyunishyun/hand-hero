@@ -17,7 +17,7 @@ namespace HandHero.Core
         None,     // still held, or nothing was held
         Meta,     // Meta's index-pinch flag went off (after it was on during this press)
         Absolute, // strength fell to ResetThreshold (the rounds 1-4 rule would release too)
-        Relative, // strength fell RelativeRelease below this press's peak (only the new rule releases)
+        Relative, // strength fell RelativeRelease below this press's peak, or to the floor under FireThreshold (only the new rule releases)
         Lost,     // tracking lost, or the system gesture took the pinch
     }
 
@@ -60,47 +60,88 @@ namespace HandHero.Core
         // A drop this far below the press's peak releases; the next press must then
         // rise this far above the lowest point since. 0 = off (absolute rule only).
         public float RelativeRelease;
+        // With RelativeRelease on, a pinch also ends at FireThreshold minus this,
+        // however deep the press went: a light press (peak 0.8-0.9, thumb 2.4-1.9 cm)
+        // still ends at the resting pointing thumb (0.71). 0 = off (peak drop only).
+        public float ReleaseFloorMargin;
+        // Once the strength has settled at or below that floor after a release, the
+        // next press needs at most FireThreshold plus this (not RelativeRelease above
+        // the lowest point), so a light tap after a firm one fires.
+        public float RearmMargin;
+        // The strength rules count only when this many consecutive samples agree:
+        // one-frame tracking outliers neither end a hold nor reopen a dropped pinch.
+        // 0 or 1 = every sample counts (the rounds 1-4 rule).
+        public int ConfirmFrames;
         // Meta's flag off for this many steps (after it was on in this press)
         // releases. 0 = the Meta flag is ignored.
         public int MetaReleaseFrames;
+        // ...and only on a sample at least this far below the press's peak (the
+        // thumb moved), so a flag flicker while the fingers stay closed does not
+        // end the hold. 0 = the flag alone.
+        public float MetaReleaseDrop;
 
         public static PinchReleaseParams Default => new PinchReleaseParams
         {
             FireThreshold = 0.8f,
             ResetThreshold = 0.6f,
             RelativeRelease = 0.2f,
+            ReleaseFloorMargin = 0.05f,
+            RearmMargin = 0.05f,
+            ConfirmFrames = 2,
             MetaReleaseFrames = 2,
+            MetaReleaseDrop = 0.05f,
         };
     }
 
     // Aim-hand pinch: fire edge + hold level with hysteresis (ADR 8).
     //
-    // Press: strength rises to FireThreshold. Release (round 5, D1), whichever comes
-    // first: Meta's index-pinch flag off for MetaReleaseFrames steps after it was on
-    // in this press; strength back down to ResetThreshold; strength RelativeRelease
-    // below the peak of this press. The last one is the ASSIST fix: a pointing hand
-    // rests the thumb about 2.8 cm from the index (strength 0.71), above the reset,
-    // so a pinch used to stay "held" for seconds and read as a charge.
-    // A release above the reset re-arms relatively too: the next press must rise
-    // RelativeRelease above the lowest point since, so jitter at the release point
-    // never fires twice. With RelativeRelease and MetaReleaseFrames at 0 this is the
-    // rounds 1-4 absolute rule.
+    // Press: strength rises to FireThreshold (on the sample it gets there: no added
+    // shot latency). Release (round 5, D1), whichever comes first:
+    // - Meta's index-pinch flag off for MetaReleaseFrames steps after it was on in
+    //   this press, on a sample MetaReleaseDrop below the press's peak (a flag
+    //   flicker while the fingers stay closed is not a release);
+    // - strength at or below ResetThreshold;
+    // - strength at or below the press's release level: RelativeRelease below its
+    //   peak, but never under FireThreshold - ReleaseFloorMargin. This is the ASSIST
+    //   fix: a pointing hand rests the thumb about 2.8 cm from the index (0.71),
+    //   above the reset, so a pinch used to stay "held" for seconds and read as a
+    //   charge; the floor makes a light press (peak 0.8-0.9) end there too (review
+    //   T0-R1-1/R2-1). It does not count while Meta's flag is on (D1: the fallback).
+    // The strength rules need ConfirmFrames consecutive samples (review T0-R1-2/R2-3):
+    // one tracking outlier inside a hold neither ends it nor, with the next sample
+    // back at the peak, fires a second shot.
+    //
+    // A release above the reset re-arms relatively: the next press must rise
+    // RelativeRelease above the lowest settled strength since (the highest of
+    // ConfirmFrames samples in a row), so jitter at the release point never fires
+    // twice. Once that low has settled at or below the floor, FireThreshold +
+    // RearmMargin is enough, so a light tap after a firm one fires. Settled at or
+    // below the reset = fully re-armed. With RelativeRelease, ConfirmFrames and
+    // MetaReleaseFrames at 0 this is the rounds 1-4 absolute rule.
     //
     // Tracking loss, the Meta system gesture and RequireReopen drop the pinch; one
-    // still closed must open (to the reset, or RelativeRelease below its highest
-    // point since) before it fires or holds.
+    // still closed must open (the same settled low) before it fires or holds, so a
+    // single low reacquire frame is not a reopen.
     //
     // The rounds 1-4 overload also ignores the pinch while the aim-hand fist is held
     // and for a short time after: a closed fist brings thumb and index close enough
     // to read as a pinch.
     public class PinchTrigger
     {
+        // Longest ConfirmFrames window (larger values are clamped to it).
+        public const int MaxConfirmFrames = 4;
+
         private float _suppressTimer;
         private bool _held;
         private bool _mustReopen;
-        // Lowest strength since the last release or reopen request (+inf right after
-        // a reopen request, so the first sample sets it).
+        // Lowest settled strength since the last release or reopen request (+inf
+        // right after a reopen request, until ConfirmFrames samples have come in).
         private float _trough = float.PositiveInfinity;
+
+        // The last samples since the last reopen request (ring buffer, no allocation per step).
+        private readonly float[] _recent = new float[MaxConfirmFrames];
+        private int _recentCount;
+        private int _recentNext;
 
         // The current press.
         private float _peak;
@@ -108,6 +149,9 @@ namespace HandHero.Core
         private float _last;
         private bool _metaSeen;
         private int _metaOffFrames;
+        // Consecutive samples at or below the release level / the reset.
+        private int _lowFrames;
+        private int _resetFrames;
 
         // Rounds 1-4: the absolute rule on one strength value, plus the fist suppression.
         public PinchState Step(bool tracked, float pinchStrength, float fireThreshold, float resetThreshold,
@@ -143,9 +187,12 @@ namespace HandHero.Core
             }
 
             float v = sample.Strength;
+            int confirm = ConfirmFrames(p);
+            float settled = Remember(v, confirm);
+
             if (_held)
             {
-                PinchReleaseBy by = ReleaseRule(sample, p);
+                PinchReleaseBy by = ReleaseRule(sample, p, confirm);
                 if (by == PinchReleaseBy.None)
                 {
                     state.Held = true;
@@ -154,14 +201,14 @@ namespace HandHero.Core
 
                 state.Release = Ended(by, v);
                 _held = false;
-                _mustReopen = v > p.ResetThreshold;
-                _trough = v;
+                _trough = settled;
+                _mustReopen = settled > p.ResetThreshold;
                 return state;
             }
 
-            if (v < _trough) _trough = v;
-            if (v <= p.ResetThreshold) _mustReopen = false;
-            bool armed = !_mustReopen || (p.RelativeRelease > 0f && v >= _trough + p.RelativeRelease);
+            if (settled < _trough) _trough = settled;
+            if (_trough <= p.ResetThreshold) _mustReopen = false;
+            bool armed = !_mustReopen || (p.RelativeRelease > 0f && v >= RearmLevel(p));
             if (!armed || v < p.FireThreshold) return state;
 
             _held = true;
@@ -171,6 +218,8 @@ namespace HandHero.Core
             _last = v;
             _metaSeen = sample.HasMeta && sample.MetaPinching;
             _metaOffFrames = 0;
+            _lowFrames = 0;
+            _resetFrames = 0;
             state.FireTriggered = true;
             state.Held = true;
             return state;
@@ -183,12 +232,63 @@ namespace HandHero.Core
             _held = false;
             _mustReopen = true;
             _trough = float.PositiveInfinity;
+            _recentCount = 0;
+        }
+
+        private static int ConfirmFrames(in PinchReleaseParams p)
+        {
+            if (p.ConfirmFrames <= 1) return 1;
+            return p.ConfirmFrames < MaxConfirmFrames ? p.ConfirmFrames : MaxConfirmFrames;
+        }
+
+        // Stores the sample; returns the highest of the last `confirm` samples (the
+        // strength has been at or below it that many steps in a row), or +inf until
+        // that many have come in since the last reopen request.
+        private float Remember(float v, int confirm)
+        {
+            _recent[_recentNext] = v;
+            _recentNext = (_recentNext + 1) % MaxConfirmFrames;
+            if (_recentCount < MaxConfirmFrames) _recentCount++;
+            if (_recentCount < confirm) return float.PositiveInfinity;
+
+            float high = v;
+            for (int i = 2; i <= confirm; i++)
+            {
+                float older = _recent[(_recentNext - i + MaxConfirmFrames) % MaxConfirmFrames];
+                if (older > high) high = older;
+            }
+            return high;
+        }
+
+        // While held, the strength at or below which the relative rule releases.
+        private float ReleaseLevel(in PinchReleaseParams p)
+        {
+            float level = _peak - p.RelativeRelease;
+            if (p.ReleaseFloorMargin > 0f)
+            {
+                float floor = p.FireThreshold - p.ReleaseFloorMargin;
+                if (floor > level) level = floor;
+            }
+            return level;
+        }
+
+        // After a release above the reset, the strength a new press must reach.
+        private float RearmLevel(in PinchReleaseParams p)
+        {
+            float level = _trough + p.RelativeRelease;
+            if (p.ReleaseFloorMargin > 0f && _trough <= p.FireThreshold - p.ReleaseFloorMargin)
+            {
+                float cap = p.FireThreshold + (p.RearmMargin > 0f ? p.RearmMargin : 0f);
+                if (cap < level) level = cap;
+            }
+            return level;
         }
 
         // While held: which rule (if any) releases on this sample. Updates the press stats otherwise.
-        private PinchReleaseBy ReleaseRule(in PinchSample sample, in PinchReleaseParams p)
+        private PinchReleaseBy ReleaseRule(in PinchSample sample, in PinchReleaseParams p, int confirm)
         {
             float v = sample.Strength;
+            bool metaPinching = sample.HasMeta && sample.MetaPinching;
 
             // The flag only counts as a release after it was on in this press: a slow
             // pinch passes FireThreshold before Meta's flag (full strength) turns on.
@@ -206,11 +306,16 @@ namespace HandHero.Core
                 }
             }
 
-            if (p.MetaReleaseFrames > 0 && _metaSeen && _metaOffFrames >= p.MetaReleaseFrames)
-                return PinchReleaseBy.Meta;
-            if (v <= p.ResetThreshold) return PinchReleaseBy.Absolute;
-            if (p.RelativeRelease > 0f && v <= _peak - p.RelativeRelease) return PinchReleaseBy.Relative;
+            _resetFrames = v <= p.ResetThreshold ? _resetFrames + 1 : 0;
+            _lowFrames = p.RelativeRelease > 0f && !metaPinching && v <= ReleaseLevel(p) ? _lowFrames + 1 : 0;
 
+            if (p.MetaReleaseFrames > 0 && _metaSeen && _metaOffFrames >= p.MetaReleaseFrames
+                && (p.MetaReleaseDrop <= 0f || v <= _peak - p.MetaReleaseDrop))
+                return PinchReleaseBy.Meta;
+            if (_resetFrames >= confirm) return PinchReleaseBy.Absolute;
+            if (_lowFrames >= confirm) return PinchReleaseBy.Relative;
+
+            // Still held (the first of the confirming samples counts as held too).
             if (v > _peak) _peak = v;
             if (v < _min) _min = v;
             _last = v;

@@ -119,15 +119,17 @@ namespace HandHero.Tests
             Assert.IsTrue(old[old.Count - 1].Held, "the old rule still holds the pinch 2 s later (device bug)");
         }
 
+        // Review fix (T0-R2-3): a release needs 2 agreeing samples, so the 3-frame
+        // opening plus one more rest frame (was: within 3 frames).
         [Test]
-        public void ThumbSettlesAt2_8cm_NewRuleReleasesWithin3Frames()
+        public void ThumbSettlesAt2_8cm_NewRuleReleasesWithin4Frames()
         {
             Assert.IsFalse(Step(Cm(4f)).FireTriggered);
             Assert.IsTrue(Step(Cm(PinchCm)).FireTriggered);
             for (int i = 0; i < 5; i++) Assert.IsTrue(Step(Cm(PinchCm)).Held);
 
-            // Opening: 1.6 -> 2.2 -> 2.8 cm, one frame each.
-            float[] opening = { Cm(1.6f), Cm(2.2f), Cm(RestCm) };
+            // Opening: 1.6 -> 2.2 -> 2.8 cm, one frame each, then the thumb rests.
+            float[] opening = { Cm(1.6f), Cm(2.2f), Cm(RestCm), Cm(RestCm) };
             int releasedAt = -1;
             PinchRelease release = default;
             for (int i = 0; i < opening.Length && releasedAt < 0; i++)
@@ -141,7 +143,7 @@ namespace HandHero.Tests
             }
 
             Assert.GreaterOrEqual(releasedAt, 0, "released while the thumb settles");
-            Assert.LessOrEqual(releasedAt + 1, 3, "within 3 frames of opening");
+            Assert.LessOrEqual(releasedAt + 1, 4, "within 4 frames of opening");
             Assert.AreEqual(PinchReleaseBy.Relative, release.By);
 
             for (int i = 0; i < 144; i++)
@@ -188,6 +190,7 @@ namespace HandHero.Tests
             frames.Add(Cm(1.6f));
             frames.Add(Cm(2.2f));
             frames.Add(Cm(RestCm));
+            frames.Add(Cm(RestCm)); // the second resting sample confirms the release
 
             ChainResult r = Chain(frames);
             Assert.AreEqual(1, r.Fires, "the press is one normal shot");
@@ -261,6 +264,7 @@ namespace HandHero.Tests
         {
             Step(Cm(PinchCm));
             Step(Cm(PinchCm));
+            Assert.IsTrue(Step(Cm(2.6f)).Held, "one sample is not a release");
             PinchState s = Step(Cm(2.6f)); // 0.756: 0.24 below the peak, above the reset
             Assert.IsFalse(s.Held);
             Assert.AreEqual(PinchReleaseBy.Relative, s.Release.By);
@@ -271,6 +275,7 @@ namespace HandHero.Tests
         public void FullOpen_IsLabelledAbsolute()
         {
             Step(Cm(PinchCm));
+            Assert.IsTrue(Step(Cm(5f)).Held, "one sample is not a release");
             PinchState s = Step(Cm(5f));
             Assert.IsFalse(s.Held);
             Assert.AreEqual(PinchReleaseBy.Absolute, s.Release.By, "the old rule would release here too");
@@ -286,7 +291,11 @@ namespace HandHero.Tests
                 if (Step(jitter[i % jitter.Length]).FireTriggered) fires++;
             Assert.AreEqual(1, fires);
 
-            // A real pinch from there fires again.
+            // Review fix (T0-R1-2): straddling the release point never gives 2 agreeing
+            // low samples, so the pinch is still held; opening to rest releases it and
+            // a real pinch from there fires again.
+            Step(Cm(RestCm));
+            Assert.IsFalse(Step(Cm(RestCm)).Held);
             Assert.IsTrue(Step(1f).FireTriggered);
         }
 
@@ -316,8 +325,9 @@ namespace HandHero.Tests
                 Assert.IsFalse(back.FireTriggered || back.Held, $"back still pinched, frame {i}");
             }
 
-            // Opening to the resting thumb (not below the reset) is a reopen.
+            // Opening to the resting thumb (not below the reset) for 2 samples is a reopen.
             Step(Cm(2.2f));
+            Step(Cm(RestCm));
             Step(Cm(RestCm));
             Assert.IsTrue(Step(Cm(PinchCm)).FireTriggered);
         }
@@ -327,6 +337,9 @@ namespace HandHero.Tests
         {
             _pinch.RequireReopen();
             for (int i = 0; i < 10; i++) Assert.IsFalse(Step(Cm(PinchCm)).Held);
+            Step(Cm(RestCm));
+            Assert.IsFalse(Step(Cm(PinchCm)).FireTriggered, "one resting sample is not a reopen");
+            Step(Cm(RestCm));
             Step(Cm(RestCm));
             Assert.IsTrue(Step(Cm(PinchCm)).FireTriggered);
         }
@@ -345,6 +358,7 @@ namespace HandHero.Tests
                 PinchState after = Step(Cm(PinchCm));
                 Assert.IsFalse(after.FireTriggered || after.Held, $"gesture over, still pinched, frame {i}");
             }
+            Step(Cm(RestCm));
             Step(Cm(RestCm));
             Assert.IsTrue(Step(Cm(PinchCm)).FireTriggered);
         }
@@ -389,20 +403,42 @@ namespace HandHero.Tests
             Assert.IsFalse(shot, "no normal shot either");
         }
 
+        // Review fix (T0-R1-2): MinStrength counts every step reported Held, so the
+        // first of the 2 release samples too. While Meta's flag is on the relative rule
+        // does not count (D1), so the Meta report has its own test.
         [Test]
         public void Release_ReportsPeakMinAndReleaseStrength()
+        {
+            Step(0.9f);
+            Step(1f);
+            Step(0.85f);
+            Step(0.95f);
+            Assert.IsTrue(Step(0.75f).Held);
+            PinchState s = Step(0.74f);
+
+            Assert.IsFalse(s.Held);
+            Assert.AreEqual(PinchReleaseBy.Relative, s.Release.By);
+            Assert.AreEqual(1f, s.Release.PeakStrength, 1e-5f);
+            Assert.AreEqual(0.75f, s.Release.MinStrength, 1e-5f);
+            Assert.AreEqual(0.74f, s.Release.ReleaseStrength, 1e-5f);
+            Assert.IsFalse(s.Release.MetaSeen);
+        }
+
+        [Test]
+        public void Release_ByMeta_ReportsMetaSeen()
         {
             Step(0.9f, hasMeta: true, metaPinching: false);
             Step(1f, hasMeta: true, metaPinching: true);
             Step(0.85f, hasMeta: true, metaPinching: true);
             Step(0.95f, hasMeta: true, metaPinching: true);
-            PinchState s = Step(0.75f, hasMeta: true, metaPinching: true);
+            Assert.IsTrue(Step(0.75f, hasMeta: true, metaPinching: false).Held);
+            PinchState s = Step(0.74f, hasMeta: true, metaPinching: false);
 
             Assert.IsFalse(s.Held);
-            Assert.AreEqual(PinchReleaseBy.Relative, s.Release.By);
+            Assert.AreEqual(PinchReleaseBy.Meta, s.Release.By, "Meta names it when several rules agree");
             Assert.AreEqual(1f, s.Release.PeakStrength, 1e-5f);
-            Assert.AreEqual(0.85f, s.Release.MinStrength, 1e-5f);
-            Assert.AreEqual(0.75f, s.Release.ReleaseStrength, 1e-5f);
+            Assert.AreEqual(0.75f, s.Release.MinStrength, 1e-5f);
+            Assert.AreEqual(0.74f, s.Release.ReleaseStrength, 1e-5f);
             Assert.IsTrue(s.Release.MetaSeen);
         }
 
@@ -411,6 +447,7 @@ namespace HandHero.Tests
         {
             Assert.IsFalse(Step(1f).Release.Ended);
             Assert.IsFalse(Step(1f).Release.Ended);
+            Assert.IsFalse(Step(0.3f).Release.Ended, "one sample is not a release");
             Assert.IsTrue(Step(0.3f).Release.Ended);
             Assert.IsFalse(Step(0.3f).Release.Ended, "only the step the pinch ended");
         }
@@ -426,6 +463,212 @@ namespace HandHero.Tests
             Assert.IsTrue(_pinch.Step(new PinchSample { Tracked = true, Strength = 0.8f }, p).FireTriggered);
         }
 
+        // ---- Review fixes (round 5): T0-R1-1, T0-R1-2, T0-R2-1, T0-R2-3 ----
+
+        // T0-R1-1 (a) / T0-R2-1 (A): a light tap only closes the thumb to 2.0 cm
+        // (peak 0.889). 0.2 below that peak is 0.689, under the resting thumb (0.711),
+        // so the peak drop alone never released it; the floor under FireThreshold does.
+        [Test]
+        public void LightTapTo2cm_ReleasesAtTheRestingThumb()
+        {
+            Assert.IsFalse(Step(Cm(4f)).FireTriggered);
+            Assert.IsTrue(Step(Cm(2f)).FireTriggered);
+            Assert.IsTrue(Step(Cm(RestCm)).Held, "one resting sample is not a release");
+            PinchState s = Step(Cm(RestCm));
+            Assert.IsFalse(s.Held, "released at the resting thumb");
+            Assert.AreEqual(PinchReleaseBy.Relative, s.Release.By);
+            Assert.AreEqual(Cm(2f), s.Release.PeakStrength, 1e-5f);
+
+            for (int i = 0; i < 30; i++)
+            {
+                PinchState rest = Step(Cm(RestCm));
+                Assert.IsFalse(rest.Held || rest.FireTriggered, $"rest frame {i}");
+            }
+        }
+
+        [Test]
+        public void LightTapsFromRest_EachFires_NoChargeEverBegins()
+        {
+            var frames = new List<float>();
+            for (int t = 0; t < 5; t++) AddLightTap(frames, 2f);
+            for (int i = 0; i < 72; i++) frames.Add(Cm(RestCm));
+
+            ChainResult r = Chain(frames);
+            Assert.AreEqual(5, r.Fires);
+            Assert.AreEqual(5, r.Holds, "every tap ended");
+            Assert.AreEqual(0, r.ChargeStarts);
+            Assert.Less(r.FirstChargeHoldSeconds, 0f, "no charge ever began");
+        }
+
+        // T0-R1-1 (c): after a firm tap released at the resting thumb (0.711), the
+        // re-arm used to need 0.911; a 2.0 cm tap (0.889) never fired.
+        [Test]
+        public void LightTapAfterAFirmTap_Fires()
+        {
+            var frames = new List<float>();
+            AddTap(frames);
+            AddLightTap(frames, 2f);
+            for (int i = 0; i < 72; i++) frames.Add(Cm(RestCm));
+
+            ChainResult r = Chain(frames);
+            Assert.AreEqual(2, r.Fires, "the light tap fires too");
+            Assert.AreEqual(2, r.Holds);
+            Assert.Less(r.FirstChargeHoldSeconds, 0f, "no charge ever began");
+        }
+
+        // T0-R2-1 (B): a re-press that peaks at 1.85 cm (0.922), then the resting
+        // thumb drifts 1 mm closer, to 2.7 cm (0.733): 0.2 below the peak is 0.722.
+        [Test]
+        public void RePressTo1_85cm_RestDriftingTo2_7cm_Releases()
+        {
+            var frames = new List<float>();
+            AddTap(frames);
+            AddLightTap(frames, 1.85f);
+            for (int i = 0; i < 72; i++) frames.Add(Cm(2.7f));
+
+            ChainResult r = Chain(frames);
+            Assert.AreEqual(2, r.Fires);
+            Assert.AreEqual(2, r.Holds, "the re-press ended at the drifted rest");
+            Assert.Less(r.FirstChargeHoldSeconds, 0f, "no charge ever began");
+        }
+
+        // T0-R1-1 (b): rest jitter of +0.11 for one frame from an armed resting hand
+        // reads as a press. The press stays instant (no added shot latency), so the
+        // first spike may fire once, but it never holds into a charge and later
+        // spikes of the same size don't fire again.
+        [Test]
+        public void OneFrameSpikesAtAnArmedRest_AtMostOneShot_NeverACharge()
+        {
+            var frames = new List<float> { 0.5f };
+            for (int i = 0; i < 10; i++) frames.Add(Cm(RestCm));
+            for (int spike = 0; spike < 6; spike++)
+            {
+                frames.Add(0.82f);
+                for (int i = 0; i < 10; i++) frames.Add(Cm(RestCm));
+            }
+
+            ChainResult r = Chain(frames);
+            Assert.LessOrEqual(r.Fires, 1, "at most the first spike fires");
+            Assert.AreEqual(r.Fires, r.Holds, "a spike press ends at the resting thumb");
+            Assert.Less(r.FirstChargeHoldSeconds, 0f, "no charge ever began");
+        }
+
+        // T0-R1-2 (a): one noisy frame 0.2 under the peak inside a firm hold used to
+        // end it, and the next frame back at the peak fired again (with and without
+        // Meta's flag on).
+        [TestCase(false)]
+        [TestCase(true)]
+        public void OneFrameDipInAFirmHold_NoReleaseNoSecondShot(bool metaOn)
+        {
+            Assert.IsTrue(Step(1f, hasMeta: metaOn, metaPinching: metaOn).FireTriggered);
+            for (int i = 0; i < 30; i++) Step(1f, hasMeta: metaOn, metaPinching: metaOn);
+
+            PinchState dip = Step(0.79f, hasMeta: metaOn, metaPinching: metaOn);
+            Assert.IsTrue(dip.Held, "one glitch sample is not a release");
+            Assert.IsFalse(dip.Release.Ended);
+
+            PinchState back = Step(1f, hasMeta: metaOn, metaPinching: metaOn);
+            Assert.IsTrue(back.Held);
+            Assert.IsFalse(back.FireTriggered, "no second shot");
+        }
+
+        // D1: the relative rule is the fallback for when Meta's flag is not on.
+        [Test]
+        public void MetaFlagOn_TheRelativeRuleWaits()
+        {
+            Assert.IsTrue(Step(1f, hasMeta: true, metaPinching: true).FireTriggered);
+            for (int i = 0; i < 5; i++)
+                Assert.IsTrue(Step(0.75f, hasMeta: true, metaPinching: true).Held, $"frame {i}: Meta says pinched");
+
+            Assert.IsTrue(Step(0.75f, hasMeta: true, metaPinching: false).Held);
+            PinchState s = Step(0.75f, hasMeta: true, metaPinching: false);
+            Assert.IsFalse(s.Held);
+            Assert.AreEqual(PinchReleaseBy.Meta, s.Release.By);
+        }
+
+        // One frame below the reset (a deep tracking glitch) inside a hold: before,
+        // it ended the hold and fully re-armed, so the next frame fired again.
+        [Test]
+        public void OneFrameDeepGlitchInAHold_NoReleaseNoSecondShot()
+        {
+            Assert.IsTrue(Step(1f).FireTriggered);
+            for (int i = 0; i < 10; i++) Step(1f);
+
+            Assert.IsTrue(Step(0.3f).Held, "one sample below the reset is not a release");
+            PinchState back = Step(1f);
+            Assert.IsTrue(back.Held);
+            Assert.IsFalse(back.FireTriggered);
+        }
+
+        // T0-R1-2 (b): after a tracking loss one reacquire frame read low (0.78) and
+        // the true value (1.0) fired at once; the rounds 1-4 pipeline needed a reopen.
+        [Test]
+        public void ReacquireFrameReadLow_ThenStillPinched_DoesNotFire()
+        {
+            Assert.IsTrue(Step(1f).FireTriggered);
+            for (int i = 0; i < 20; i++) Step(1f);
+            Assert.AreEqual(PinchReleaseBy.Lost, Step(1f, tracked: false).Release.By);
+
+            Assert.IsFalse(Step(0.78f).FireTriggered, "the reacquire frame");
+            for (int i = 0; i < 20; i++)
+            {
+                PinchState s = Step(1f);
+                Assert.IsFalse(s.FireTriggered || s.Held, $"still pinched, frame {i}");
+            }
+        }
+
+        // T0-R2-3: one tracking outlier at 3 cm (0.667) inside a 1 s hold used to end
+        // it (charge shot early or thrown away) and fire an extra normal shot.
+        [Test]
+        public void OneFrame3cmSpikeInAOneSecondHold_OneShotOneChargeShot()
+        {
+            var frames = new List<float>();
+            for (int i = 0; i < 6; i++) frames.Add(Cm(RestCm));
+            frames.Add(Cm(1.2f));
+            for (int i = 0; i < 30; i++) frames.Add(Cm(PinchCm));
+            frames.Add(Cm(3f));
+            for (int i = 0; i < 40; i++) frames.Add(Cm(PinchCm));
+            frames.Add(Cm(1.6f));
+            frames.Add(Cm(2.2f));
+            frames.Add(Cm(RestCm));
+            frames.Add(Cm(RestCm));
+
+            ChainResult r = Chain(frames);
+            Assert.AreEqual(1, r.Fires);
+            Assert.AreEqual(1, r.Holds);
+            Assert.AreEqual(1, r.ChargeStarts);
+            Assert.AreEqual(1, r.ChargeShots);
+        }
+
+        // T0-R2-3: Meta's flag is on only at Meta strength 1.0; a 2-frame dip of the
+        // flag while our strength stays at the press's peak (fingers still closed)
+        // used to end the hold.
+        [Test]
+        public void MetaFlagTwoFrameDip_FingersStillClosed_KeepsTheHold()
+        {
+            Assert.IsTrue(Step(1f, hasMeta: true, metaPinching: true).FireTriggered);
+            for (int i = 0; i < 20; i++) Step(1f, hasMeta: true, metaPinching: true);
+
+            for (int i = 0; i < 2; i++)
+                Assert.IsTrue(Step(1f, hasMeta: true, metaPinching: false).Held, $"flag off frame {i}");
+            for (int i = 0; i < 20; i++)
+            {
+                PinchState s = Step(1f, hasMeta: true, metaPinching: true);
+                Assert.IsTrue(s.Held, $"flag back on, frame {i}");
+                Assert.IsFalse(s.FireTriggered, $"flag back on, frame {i}");
+            }
+        }
+
+        // A light tap from the resting pointing pose: the thumb only closes to `closestCm`.
+        private static void AddLightTap(List<float> frames, float closestCm)
+        {
+            for (int i = 0; i < 8; i++) frames.Add(Cm(RestCm));
+            frames.Add(Cm(2.3f));
+            frames.Add(Cm(closestCm));
+            frames.Add(Cm(closestCm));
+            frames.Add(Cm(2.3f));
+        }
+
         [Test]
         public void DefaultParams_MatchTheDecision()
         {
@@ -433,6 +676,12 @@ namespace HandHero.Tests
             Assert.AreEqual(0.6f, P.ResetThreshold);
             Assert.AreEqual(0.2f, P.RelativeRelease);
             Assert.AreEqual(2, P.MetaReleaseFrames);
+            Assert.AreEqual(0.05f, P.ReleaseFloorMargin);
+            Assert.AreEqual(0.05f, P.RearmMargin);
+            Assert.AreEqual(2, P.ConfirmFrames);
+            Assert.AreEqual(0.05f, P.MetaReleaseDrop);
+            Assert.LessOrEqual(Cm(RestCm), P.FireThreshold - P.ReleaseFloorMargin,
+                "the resting pointing thumb is at or below the release floor");
         }
     }
 }

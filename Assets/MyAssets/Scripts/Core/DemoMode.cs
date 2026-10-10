@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace HandHero.Core
 {
@@ -255,9 +256,10 @@ namespace HandHero.Core
         public float HeroClearAngle;
         [Tooltip("The player's hero's radius in world meters (its wings span 2.2 m): a close hero looks wider, so the caption keeps further off")]
         public float HeroRadius;
-        [Tooltip("Meters the caption moves down per try while it would cover the hero")]
-        public float StepDown;
-        [Tooltip("Tries before the caption stays where it is")]
+        [Tooltip("Meters the caption moves per try while it would cover the hero: away from the hero first (up when the hero is below it), then the other way")]
+        [FormerlySerializedAs("StepDown")]
+        public float Step;
+        [Tooltip("Steps tried each way before the caption gives up and stays beside the palm")]
         public int MaxSteps;
 
         public static DemoCaptionLayoutParams Default => new DemoCaptionLayoutParams
@@ -267,16 +269,20 @@ namespace HandHero.Core
             LabelWidth = 0.24f,
             HeroClearAngle = 6f,
             HeroRadius = 1.2f,
-            StepDown = 0.05f,
+            Step = 0.05f,
             MaxSteps = 6,
         };
     }
 
     // Where a caption goes (round 5, T4): beside the palm on the outer side of the
     // view (left hand -> further left, right hand -> further right), a little above
-    // it, stepped down while it would cover the player's hero. Offsets are physical
-    // meters times worldScale (the tabletop view). Returns the caption's inner
-    // edge; the text runs outward from it.
+    // it. While it would cover the player's hero it moves to the nearest clear spot
+    // within MaxSteps steps, trying the step away from the hero first (up when the
+    // hero is below the caption as seen from the head, else down), then the other
+    // way (review T4-R2-1: stepping only down moved it onto a hero below it). No
+    // clear spot: it stays beside the palm it labels. Offsets are physical meters
+    // times worldScale (the tabletop view). Returns the caption's inner edge; the
+    // text runs outward from it.
     public static class DemoCaptionLayout
     {
         public static Vector3 Place(Vector3 head, Vector3 palm, Vector3 viewRight, bool leftHand, bool hasHero,
@@ -285,10 +291,29 @@ namespace HandHero.Core
             float s = worldScale > 0f ? worldScale : 1f;
             Vector3 side = OuterSide(viewRight, leftHand);
             Vector3 anchor = palm + (side * p.SideOffset + Vector3.up * p.UpOffset) * s;
-            if (!hasHero) return anchor;
-            for (int i = 0; i < p.MaxSteps && CoversHero(head, anchor, side, hero, s, p); i++)
-                anchor += Vector3.down * (p.StepDown * s);
+            if (!hasHero || !CoversHero(head, anchor, side, hero, s, p)) return anchor;
+
+            Vector3 away = HeroIsBelow(head, anchor + side * (p.LabelWidth * s * 0.5f), hero) ? Vector3.up : Vector3.down;
+            for (int k = 1; k <= p.MaxSteps; k++)
+            {
+                Vector3 offset = away * (p.Step * s * k);
+                if (!CoversHero(head, anchor + offset, side, hero, s, p)) return anchor + offset;
+                if (!CoversHero(head, anchor - offset, side, hero, s, p)) return anchor - offset;
+            }
             return anchor;
+        }
+
+        // The hero's center is lower than the caption's middle as seen from the head
+        // (elevation angle above the horizontal).
+        public static bool HeroIsBelow(Vector3 head, Vector3 captionMiddle, Vector3 hero)
+        {
+            return Elevation(hero - head) < Elevation(captionMiddle - head);
+        }
+
+        private static float Elevation(Vector3 v)
+        {
+            float flat = new Vector2(v.x, v.z).magnitude;
+            return Mathf.Atan2(v.y, flat);
         }
 
         // The view's right, levelled (a tilted head doesn't tilt the captions).

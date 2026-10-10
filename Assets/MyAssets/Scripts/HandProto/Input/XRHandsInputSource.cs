@@ -32,8 +32,16 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     [SerializeField] private float pinchResetThreshold = 0.6f;
     [Tooltip("Round 5 (D1): a pinch also ends when the strength falls this far below its peak in this press (0.2 = about 1 cm of thumb travel); the next press must then rise this far above the lowest point since. 0 = off (absolute reset only)")]
     [SerializeField] private float pinchRelativeRelease = 0.2f;
+    [Tooltip("Round 5 review: a pinch also ends at pinchFireThreshold minus this, however deep the press went, so a light press (thumb only to 2 cm) ends at the resting pointing thumb (2.8 cm = 0.71). 0.05 = 0.75, about 2.6 cm. 0 = off (peak drop only)")]
+    [SerializeField] private float pinchReleaseFloorMargin = 0.05f;
+    [Tooltip("Round 5 review: once the thumb has settled at or below that floor after a release, the next press needs at most pinchFireThreshold plus this (0.85, about 2.2 cm), so a light tap after a firm one fires")]
+    [SerializeField] private float pinchRearmMargin = 0.05f;
+    [Tooltip("Round 5 review: the pinch strength rules count only when this many frames in a row agree, so one bad tracking frame neither ends a held charge nor fires an extra shot (adds 1 frame to a release). 1 = every frame counts")]
+    [SerializeField] private int pinchConfirmFrames = 2;
     [Tooltip("Round 5 (D1): a pinch also ends when Meta's own index-pinch flag (Hand Tracking Aim) is off for this many frames after it was on in this press. 0 = ignore the Meta flag")]
     [SerializeField] private int metaPinchReleaseFrames = 2;
+    [Tooltip("Round 5 review: Meta's flag ends a pinch only on a frame where the strength is also at least this far below the press's peak (the thumb moved), so a flag flicker with the fingers still closed keeps the charge. 0 = the flag alone")]
+    [SerializeField] private float metaPinchReleaseDrop = 0.05f;
 
     [Header("CURSOR trigger (index finger) with hysteresis")]
     [Tooltip("Index curl above this pulls the trigger (fires once, holding charges)")]
@@ -121,7 +129,8 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         // Keeps stepping through a palms charge so a pinch held through it doesn't
         // fire afterwards.
         // Round 5 (D1): unsmoothed strength, released by Meta's pinch flag, the reset
-        // threshold or a drop from the press's peak (PinchTrigger).
+        // threshold or a drop from the press's peak / the floor under the fire
+        // threshold, the strength rules confirmed over 2 frames (PinchTrigger).
         // The Meta system gesture's pinch opens the OS menu, never a shot (CR-7): it
         // drops the pinch, a held charge is cancelled instead of released (round 4,
         // S3), and a pinch still closed afterwards must open before it fires.
@@ -138,7 +147,11 @@ public class XRHandsInputSource : HandInputSourceBehaviour
             FireThreshold = pinchFireThreshold,
             ResetThreshold = pinchResetThreshold,
             RelativeRelease = pinchRelativeRelease,
+            ReleaseFloorMargin = pinchReleaseFloorMargin,
+            RearmMargin = pinchRearmMargin,
+            ConfirmFrames = pinchConfirmFrames,
             MetaReleaseFrames = metaPinchReleaseFrames,
+            MetaReleaseDrop = metaPinchReleaseDrop,
         });
         data.PinchRelease = pinch.Release;
 
