@@ -67,6 +67,8 @@ namespace HandHero.Core
         Approach, // too far: close in to PreferredRange
         Strafe,   // in range: circle the enemy, weave, shoot
         Evade,    // just got hit: yank sideways, hold fire
+        Dash,     // round 5 (T2): flying to a new spot on its range sphere (Sniper, Lancer)
+        Hold,     // round 5 (T2): still at that spot until its attack is fired (Lancer)
     }
 
     // Opponent AI that outputs HandInputData — the same input the player's hands
@@ -77,11 +79,23 @@ namespace HandHero.Core
     // It holds the clutch the whole time and mirrors ClutchMapper's target, so it
     // can steer the hero toward any desired point by emitting hand deltas.
     // Shooting: lock aim (with error) -> telegraph for TelegraphTime -> fire.
-    // Archetypes (round 4, S6) change only the attack: telegraph and interval
+    // Archetypes (round 4, S6) change the attack: telegraph and interval
     // multipliers, bursts (later shots re-aim) and the boss's alternating
     // patterns. The default attack (Striker) is the original bot exactly.
+    // Round 5 (T2 / D4) adds a movement personality per pattern (BotMovement):
+    // range, strafe width and rhythm, and dashes to a new spot on the range
+    // sphere before / after an attack, holding still in between. The default
+    // movement (Striker, or all zero) is the original bot exactly.
     public class BotBrain
     {
+        private enum DashPhase
+        {
+            None,
+            BeforeAttack, // flying to the spot it will attack from
+            Hold,         // still at that spot through the telegraph and shots
+            AfterAttack,  // flying to a new spot after the attack's last shot
+        }
+
         private readonly SeededRandom _rng;
         private BotParams _p;
 
@@ -118,6 +132,17 @@ namespace HandHero.Core
         private int _shotsLeft;
         private float _burstTimer;
 
+        // Movement personalities (round 5, T2): each pattern's movement, the
+        // pattern of the attack under way, and the dash / hold around an attack.
+        // The arena of the latest Step bounds the dash spots.
+        private BotMovement _move;
+        private BotMovement _altMove;
+        private bool _activeIsAlt;
+        private DashPhase _dash;
+        private Vector3 _dashSpot;
+        private float _dashTimer;
+        private ArenaBounds _bounds;
+
         public BotBrain(BotParams p, int seed)
         {
             _p = p;
@@ -140,6 +165,8 @@ namespace HandHero.Core
         // Seconds until the next shot may start its telegraph.
         public float TimeToNextShot => _fireTimer;
         public Vector3 PerceivedTarget => _perceived;
+        // Round 5 (T2): where the current dash goes, or where the bot holds.
+        public Vector3 DashSpot => _dashSpot;
 
         public BotParams Params
         {
@@ -184,7 +211,26 @@ namespace HandHero.Core
             _attacksDone = 0;
         }
 
+        // Movement personalities (round 5, T2 / D4): `move` goes with SetAttacks'
+        // `attack`, `altMove` with its `altAttack`. Drops a dash under way.
+        public void SetMovement(BotMovement move, BotMovement altMove)
+        {
+            _move = move;
+            _altMove = altMove;
+            _dash = DashPhase.None;
+        }
+
         private BotAttack Current => _useAlt && _switchEvery > 0 ? _alt : _primary;
+
+        // Round 5 (T2): the next attack is the alt pattern's.
+        private bool NextIsAlt => _useAlt && _switchEvery > 0;
+
+        // The movement in charge now: the attack under way's (its telegraph,
+        // shots and the dash after it), else the next attack's (its dash and hold).
+        private BotMovement Move =>
+            (_telegraphing || _shotsLeft > 0 || _dash == DashPhase.AfterAttack ? _activeIsAlt : NextIsAlt)
+                ? _altMove
+                : _move;
 
         // First shot after a reset: FireInterval x U(0.5, 1.0), u in [0, 1].
         public static float FirstShotDelay(float fireInterval, double u)
@@ -209,6 +255,7 @@ namespace HandHero.Core
         {
             _time += dt;
             _lastSelf = selfPosition;
+            _bounds = bounds;
             Perceive(hasEnemy, enemyPosition, dt);
 
             var input = new HandInputData { ClutchHeld = true };
@@ -297,9 +344,16 @@ namespace HandHero.Core
             float dist = toSelf.magnitude;
             Vector3 radial = dist > 1e-3f ? toSelf / dist : _lastRadial;
             _lastRadial = radial;
-            Vector3 ring = _perceived + radial * _p.PreferredRange;
 
-            if (dist > _p.PreferredRange + _p.RangeTolerance)
+            // Round 5 (T2): a dash or a hold owns the movement until it ends.
+            if (_dash != DashPhase.None && UpdateDash(self, dt)) return _dashSpot;
+
+            // Striker's movement scales are exactly 1, so its numbers are today's.
+            BotMovement m = Move;
+            float range = _p.PreferredRange * m.RangeScale;
+            Vector3 ring = _perceived + radial * range;
+
+            if (dist > range + _p.RangeTolerance)
             {
                 State = BotState.Approach;
                 return ring;
@@ -310,14 +364,104 @@ namespace HandHero.Core
             _strafeTimer -= dt;
             if (_strafeTimer <= 0f) FlipStrafe();
 
-            Vector3 desired = ring + Tangent(radial) * (_strafeSign * _p.StrafeLead);
-            desired.y += Mathf.Sin(_time * 0.9f) * _p.VerticalWeave;
+            Vector3 desired = ring + Tangent(radial) * (_strafeSign * (_p.StrafeLead * m.StrafeScale));
+            // Round 5 (T2): back onto the range sphere, so the distance stays the archetype's.
+            if (m.KeepRange) desired = _perceived + (desired - _perceived).normalized * range;
+            desired.y += Mathf.Sin(_time * 0.9f) * (_p.VerticalWeave * m.WeaveScale);
 
             // Pinned against a wall: go the other way round.
-            if (bounds.Enabled && (bounds.Clamp(desired) - desired).sqrMagnitude > 1f && _strafeTimer < _p.StrafeSwitchInterval * 0.5f)
+            if (bounds.Enabled && (bounds.Clamp(desired) - desired).sqrMagnitude > 1f
+                && _strafeTimer < _p.StrafeSwitchInterval * m.SwitchScale * 0.5f)
                 FlipStrafe();
 
             return desired;
+        }
+
+        // Round 5 (T2 / D4): advances a dash; true while the dash or the hold
+        // owns the movement (the caller then flies to _dashSpot). A dash before
+        // an attack turns into a hold where it ends; the dash after one hands
+        // back to strafing. A wall that stops a dash short ends it at the timeout.
+        private bool UpdateDash(Vector3 self, float dt)
+        {
+            if (_dash == DashPhase.Hold)
+            {
+                State = BotState.Hold;
+                return true;
+            }
+
+            BotMovement m = Move;
+            _dashTimer += dt;
+            float arrive = m.ArriveDistance;
+            bool arrived = (self - _dashSpot).sqrMagnitude <= arrive * arrive;
+            if (!arrived && _dashTimer < m.DashTime)
+            {
+                State = BotState.Dash;
+                return true;
+            }
+
+            if (_dash == DashPhase.BeforeAttack)
+            {
+                _dash = DashPhase.Hold;
+                if (!arrived) _dashSpot = self; // stopped short: hold right here
+                State = BotState.Hold;
+                return true;
+            }
+
+            _dash = DashPhase.None;
+            return false;
+        }
+
+        // Round 5 (T2): sets off to a new spot `DashDistance` along the range
+        // sphere, to a random side (the other one when a wall cuts it short),
+        // at a random height inside the weave. No distance: hold in place
+        // (before an attack) or keep strafing (after one).
+        private void StartDash(DashPhase phase, BotMovement m)
+        {
+            _dashTimer = 0f;
+            if (m.DashDistance <= 0f)
+            {
+                _dash = phase == DashPhase.BeforeAttack ? DashPhase.Hold : DashPhase.None;
+                _dashSpot = _lastSelf;
+                return;
+            }
+
+            float range = _p.PreferredRange * m.RangeScale;
+            float side = _rng.NextDouble() < 0.5 ? -1f : 1f;
+            float up = ((float)_rng.NextDouble() * 2f - 1f) * (_p.VerticalWeave * m.WeaveScale);
+
+            Vector3 toSelf = _lastSelf - _perceived;
+            Vector3 radial = toSelf.sqrMagnitude > 1e-6f ? toSelf.normalized : _lastRadial;
+            float radians = m.DashDistance / Mathf.Max(range, 1f);
+
+            Vector3 spot = SphereSpot(radial, side * radians, range, up);
+            Vector3 clamped = _bounds.Clamp(spot);
+            float cut = (clamped - spot).sqrMagnitude;
+            if (cut > 1f)
+            {
+                Vector3 other = SphereSpot(radial, -side * radians, range, up);
+                Vector3 otherClamped = _bounds.Clamp(other);
+                if ((otherClamped - other).sqrMagnitude < cut)
+                {
+                    side = -side;
+                    clamped = otherClamped;
+                }
+            }
+
+            _dash = phase;
+            _dashSpot = clamped;
+            _strafeSign = side; // strafe on the way it dashed
+        }
+
+        // `radial` turned `radians` about the vertical, `range` from the
+        // perceived enemy, `up` meters higher.
+        private Vector3 SphereSpot(Vector3 radial, float radians, float range, float up)
+        {
+            float c = Mathf.Cos(radians);
+            float s = Mathf.Sin(radians);
+            var dir = new Vector3(radial.x * c + radial.z * s, radial.y, radial.z * c - radial.x * s);
+            Vector3 spot = _perceived + dir * range;
+            spot.y += up;
+            return spot;
         }
 
         // Returns true on the frame the beam fires.
@@ -346,12 +490,35 @@ namespace HandHero.Core
                 return FireShot();
             }
 
+            // Round 5 (T2 / D4): a dash-and-hold pattern (Lancer) first flies to a
+            // new spot, setting off DashLeadTime before the attack is due so the
+            // telegraph starts about on time, and telegraphs once it holds there.
+            BotMovement next = NextIsAlt ? _altMove : _move;
+
             _fireTimer -= dt;
-            if (_fireTimer > 0f) return false;
-            if (Vector3.Distance(self, _perceived) > _p.MaxFireRange) return false;
+            if (_fireTimer > 0f)
+            {
+                if (next.DashBeforeAttack && _dash == DashPhase.None && _fireTimer <= next.DashLeadTime
+                    && Vector3.Distance(self, _perceived) <= _p.MaxFireRange)
+                    StartDash(DashPhase.BeforeAttack, next);
+                return false;
+            }
+            if (Vector3.Distance(self, _perceived) > _p.MaxFireRange)
+            {
+                // Round 5 (T2): no attack to dash for or hold through.
+                if (_dash == DashPhase.BeforeAttack || _dash == DashPhase.Hold) _dash = DashPhase.None;
+                return false;
+            }
+
+            if (next.DashBeforeAttack && _dash != DashPhase.Hold)
+            {
+                if (_dash == DashPhase.None) StartDash(DashPhase.BeforeAttack, next);
+                if (_dash != DashPhase.Hold) return false;
+            }
 
             _lockedAim = _perceived + AimError(self, _perceived);
             _active = Current;
+            _activeIsAlt = NextIsAlt;
             _shotsLeft = Mathf.Max(1, _active.BurstCount);
             CountAttackForSwitch();
             float telegraph = _p.TelegraphTime * _active.TelegraphMult;
@@ -391,14 +558,26 @@ namespace HandHero.Core
 
             float m = _active.IntervalMult;
             _fireTimer = _p.FireInterval * m + (float)_rng.NextDouble() * (_p.FireIntervalJitter * m);
+            AfterAttack();
             return true;
         }
 
-        // The telegraph and any burst shots left; the interval timer is untouched.
+        // Round 5 (T2 / D4): the attack's last shot ends its hold; a pattern that
+        // repositions (Sniper, Lancer) dashes to a new spot.
+        private void AfterAttack()
+        {
+            BotMovement move = _activeIsAlt ? _altMove : _move;
+            if (move.DashAfterAttack) StartDash(DashPhase.AfterAttack, move);
+            else _dash = DashPhase.None;
+        }
+
+        // The telegraph and any burst shots left, and (round 5, T2) a dash or
+        // hold; the interval timer is untouched.
         private void CancelAttack()
         {
             _telegraphing = false;
             _shotsLeft = 0;
+            _dash = DashPhase.None;
         }
 
         private void StartEvade()
@@ -444,7 +623,7 @@ namespace HandHero.Core
 
         private float NextStrafeSwitch()
         {
-            return _p.StrafeSwitchInterval * (0.5f + (float)_rng.NextDouble());
+            return _p.StrafeSwitchInterval * Move.SwitchScale * (0.5f + (float)_rng.NextDouble());
         }
 
         private static Vector3 Tangent(Vector3 radial)

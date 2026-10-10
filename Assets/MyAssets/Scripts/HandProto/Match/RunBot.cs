@@ -72,7 +72,8 @@ public class RunBot : MonoBehaviour
         SetControlled(controlled);
     }
 
-    // Looks and attacks only (D7): flight, health and the hit receiver stay the same.
+    // Looks, attacks (D7) and the movement personality (round 5, D4): the flight
+    // model, its speed caps, health and the hit receiver stay the same.
     private void ApplyArchetype(BotArchetype archetype)
     {
         Archetype = archetype;

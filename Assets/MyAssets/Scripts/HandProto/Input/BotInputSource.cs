@@ -33,11 +33,13 @@ public class BotInputSource : HandInputSourceBehaviour
     // while sampling, so RunBot sets the beam's shot profile before it fires.
     public event System.Action<BotAttack> ShotFired;
 
-    // Run bot archetypes (S6): attack patterns from the next attack on. Call
-    // before Reseed so the first shot's delay uses the archetype's interval.
+    // Run bot archetypes (S6): attack patterns from the next attack on, and
+    // (round 5, T2) the movement that goes with each pattern. Call before
+    // Reseed so the first shot's delay uses the archetype's interval.
     public void SetArchetype(BotArchetype archetype)
     {
         _brain.SetAttacks(archetype.Attack, archetype.AltAttack, archetype.SwitchEvery);
+        _brain.SetMovement(archetype.Movement, archetype.AltMovement);
     }
 
     public void SetEnemy(Transform target)
