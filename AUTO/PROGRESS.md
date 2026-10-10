@@ -6,7 +6,7 @@
 |---|---|---|
 | T0 ASSIST 핀치 놓기 판정 | DONE | `38ca4b6`. 테스트 628/628(새 27개). 놓기 = Meta 플래그 2프레임 꺼짐 / 절대 0.6 / 최고값 대비 0.2 하락 중 먼저 오는 것. 런 기록에 핀치별 진단값, `run_summary.py`가 모드별로 요약. |
 | T1 남은 Minor 13건 | DONE | `9acd761`(`draft/r5b-T1` 병합). 테스트 650/650(새 22개, 일부러 바꾼 테스트 1개). 13건 모두 수정. Gunner 빔은 조준점 노랑과 30° 떨어지게 (0.6, 1, 0.2)로 옮김. 씬 2개와 RunBot 프리팹 재생성. |
-| T2 적 움직임 성격 | TODO | |
+| T2 적 움직임 성격 | DONE | `207a8a9`(`draft/r5b-T2` 병합). 테스트 670/670(새 20개). Sniper 18 m·쏜 뒤 8 m 이동, Gunner 8.4 m·넓게 좌우, Lancer 0.9초 전 10 m 돌진 → 멈춰 예고·발사 → 다시 돌진, 보스는 패턴별, Striker는 4차와 같음. 돌진·멈춤 자리는 지형 조각을 피함(T2-P4). 씬 2개와 RunBot 프리팹 재생성. |
 | T3 지형 2단계(새 조각·테마) | TODO | |
 | T4 데모 모드 | TODO | |
 | T5 씬·테스트·APK·리뷰·보고서 | TODO | |
@@ -24,3 +24,8 @@
   - 검증: 새 테스트 22개는 각 규칙을 일부러 망가뜨렸을 때 모두 실패하는 것을 확인했다. 사전 리뷰 3건을 반영했다. T1-P1: 일시정지 테스트가 `PhaseTime`을 본다. T1-P3: Gunner 빔 81°→90°, 테스트에 조준점 노랑 25° 조건 추가. 선택 12건은 `QUESTIONS_FOR_HYUN.md` 8–19번에 있다.
   - T3 통합 때 주의(T1-P2): `ArenaLayout.cs`의 `ArenaLayoutResult` 주석이 T3와 충돌한다. T1의 Pieces·SpawnPoints·UsedFallback 주석("대체 배열이 없으면 null, 반쯤 놓인 시도는 절대 돌려주지 않음")을 지키고, Pieces 줄에 T3의 "(on the floor, or in the air for floating pieces)"만 더한다. T3가 `Generate`를 다시 쓰면 마지막 `return`의 `: null` 규칙을 지켜야 S7-1-2 테스트 3개가 통과한다.
   - 기기 확인: (1) MR TABLE에서 권한 대화상자를 바깥을 눌러 닫기 → `perf_log`에 `ROOM_SCAN scan=PERMISSION_DISMISSED`, 다시 묻지 않음, 게임은 평소대로. (2) MR TABLE 메뉴에서 10–20초 뒤 매치 시작 → `SUMMARY`·`STOPPED`가 2프레임 뒤에 남고 매치 첫 프레임에 프로브 때문인 `HITCH`가 없음. (3) 섬 3 이후 Gunner가 연두색이고 과녁·CURSOR 주황, ASSIST 조준점과 헷갈리지 않음. 모든 원형의 지느러미가 빨강. (4) 런 중 일시정지 > RESET PROGRESS 두 번 → 런을 끝내도 NEW BEST·UNLOCKED가 없고, 다음 런은 평소대로 기록됨. (5) 유물이 해금된 상태에서 STARTING RELIC 화면에 30초 머문 뒤 런 → 끝 화면과 `run_log`의 시간에 그 30초가 들어가지 않음.
+- 2026-10-10 T2 DONE (`207a8a9`, `draft/r5b-T2` 병합, 충돌 없음):
+  - 결과: 움직임 값(`BotMovement`)을 원형의 공격 패턴과 짝지었다. 비행 모델과 손 속도 상한은 플레이어와 같다. 사전 리뷰 4건을 반영했다. T2-P1: Striker 테스트가 4차 `BotBrain` 골든 기록과 비교한다. 4차 복사본과는 51만 프레임이 비트까지 같았다. T2-P2: 공정성 테스트가 돌진 자리와 시간 제한을 본다. T2-P3: 보스 테스트가 패턴별 거리를 본다. T2-P4: 돌진·멈춤 자리가 켜진 지형 조각(히어로 반지름 1 m 포함)을 피한다. 선택 8건은 `QUESTIONS_FOR_HYUN.md` 20–27번에 있다.
+  - 검증: 새 테스트 20개(초안 15 + 추가 5)는 `BotBrain`을 일부러 망가뜨린 변형 9가지에서 해당 테스트가 실패하는 것을 .NET에서 확인했고, 그중 5가지(거리 +1 cm, 경기장 자르기 없음, 움직임 선택 뒤집기, 조각 검사 없음, 시간 제한 없음)는 Unity에서도 확인했다. 씬은 `BuildAll`로 다시 만들었다(배선 오류 0).
+  - T3 통합 때 주의: `ArenaLayoutApplier.ObstacleBoxes`(파일 끝)에 T3의 낮은 벽·발판·가는 기둥 풀을 `AddObstacleBoxes`로 더해야 봇이 그 조각 안에서 멈추지 않는다. `RunDirector.ApplyIslandLayout`은 건드리지 않았다(T3와 겹치지 않음).
+  - 기기 확인: (1) 섬마다 원형별 움직임이 다르게 느껴지는지: Sniper는 멀리서 쏘고 자리를 옮기고, Gunner는 가까이서 좌우로 크게 움직이고, Lancer는 돌진한 뒤 멈춰서 쏜다. (2) 싸움이 공정한지: Lancer 공격 빈도가 4차와 비슷한지, 멈춘 Lancer를 맞히기 쉬운지. (3) 기둥 근처에서 Lancer·보스가 기둥 안에서 멈춰 쏘지 않는지. (4) Sniper가 벽에 붙어 있는 시간이 거슬리지 않는지.
