@@ -157,6 +157,8 @@ public class XRHandsInputSource : HandInputSourceBehaviour
             MetaReleaseDrop = metaPinchReleaseDrop,
         });
         data.PinchRelease = pinch.Release;
+        data.HasAimPinchStrength = aimHand.IsTracked && !aimHand.SystemGesture;
+        data.AimPinchStrength = aimHand.RawPinchStrength;
 
         if (!aimHand.IsTracked)
             return data; // HasAim = false: reticle freezes at the last aim point

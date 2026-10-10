@@ -68,6 +68,16 @@ namespace HandHero.EditorTools
             return edited;
         }
 
+        // The given files that exist but were never recorded here (Library deleted, PC
+        // reset, another checkout): whether they hold inspector edits is unknown.
+        public static List<string> Unrecorded(params string[] assetPaths)
+        {
+            var unknown = new List<string>();
+            foreach (string path in assetPaths)
+                if (Check(path) == State.NoRecord) unknown.Add(path);
+            return unknown;
+        }
+
         private static SortedDictionary<string, string> Load()
         {
             var store = new SortedDictionary<string, string>(StringComparer.Ordinal);

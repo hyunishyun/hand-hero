@@ -107,6 +107,54 @@ namespace HandHero.Tests
             Assert.IsTrue(Step(0.9f));
         }
 
+        // DR-8 second pass: the reopen rule also swallowed a pinch that was still closing
+        // (between the thresholds, not pressed yet) when the hand dropped out, so the
+        // player had to pinch again. Before DR-8 it pressed when the hand was back; it
+        // does again, once, and a hold through a later dropout still presses nothing.
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(4)]
+        [TestCase(8)]
+        public void PinchStillClosingAtTheLoss_PressesOnceWhenBack(int lostFrames)
+        {
+            Steps(0.2f, 5);
+            Steps(0.65f, 2);
+            Steps(0.65f, lostFrames, tracked: false);
+            Steps(1f, 20);
+            Assert.AreEqual(1, _presses, "the pinch that was closing presses");
+
+            Steps(1f, lostFrames, tracked: false);
+            Steps(1f, 20);
+            Assert.AreEqual(1, _presses, "held through the next dropout: no second press");
+        }
+
+        // A pinch that pressed and eased off into the dead band (gate still on) is the
+        // same pinch: a loss there still needs a reopen (DR-8).
+        [Test]
+        public void PressedPinchEasedOffAtTheLoss_DoesNotPressAgain()
+        {
+            Steps(0.2f, 5);
+            Assert.IsTrue(Step(0.95f));
+            Steps(0.65f, 3);
+            Steps(0.65f, 2, tracked: false);
+            Steps(1f, 20);
+            Assert.AreEqual(1, _presses);
+        }
+
+        // A panel shown under a held pinch still waits for the open hand across a loss.
+        [Test]
+        public void WaitingForOpen_LossInTheDeadBand_StillWaits()
+        {
+            Steps(1f, 5);
+            Steps(0.65f, 2);
+            Steps(0.65f, 2, tracked: false);
+            Steps(1f, 20);
+            Assert.AreEqual(0, _presses);
+
+            Steps(0.4f, 2);
+            Assert.IsTrue(Step(0.9f));
+        }
+
         // The pinch in progress ends at the loss (never later somewhere else).
         [Test]
         public void TrackingLoss_DropsThePinch()

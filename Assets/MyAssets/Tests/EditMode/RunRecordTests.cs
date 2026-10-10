@@ -447,6 +447,38 @@ namespace HandHero.Tests
             string json = RunRecordJson.ToJson(Finish(Begun(), RunResult.Quit, 1f));
             StringAssert.Contains("\"release_by\":[]", json);
             StringAssert.Contains("\"min_strength\":[]", json);
+            StringAssert.Contains("\"pinch_strength_s\":{}", json);
+        }
+
+        // Deep review DR-9, second pass: the aim hand's time per unsmoothed strength, so
+        // run_summary.py can read where the thumb rests (report A5). Only bins with time,
+        // lowest first, keyed by the strength rounded to 0.01 ("<0.50" for the rest).
+        [Test]
+        public void Json_PinchStrengthTime_NonEmptyBinsInOrder()
+        {
+            var holds = new PinchHoldStats();
+            holds.AddStrength(1f, 0.5f);
+            holds.AddStrength(0.711f, 2f);
+            holds.AddStrength(0.3f, 1.5f);
+            holds.AddStrength(0.709f, 0.25f);
+
+            RunRecord r = Begun().Finish(RunResult.Quit, 1f, new RunTotals { Holds = holds });
+            Assert.AreEqual(PinchStrengthTime.Bins, r.PinchStrengthSeconds.Length);
+            Assert.AreEqual(2.25f, r.PinchStrengthSeconds[PinchStrengthTime.BinOf(0.71f)], 1e-6f);
+
+            string json = RunRecordJson.ToJson(r);
+            StringAssert.Contains("\"pinch_strength_s\":{\"<0.50\":1.5,\"0.71\":2.25,\"1.00\":0.5}", json);
+            StringAssert.EndsWith("}", json);
+        }
+
+        [Test]
+        public void PinchStrengthTime_IsACopy_NotClearedWithTheNextRun()
+        {
+            var holds = new PinchHoldStats();
+            holds.AddStrength(0.71f, 1f);
+            RunRecord r = Begun().Finish(RunResult.Quit, 1f, new RunTotals { Holds = holds });
+            holds.Clear();
+            Assert.AreEqual(1f, r.PinchStrengthSeconds[PinchStrengthTime.BinOf(0.71f)], 1e-6f);
         }
     }
 }

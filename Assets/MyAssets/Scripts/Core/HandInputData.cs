@@ -57,6 +57,12 @@ namespace HandHero.Core
         // Diagnostics only (round 5, D2): set on the frame the aim-hand pinch ended
         // (hand-tracked input). Feeds the run log; gameplay never reads it.
         public PinchRelease PinchRelease;
+        // Diagnostics only (deep review DR-9, second pass): the aim hand's unsmoothed
+        // pinch strength this frame, when it is tracked and not in the Meta system
+        // gesture (hand-tracked input). Feeds the run log's time per strength (where the
+        // thumb rests, report A5); gameplay never reads it.
+        public bool HasAimPinchStrength;
+        public float AimPinchStrength;
 
         public Ray AimRay => new Ray(AimOrigin, AimDirection);
 

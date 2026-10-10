@@ -4,6 +4,7 @@ namespace HandHero.Core
 {
     // Finished pinch holds of one run (D13): how long each was held and whether it
     // became a charge, so HoldDelay can be tuned from data (run telemetry, P13).
+    // Since deep review DR-9 (second pass) also the aim hand's time per strength.
     public class PinchHoldStats
     {
         private readonly List<float> _durations = new List<float>(256);
@@ -34,6 +35,9 @@ namespace HandHero.Core
         public IReadOnlyList<float> ReleaseStrengths => _releaseStrength;
         public IReadOnlyList<PinchReleaseBy> ReleasedBy => _releaseBy;
         public IReadOnlyList<bool> MetaSeenFlags => _metaSeen;
+        // Deep review DR-9, second pass: the aim hand's time per unsmoothed strength
+        // (tracked ASSIST frames), so the resting thumb can be read from the run log.
+        public PinchStrengthTime StrengthTime { get; } = new PinchStrengthTime();
 
         // Takes the step a held gesture ended on; any other step, or any step while
         // not recording, is ignored.
@@ -58,6 +62,14 @@ namespace HandHero.Core
             if (step.Released) ChargeShots++;
         }
 
+        // One aim-hand frame (PointingBeamController, ASSIST): `dt` real seconds at this
+        // unsmoothed strength. Ignored while not recording, like the holds.
+        public void AddStrength(float strength, float dt)
+        {
+            if (!Recording) return;
+            StrengthTime.Add(strength, dt);
+        }
+
         // Charge shots from holds shorter than this: likely meant as normal shots.
         public int QuickChargeShots(float maxHoldSeconds)
         {
@@ -77,6 +89,7 @@ namespace HandHero.Core
             _releaseStrength.Clear();
             _releaseBy.Clear();
             _metaSeen.Clear();
+            StrengthTime.Clear();
             ChargesStarted = 0;
             ChargeShots = 0;
         }

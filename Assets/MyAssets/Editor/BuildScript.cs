@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -192,10 +193,11 @@ namespace HandHero.EditorTools
         }
 
         // Deep review DR-4. Rebuilding stays the default (the scenes always match the code).
-        // When the saved scene or prefab differs from what the builder last wrote, the
-        // rebuild would reset those edits: the menu asks, batch mode logs a NOTE
-        // (compile_check prints it) and rebuilds. keepScenes uses the saved files and
-        // builds them only when they don't exist yet.
+        // When the saved scene or prefab differs from what the builder last wrote, or
+        // nothing was recorded on this PC yet (second pass), the rebuild would or might
+        // reset those edits: the menu asks, batch mode logs a NOTE (compile_check prints
+        // it) and rebuilds. keepScenes uses the saved files and builds them only when
+        // they don't exist yet.
         private static bool PrepareScenes(bool keepScenes)
         {
             // The build reads the saved scene: offer to save unsaved inspector edits first.
@@ -216,16 +218,27 @@ namespace HandHero.EditorTools
                 Debug.Log("[BuildScript] No saved Arena_Main scene or RunBot prefab yet: building them.");
 
             List<string> edited = keepScenes ? new List<string>() : SceneBuildFingerprints.Edited(GeneratedSceneFiles);
-            if (edited.Count > 0)
+            // Second pass: with no record (Library deleted, PC reset, another checkout) an
+            // edit can't be told apart, and the rebuild used to reset it without a word.
+            List<string> unknown = keepScenes ? new List<string>() : SceneBuildFingerprints.Unrecorded(GeneratedSceneFiles);
+            if (edited.Count > 0 || unknown.Count > 0)
             {
-                string files = string.Join(", ", edited);
-                const string Why = "changed since the scene builder last wrote it (an inspector edit or a git " +
-                                   "checkout). This build regenerates the scenes from code, so those edits go " +
-                                   "back to the C# defaults.";
+                var why = new StringBuilder();
+                if (edited.Count > 0)
+                    why.Append(string.Join(", ", edited)).Append(" changed since the scene builder last wrote it " +
+                                                                 "(an inspector edit or a git checkout). ");
+                if (unknown.Count > 0)
+                    why.Append(string.Join(", ", unknown)).Append(": no scene build recorded on this PC (Library " +
+                                                                  "deleted, PC reset or a new checkout), so this " +
+                                                                  "build can't tell whether it holds inspector edits. ");
+                why.Append("This build regenerates the scenes from code, so any edits go back to the C# defaults.");
+                string message = why.ToString();
                 if (!Application.isBatchMode)
                 {
-                    int choice = EditorUtility.DisplayDialogComplex("Hand Hero: scene edits will be reset",
-                        $"{files} {Why}", "Rebuild scenes", "Cancel", "Keep my scene edits");
+                    int choice = EditorUtility.DisplayDialogComplex(edited.Count > 0
+                            ? "Hand Hero: scene edits will be reset"
+                            : "Hand Hero: scene edits may be reset",
+                        message, "Rebuild scenes", "Cancel", "Keep my scene edits");
                     if (choice == 1)
                     {
                         Debug.Log("[BuildScript] Build cancelled.");
@@ -239,7 +252,7 @@ namespace HandHero.EditorTools
                 }
                 else
                 {
-                    Debug.LogWarning($"[BuildScript] NOTE: {files} {Why} To keep them, build with " +
+                    Debug.LogWarning($"[BuildScript] NOTE: {message} To keep them, build with " +
                                      "BuildQuestApkReleaseKeepScenes or BuildQuestApkDevKeepScenes.");
                 }
             }

@@ -281,6 +281,11 @@ public class PointingBeamController : MonoBehaviour
         else step = _charge.Step(action == ChargeInputAction.Hold, Time.deltaTime, CombatMath.Charge(charge, stats));
         // The pinch that ended this hold (round 5, D2); CURSOR holds are trigger holds.
         _pinchHolds.Add(step, mode == AimMode.Cursor ? default : input.PinchRelease);
+        // Where the ASSIST thumb rests (deep review DR-9, second pass): real seconds per
+        // strength, held or not. The source is on only while fighting (MatchDirector
+        // fightOnly): pause and the menus between islands give no strength.
+        if (mode != AimMode.Cursor && input.HasAimPinchStrength)
+            _pinchHolds.AddStrength(input.AimPinchStrength, Time.unscaledDeltaTime);
 
         UpdateChargeIndicator(step);
         UpdateChargeSounds(step);

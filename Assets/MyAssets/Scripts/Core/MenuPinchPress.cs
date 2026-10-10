@@ -8,10 +8,15 @@ namespace HandHero.Core
     // short dropout came back still closed (the tracker snaps the strength to the
     // raw value) with the ray on the same button and pressed it again: RESET
     // PROGRESS confirmed itself, REROLL rerolled and paid twice.
+    // A pinch still closing at the loss (between the thresholds, not pressed yet)
+    // is not a press to repeat: it carries on and presses once when the hand is back
+    // and gets there, as before DR-8 (DR-8 second pass: the reopen rule swallowed it).
     public class MenuPinchPress
     {
         private HysteresisGate _gate;
         private bool _waitForOpen;
+        // Strength of the last tracked step (the pinch as it was when the hand dropped out).
+        private float _last;
 
         public bool IsPinched => _gate.IsOn;
         public bool WaitingForOpen => _waitForOpen;
@@ -28,12 +33,16 @@ namespace HandHero.Core
         {
             if (!tracked)
             {
-                // Tracking lost: a pinch in progress ends here, never later somewhere
-                // else, and one still closed when the hand is back must open first.
-                RequireReopen();
+                // Tracking lost: a pinch that pressed ends here, never later somewhere
+                // else, and one still closed when the hand is back must open first. So
+                // does an open hand (it may come back already pinched). A pinch still
+                // closing keeps its press (DR-8 second pass).
+                bool closing = !_gate.IsOn && !_waitForOpen && _last > releaseThreshold;
+                if (!closing) RequireReopen();
                 return false;
             }
 
+            _last = pinchStrength;
             if (_waitForOpen && pinchStrength <= releaseThreshold) _waitForOpen = false;
             return _gate.Step(pinchStrength, pressThreshold, releaseThreshold) == GateEdge.Rising && !_waitForOpen;
         }

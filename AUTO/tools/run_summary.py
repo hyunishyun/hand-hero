@@ -5,8 +5,9 @@ Reads one or more run_log.jsonl files written by RunDirector (one JSON line per
 run, see HandHero.Core.RunRecordJson) and prints run count, win rate, run times
 against the 10-minute limit, deaths per island, slowest islands, most-picked
 items, the ASSIST charge misfire rate, pinch holds per aim mode (share over 1 s
-and what released each pinch, round 5), island themes and terrain pieces
-(round 5) and which RunParams knob to turn first.
+and what released each pinch, round 5), where the ASSIST thumb rests (deep review
+DR-9 second pass, report A5), island themes and terrain pieces (round 5) and which
+RunParams knob to turn first.
 
 The device file keeps every run across `adb install -r`, so each run names the
 APK that wrote it ("build", deep review DR-7) and only the newest build is
@@ -42,6 +43,11 @@ RUN_LIMIT_S = 600.0       # judged session: a full run must fit in 10 minutes
 QUICK_HOLD_S = 0.5        # a charge started by a shorter hold was probably meant as a normal shot
 LONG_HOLD_S = 1.0         # round 5: share of holds over this, per aim mode (ASSIST release bug)
 LONG_HOLD_LIST = 8        # deep review DR-9: holds over LONG_HOLD_S listed with their strengths
+# Deep review DR-9 second pass: the resting thumb r is the strength (0.01 bins of
+# "pinch_strength_s") with the most aim-hand time in this range (+-1 bin). Under 0.50 is an
+# open hand (3.75 cm or more); 0.96-1.00 is a press with the thumb on the index.
+REST_LOW, REST_HIGH = 0.50, 0.95
+REST_SPREAD = 3           # r = the time-weighted mean within 3 bins (0.03) of that peak
 RELEASE_ORDER = ("meta", "absolute", "relative", "lost", "none")
 BOSS_ISLAND = 9
 NO_STAMP = "no build stamp"   # runs written before the deep-review build stamp (DR-7)
@@ -254,6 +260,44 @@ def summarize(runs):
     return "\n".join(lines)
 
 
+def strength_cm(strength):
+    """HandGestureTracker's thumb-index distance for an unsmoothed strength: (6 - cm) / 4.5."""
+    return 6.0 - 4.5 * strength
+
+
+def resting_thumb(seconds):
+    """Deep review DR-9 second pass: where the aim-hand thumb rests, from the run log's
+    seconds per strength bin ({"<0.50": s, "0.71": s, ...}, RunRecordJson).
+
+    The bin in REST_LOW..REST_HIGH whose window (itself and its two neighbours in the
+    range) holds the most time is the centre; r is the time-weighted mean of the bins
+    within REST_SPREAD of it (in the range). Simulated (rest 0.71-0.82, taps at 3/s to
+    0.93 or 1.00, charges up to 4 s, open hand, Gaussian noise up to 0.03): r stays
+    within 0.006 of the true rest. Returns (r, share of all tracked time within
+    REST_SPREAD, all tracked seconds) or None."""
+    total = sum(seconds.values())
+    bins = defaultdict(float)
+    for label, s in seconds.items():
+        try:
+            value = round(float(label), 2)
+        except ValueError:
+            continue  # "<0.50"
+        if REST_LOW <= value <= REST_HIGH:
+            bins[value] += s
+    if total <= 0 or not any(s > 0 for s in bins.values()):
+        return None
+
+    def window(value, bins_each_side):
+        steps = range(-bins_each_side, bins_each_side + 1)
+        return [w for w in (round(value + step / 100, 2) for step in steps) if w in bins]
+
+    centre = max(sorted(bins), key=lambda v: sum(bins[w] for w in window(v, 1)))
+    near = window(centre, REST_SPREAD)
+    mass = sum(bins[w] for w in near)
+    r = sum(w * bins[w] for w in near) / mass
+    return r, mass / total, total
+
+
 def pinch_holds_by_mode(runs):
     """Round 5 (D2): per aim mode, how long pinches were held and what released them.
 
@@ -268,11 +312,17 @@ def pinch_holds_by_mode(runs):
     keeps them in the headline and says "not recorded".
 
     Deep review DR-9: holds over 1 s are also listed one by one (longest first, up to
-    LONG_HOLD_LIST) with their peak and lowest strength while held. A hold that was
-    not meant as a charge sat at the resting thumb, so its lowest strength is where the
-    thumb rests (report section 2, A5)."""
+    LONG_HOLD_LIST) with their peak and lowest strength while held. The peak tells the
+    tap type (under 0.95 = a light tap). The lowest is not the resting thumb (second
+    pass): a hold ends only once 2 samples reach the release level and the first counts
+    as held, so it is at or under that level (0.75 for a light tap).
+
+    Deep review DR-9 second pass: the resting thumb r comes from the aim hand's time per
+    strength ("pinch_strength_s", ASSIST frames of the run, held or not). It shows r for
+    stuck holds and for taps that never fired (no holds at all). Report section 2, A5."""
     modes = defaultdict(lambda: {"durations": [], "older": [], "release": Counter(), "recorded": 0,
-                                 "meta_seen": 0, "peak": [], "low": [], "at_release": [], "long": []})
+                                 "meta_seen": 0, "peak": [], "low": [], "at_release": [], "long": [],
+                                 "strength_s": Counter(), "strength_runs": 0})
     for r in runs:
         m = modes[r.get("aim", "?")]
         holds = r.get("hold_s", [])
@@ -280,6 +330,9 @@ def pinch_holds_by_mode(runs):
         if released_by is None:
             m["older"].extend(holds)
             continue
+        if r.get("pinch_strength_s") is not None:
+            m["strength_runs"] += 1
+            m["strength_s"].update(r["pinch_strength_s"])
         m["durations"].extend(holds)
         m["recorded"] += len(released_by)
         m["release"].update(released_by)
@@ -304,8 +357,19 @@ def pinch_holds_by_mode(runs):
         return (f"{len(durations)} holds, median {median(durations):.2f} s,"
                 f" {long_holds} over {LONG_HOLD_S:g} s ({long_holds / len(durations):.0%})")
 
+    def resting_line(m):
+        """None when there is nothing to say (CURSOR, or no ASSIST pinch at all)."""
+        rest = resting_thumb(m["strength_s"])
+        if rest:
+            r, share, total = rest
+            return (f"    resting thumb (most aim-hand time at {REST_LOW:.2f}-{REST_HIGH:.2f}):"
+                    f" r {r:.2f} = {strength_cm(r):.1f} cm, {share:.0%} of {total:.0f} s tracked")
+        if m["peak"] and not m["strength_runs"]:
+            return "    resting thumb: not recorded (APK before the deep-review second pass)"
+        return None
+
     out = ["", f"Pinch holds by aim mode (over {LONG_HOLD_S:g} s / what released them):"]
-    if not any(m["durations"] or m["older"] for m in modes.values()):
+    if not any(m["durations"] or m["older"] or resting_line(m) for m in modes.values()):
         out.append("  none recorded")
         return out
     for mode in sorted(modes):
@@ -315,6 +379,10 @@ def pinch_holds_by_mode(runs):
             if older:
                 out.append(f"  {mode}: {holds_line(older)}")
                 out.append("    released by: not recorded (logs before round 5)")
+            elif resting_line(m):
+                # DR-9 second pass: taps that never fired (after a reopen) leave no hold.
+                out.append(f"  {mode}: 0 holds")
+                out.append(resting_line(m))
             continue
         out.append(f"  {mode}: {holds_line(durations)}")
         total = m["recorded"]
@@ -334,6 +402,8 @@ def pinch_holds_by_mode(runs):
             more = len(longest) - LONG_HOLD_LIST
             out.append(f"    holds over {LONG_HOLD_S:g} s, longest first (peak / lowest while held): {listed}"
                        + (f", +{more} more" if more > 0 else ""))
+        if resting_line(m):
+            out.append(resting_line(m))
         if older:
             out.append(f"    older APKs (rounds 3-4, not in the numbers above): {holds_line(older)}")
     return out

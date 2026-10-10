@@ -1,9 +1,9 @@
 # REPORT_FOR_HYUN — 5차 (ASSIST 핀치 놓기, 남은 Minor, 적 움직임, 지형 2단계, 데모 모드)
 
 - **브랜치:** `auto/2026-10-09-r5`(4차 `a8cd3c2` 위, Phase 0 `ae71d0f`). push는 하지 않았다.
-- **테스트:** EditMode 766/766 통과. 시작할 때는 601개였다(새 165개).
+- **테스트:** EditMode 818/818 통과. 5차 끝에 766개, 딥 리뷰 수정에서 52개를 더했다. 시작할 때는 601개였다.
 - **씬:** `HandHeroSceneBuilder.BuildAll`로 다시 만들었다. 배선 오류는 0이다.
-- **APK:** 2종을 빌드했다. 최종 리뷰에서 코드가 바뀌지 않았으므로 이 APK가 마지막 코드다.
+- **APK:** 2종을 빌드했다(10-10 01:56·02:03). 그 뒤 딥 리뷰(DR-1–DR-10과 2차 수정)에서 코드를 고쳤다. 그래서 이 두 APK에는 딥 리뷰 수정이 없다. 딥 리뷰 수정을 기기에서 보려면 APK를 다시 빌드해야 한다(`PROGRESS.md`).
 - **헤드셋 확인은 하지 않았다.** 아래 체크리스트는 모두 기기에서 확인해야 한다.
 - 막힌 것(`AUTO/BLOCKERS.md`)은 없다. ProjectSettings, 패키지, XR·렌더 설정은 바꾸지 않았다.
 
@@ -11,6 +11,7 @@
 - `HandHero_20261010_0203_release.apk` (55.5 MB): 체감, 성능, 녹화용이다.
 - `HandHero_20261010_0156_dev.apk` (126.7 MB, 클린 개발 빌드): 방 스캔 와이어프레임과 Profiler 확인용이다.
 - 4차 APK(`HandHero_20261009_*`)는 쓰지 않는다.
+- 위 두 APK는 딥 리뷰 전 코드다. 2절에서 "딥 리뷰"라고 적힌 확인(A5의 `resting thumb` 줄, 31–33번 등)은 다시 빌드한 APK에서 한다.
 
 **이번 라운드를 돌린 방식 (D7, 울트라코드 워크플로)**
 - T0은 메인 체크아웃에서 TDD로 끝까지 했다. 같은 시간에 T1–T4 초안을 git 워크트리 4개(`draft/r5b-T1`–`T4`)에서 따로 썼다(10-09 23:42–23:55, `draft (uncompiled)` 커밋 4개).
@@ -92,11 +93,15 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
    - `release_by` 분포를 읽을 때 주의할 점이 두 가지다(리뷰 Minor, 고치지 않음).
      - `relative`가 거의 전부로 나와도 정상이다. 이 라벨은 "새 규칙만 놓았다"는 뜻이 아니다. 손을 보통 속도로 펴면 상대 기준이 먼저 걸린다(T0-R2-5, F1-1).
      - `lost`는 항상 0이다. 추적이 끊기거나 시스템 제스처로 끝난 쥐기는 `hold_s`에서도 빠진다. 그래서 1초 넘는 비율이 실제보다 조금 낮게 나올 수 있다(T0-R1-3 외).
-5. 쉬는 엄지가 남보다 가까우면 탭이 쏘지 않거나, 짧은 탭이 쥔 채로 남아 차지가 될 수 있다. 그때 값을 고르는 법이다(딥 리뷰 DR-9에서 고쳤다).
+5. 쉬는 엄지가 남보다 가까우면 탭이 쏘지 않거나, 짧은 탭이 쥔 채로 남아 차지가 될 수 있다. 그때 값을 고르는 법이다(딥 리뷰 DR-9, r을 읽는 법은 2차 수정에서 고쳤다).
    - 예전 안내("`pinchReleaseFloorMargin`을 0.03으로")는 아주 좁은 경우에만 듣는다. 가벼운 탭이면서 쉬는 엄지가 2.63–2.54 cm일 때다. 0.03은 바닥 0.77(2.54 cm)이고, 2.5 cm는 0.778이라 덮지 못한다. 엄지를 붙이는 탭에는 아무 효과가 없다.
-   - 먼저 `run_summary.py`의 Assist 아래 `holds over 1 s, longest first (peak / lowest while held)` 줄을 본다(딥 리뷰 DR-9에서 더한 줄).
-     - 일부러 하지 않은 긴 쥐기의 `lowest while held`가 쉬는 엄지의 강도(r)다. 강도 = (6 − 거리 cm) ÷ 4.5다. 0.71은 2.8 cm, 0.75는 2.63 cm, 0.8은 2.4 cm다.
-     - `peak`가 0.95보다 낮으면 가벼운 탭, 1.00이면 엄지를 검지에 붙인 탭이다.
+   - 먼저 `run_summary.py`의 Assist 아래 `resting thumb` 줄에서 쉬는 엄지의 강도 r을 읽는다(딥 리뷰 DR-9 2차 수정, 다시 빌드한 APK부터 나온다). 예: `resting thumb (most aim-hand time at 0.50-0.95): r 0.77 = 2.5 cm, 31% of 136 s tracked`.
+     - r은 RUN의 싸움 동안 ASSIST 오른손이 0.50–0.95 사이에서 가장 오래 머문 강도다. 쥔 때와 아닌 때를 모두 센다. 일시정지와 섬 사이 메뉴는 세지 않는다. 그래서 탭이 쥔 채로 남은 런에도, 탭이 하나도 나가지 않은 런(`Assist: 0 holds`)에도 나온다.
+     - 강도 = (6 − 거리 cm) ÷ 4.5다. 0.71은 2.8 cm, 0.75는 2.63 cm, 0.8은 2.4 cm다.
+     - 비율(%)이 낮으면(대략 20% 아래) 쉬는 자세가 한곳에 머물지 않았다는 뜻이라 r을 믿기 어렵다. 가리키는 자세로 한 섬 이상 싸운 런으로 읽는다.
+     - `resting thumb: not recorded`가 나오면 이 기록 전에 빌드한 APK(`0203`, `0156` 포함)다.
+     - `holds over 1 s` 줄의 `lowest while held`는 r이 아니다. 쥐기는 놓기 기준(가벼운 탭은 0.75) 이하 값이 2번 연달아 와야 끝나고, 그 첫 값까지 쥔 것으로 친다. 그래서 이 값은 늘 그 기준 이하다. 예전 안내처럼 이 값을 r로 읽으면 늘 아래 첫 줄("값을 바꾸지 않는다")이 된다(딥 리뷰 DR-9 재확인, 4.1의 62번).
+   - 탭 종류: `peak`(긴 쥐기 줄, `strength` 줄)가 0.95보다 낮으면 가벼운 탭, 1.00이면 엄지를 검지에 붙인 탭이다. 쥐기가 없으면 자신이 하는 탭 방식으로 고른다.
    - r에 따라 고른다. 아래 수치는 `PinchTrigger`를 그대로 옮긴 시뮬레이션이다(탭 10번, 섬 시작 직후와 처음 상태 모두).
      - **r이 0.75 이하(엄지가 2.63 cm보다 멀다):** 놓기 기준 때문이 아니다. 값을 바꾸지 않는다.
      - **r이 0.75–0.78이고 가벼운 탭:** `pinchReleaseFloorMargin`을 0.79 − r 이하로 둔다(0.01 단위로 내림). 그러면 바닥(0.8 − 값)이 r보다 0.01 이상 높다. r 0.76이면 0.03, r 0.77이면 0.02, r 0.78이면 0.01이다.
@@ -182,11 +187,13 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
     - 설치 뒤 `dumpsys`의 `versionName`이 APK 파일 이름의 도장(예: `20261010_1042_release`)과 같아야 한다.
     - RUN 한 판 뒤 `run_log.jsonl` 마지막 줄의 `"build"`와 `perf_log.txt` 머리줄의 `app`도 같은 값이어야 한다.
     - Unity 에디터에서 `Arena_Main`의 값 하나를 바꿔 저장하고 `HandHero > Build Quest APK (release)`를 누른다. "scene edits will be reset" 창이 떠야 한다. Cancel을 누르면 빌드하지 않는다. 시험한 값은 되돌린다.
+    - `Library` 폴더를 지웠거나 PC가 초기화된 뒤 처음 빌드할 때는 "scene edits may be reset" 창이 뜬다. 이 PC에 씬을 만든 기록이 없어서 수정이 있는지 알 수 없다는 뜻이다(딥 리뷰 DR-4 2차 수정, 4.1의 64번). 인스펙터 값을 바꾸지 않았으면 Rebuild scenes를 누른다.
 32. 메뉴 핀치가 손이 잠깐 끊긴 뒤 두 번 눌리지 않는지 본다(딥 리뷰 DR-8).
     - 일시정지 > RESET PROGRESS를 가리키고 한 번 핀치한다. 쥔 채로 오른손을 잠깐 시야 밖으로 뺐다가 다시 넣는다.
     - 버튼이 `CONFIRM RESET`으로 바뀌기만 하고, 3초 뒤 `RESET PROGRESS`로 돌아와야 한다. `PROGRESS RESET`이 뜨면(진행이 지워지면) 안 된다.
     - 지워진 진행은 되살릴 수 없다. 지워져도 괜찮은 상태에서 시험한다.
     - 상점 REROLL도 같은 방법으로 한 번 핀치에 한 번만 바뀌고 한 번만 값을 치르는지 본다.
+    - 핀치를 닫는 도중(버튼이 눌리기 전)에 오른손이 잠깐 끊겼다 돌아오면, 다시 핀치하지 않아도 한 번 눌려야 한다(딥 리뷰 DR-8 2차 수정, 4.1의 63번). DR-8 첫 수정은 이 핀치를 씹었다.
     - 평소처럼 가리키고 핀치하는 메뉴 선택이 느려지거나 씹히지 않는지 본다.
 33. 영웅을 끄는 왼손 주먹이 잠깐 끊겨도 끌기가 이어지는지 본다(딥 리뷰 DR-10).
     - 주먹으로 영웅을 빠르게 끌면서 왼손을 잠깐 다른 손 뒤로 가리거나 시야 끝에 댄다. 영웅이 멈칫하거나 덜 가지 않아야 한다.
@@ -285,12 +292,13 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
   - 이 빌드는 저장된 씬을 그대로 쓴다. 그래서 그 뒤에 빌더나 직렬화 필드를 바꾼 코드(다음 라운드 등)는 씬을 다시 만들기 전까지 APK에 들어가지 않는다.
 - **값을 계속 쓰기로 했으면** C# 기본값을 바꾼다(필드 초기값, `*.Default`, `Defaults()`, 빌더). 그다음 `HandHero > Build All Scenes`로 씬을 다시 만든다. 다음 라운드의 씬 재생성에도 남는 방법은 이것뿐이다.
 - 보통 빌드 메뉴는 저장된 씬이나 프리팹이 빌더가 마지막으로 쓴 것과 다르면 먼저 묻는다(Rebuild scenes / Cancel / Keep my scene edits).
+  - 이 PC에 씬을 만든 기록이 없을 때(`Library`를 지웠거나, PC가 초기화됐거나, 새로 받은 체크아웃)도 묻는다("scene edits may be reset", 딥 리뷰 DR-4 2차 수정). 예전에는 그때 아무 말 없이 다시 만들었다.
   - `compile_check` 빌드는 묻지 않는다. `[BuildScript] NOTE:` 줄을 출력하고 다시 만든다.
   - 미리 보려면 `HandHero > Check Scene Edits`를 쓴다(PowerShell: `-ExecuteMethod HandHero.EditorTools.BuildScript.CheckSceneEdits`).
   - 이 PC에서 씬을 만든 기록과 비교한다. 그래서 git으로 다른 커밋을 받은 뒤에도 "EDITED"로 나올 수 있다.
 - 에디터 Play(Link)는 인스펙터 값을 그대로 쓴다.
 
-### 4.1 대신 내린 결정 (모두 되돌릴 수 있음, 자세한 내용은 `QUESTIONS_FOR_HYUN.md` 1–61번)
+### 4.1 대신 내린 결정 (모두 되돌릴 수 있음, 자세한 내용은 `QUESTIONS_FOR_HYUN.md` 1–64번)
 
 | # | 결정 | 되돌리려면 |
 |---|---|---|
@@ -330,9 +338,12 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | 56 | 딥 리뷰 DR-4: 보통 APK 빌드는 그대로 씬을 다시 만든다(씬이 늘 코드와 같다). 인스펙터 값을 쓰는 빌드 `…KeepScenes`와 `Check Scene Edits`를 더했다. 저장된 씬이 빌더가 쓴 것과 다르면 메뉴는 묻고, 배치 빌드는 NOTE를 남긴다. | 새 빌드를 쓰지 않으면 예전과 같다. 묻는 창은 `BuildScript.PrepareScenes`, 기록은 `Library/HandHero/SceneBuildFingerprints.txt`다. |
 | 57 | 딥 리뷰 DR-7: APK 버전 이름에 빌드 도장(`9.2.0+날짜_시각_종류`)을 빌드하는 동안만 단다. 런 기록에 `build`를 넣었다. `run_summary.py`는 가장 최근 빌드만 요약한다. | 도장: `BuildScript.BuildQuestApk`의 `bundleVersion` 두 줄. 요약: `--all` |
 | 58 | 딥 리뷰 DR-6: Meta 플래그로 놓을 때 강도 하락(0.05)도 2프레임 연속이어야 한다(`pinchConfirmFrames`). 플래그가 꺼진 동안 튄 한 프레임으로 차지가 끊기지 않는다. 진짜로 놓을 때는 강도 규칙과 같은 2프레임이다. | `PinchTrigger.ReleaseRule`의 `_metaDropFrames >= confirm`을 `_metaDropFrames >= 1`로 |
-| 59 | 딥 리뷰 DR-8: 메뉴 포인터는 오른손 추적이 끊기면, 손이 돌아온 뒤 한 번 열어야 다시 누를 수 있다. 패널이 뜰 때와 같은 규칙이다. 판정은 Core `MenuPinchPress`로 옮겼다. | `MenuPinchPress.Step`의 `!tracked` 분기에서 `RequireReopen()`을 `_gate.Reset()`으로 |
+| 59 | 딥 리뷰 DR-8: 메뉴 포인터는 오른손 추적이 끊기면, 손이 돌아온 뒤 한 번 열어야 다시 누를 수 있다. 패널이 뜰 때와 같은 규칙이다. 판정은 Core `MenuPinchPress`로 옮겼다. | `MenuPinchPress.Step`의 `!tracked` 분기 전체를 `_gate.Reset()`으로 |
 | 60 | 딥 리뷰 DR-10: 잡은 클러치는 왼손 추적이 0.25초까지 끊겨도 유지된다(그동안 끌기 0). 주먹을 쥔 채 돌아오면 같은 잡기로 이어지고, 손이 있는 자리에서 기준을 다시 잡는다(점프 없음). 더 오래 끊기면 예전처럼 놓고 활공한다. CURSOR 조준 끌기는 그대로다. | 씬 `XRHandsInputSource` > `clutchLostGraceTime` = 0 |
 | 61 | 딥 리뷰 DR-9: 2절 A5의 조정 안내를 고쳤다. `run_summary.py`가 1초 넘는 쥐기를 8개까지 peak / lowest while held와 함께 적는다. 다시 누르기 규칙과 바닥은 바꾸지 않았다(기기 데이터가 먼저다). | 요약 줄: `run_summary.py`의 `LONG_HOLD_LIST` |
+| 62 | 딥 리뷰 DR-9 2차 수정: 61번의 A5는 r을 lowest while held에서 읽게 했는데, 그 값은 늘 0.75 이하라 r이 될 수 없었다. 런 기록에 ASSIST 오른손이 강도(0.01 단위)마다 머문 시간 `pinch_strength_s`를 남기고, `run_summary.py`가 0.50–0.95에서 가장 오래 머문 강도를 r로 적는다(`resting thumb` 줄). 놓기·다시 누르기 규칙은 그대로다. | 기록: `PointingBeamController`의 `AddStrength` 줄. 요약: `run_summary.py`의 `REST_LOW`·`REST_HIGH`·`REST_SPREAD` |
+| 63 | 딥 리뷰 DR-8 2차 수정: 메뉴 핀치를 닫는 도중(0.5–0.8, 아직 안 눌림)에 손이 끊기면, 돌아와서 다 닫을 때 한 번 누른다(DR-8 전과 같다). 누른 핀치와 편 손은 59번대로 한 번 열어야 누른다. | `MenuPinchPress.Step`의 `closing` 조건을 지우고 `RequireReopen()`만 남긴다(59번 동작). |
+| 64 | 딥 리뷰 DR-4 2차 수정: 이 PC에 씬 빌드 기록이 없으면 보통 빌드 메뉴도 묻고("scene edits may be reset"), 배치 빌드는 NOTE를 남긴다. 예전에는 말없이 다시 만들었다. | `BuildScript.PrepareScenes`의 `unknown` 목록 |
 
 ### 4.2 바뀐 값과 되돌리는 법
 
@@ -363,7 +374,11 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | Meta 놓기의 강도 하락(딥 리뷰 DR-6) | 그 프레임만 → 2프레임 연속 | `PinchTrigger.ReleaseRule` | 4.1의 58번 |
 | 메뉴 핀치, 추적이 끊긴 뒤(딥 리뷰 DR-8) | 핀치만 떨어뜨림 → 손이 돌아오면 한 번 열어야 누름 | `MenuPinchPress`(`HandMenuPointer`가 씀) | 4.1의 59번 |
 | 클러치 추적 끊김 유예(딥 리뷰 DR-10) | 0초 → 0.25초 | 씬 `XRHandsInputSource.clutchLostGraceTime`, `HandClutchSampler` | 0 |
-| `run_summary.py` 긴 쥐기 줄(딥 리뷰 DR-9) | 없음 → 1초 넘는 쥐기를 8개까지 peak / lowest while held와 함께 | `pinch_holds_by_mode` | — |
+| `run_summary.py` 긴 쥐기 줄(딥 리뷰 DR-9) | 없음 → 1초 넘는 쥐기를 8개까지 peak / lowest while held와 함께(lowest는 r이 아니다, 62번) | `pinch_holds_by_mode` | — |
+| 런 기록 `pinch_strength_s`(딥 리뷰 DR-9 2차 수정) | 없음 → ASSIST 오른손이 강도(0.01 단위, 0.50 아래는 한 칸)마다 머문 초. 쥐기가 없어도 남는다. `v`는 1 그대로 | `PinchStrengthTime`, `PinchHoldStats.AddStrength`, `RunRecordJson.ToJson` | 4.1의 62번 |
+| `run_summary.py` 쉬는 엄지 줄(딥 리뷰 DR-9 2차 수정) | 없음 → `resting thumb ...: r 0.77 = 2.5 cm, 31% of 136 s tracked` | `resting_thumb`, `pinch_holds_by_mode` | — |
+| 메뉴 핀치, 닫는 도중 끊김(딥 리뷰 DR-8 2차 수정) | 한 번 열어야 누름 → 돌아와서 다 닫으면 한 번 누름 | `MenuPinchPress` | 4.1의 63번 |
+| 기록 없는 씬의 보통 빌드(딥 리뷰 DR-4 2차 수정) | 말없이 다시 만듦 → 메뉴는 묻고, 배치는 NOTE | `BuildScript.PrepareScenes`, `SceneBuildFingerprints.Unrecorded` | 4.1의 64번 |
 
 ProjectSettings, 매니페스트, 패키지, XR·렌더 설정은 바뀌지 않았다(APK 버전 이름의 도장은 빌드하는 동안만 단다, DR-7). 퀵 매치와 튜토리얼의 수치와 배치도 그대로다. 4차 게임 수치(`HordeTime`, 보스 체력, `EnemyDamageMult`, 원형 공격 숫자)도 그대로다.
 
@@ -416,7 +431,7 @@ Critical은 0건이다.
 1. **기기 데이터로 ASSIST 감각과 밸런스를 맞춘다.**
    - 먼저 진단 Minor 2건을 고친다. `lost`가 기록되게 하고(T0-R1-3 외), `release_by` 라벨이 "예전 규칙도 놓았을까"에 답하게 한다(T0-R2-5). 그래야 `run_summary.py` 숫자를 믿을 수 있다.
    - 그 숫자로 `pinchReleaseFloorMargin`·`pinchRelativeRelease`를 맞춘다. Meta 신호가 오면(`meta_seen`) 그쪽 비중을 높인다.
-   - 지금 기준은 쉬는 엄지 2.8 cm 하나를 가정해서 맞췄다. 기기에서 잰 값이 아니다. 다시 누르기 기준이 바닥에서 갑자기 바뀌는 것을 잇고, 플레이어마다 쉬는 엄지를 재서 바닥을 정하는 안을 검토한다(딥 리뷰 DR-9, 이번에는 안내만 고쳤다).
+   - 지금 기준은 쉬는 엄지 2.8 cm 하나를 가정해서 맞췄다. 기기에서 잰 값이 아니다. 다시 누르기 기준이 바닥에서 갑자기 바뀌는 것을 잇고, 플레이어마다 쉬는 엄지를 재서 바닥을 정하는 안을 검토한다. 규칙은 그대로 두었다(딥 리뷰 DR-9). 2차 수정부터 런 기록의 `resting thumb` 줄로 플레이어의 쉬는 엄지를 읽을 수 있으니, 그 값으로 정한다.
    - 적 움직임 숫자(Gunner 좌우 폭, Lancer 돌진 거리)와 원형별 피해를 다시 맞춘다. Gunner 예고선 선회(T2-R2-2)와 Lancer 미끄러짐(T2-R1-2)도 같이 본다.
 2. **아트 방향을 정한다(아트 패스).**
    - 테마 3종을 실제 아트(재질, 하늘, 조각 모양)로 바꾼다. 테마가 바뀔 때는 페이드를 넣는다(F3-3).

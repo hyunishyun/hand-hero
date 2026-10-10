@@ -121,6 +121,10 @@ namespace HandHero.Core
         public float[] HoldReleaseStrength = Array.Empty<float>();
         public PinchReleaseBy[] HoldReleaseBy = Array.Empty<PinchReleaseBy>();
         public bool[] HoldMetaSeen = Array.Empty<bool>();
+        // Deep review DR-9, second pass: seconds of tracked ASSIST aim-hand time per
+        // unsmoothed strength bin (PinchStrengthTime: [0] under 0.50, then 0.50 ... 1.00),
+        // for reading the resting thumb. Empty without hold stats.
+        public float[] PinchStrengthSeconds = Array.Empty<float>();
     }
 
     // Collects run events into a RunRecord. Begin at run start, then island /
@@ -254,6 +258,7 @@ namespace HandHero.Core
                 r.HoldReleaseStrength = Copy(totals.Holds.ReleaseStrengths);
                 r.HoldReleaseBy = Copy(totals.Holds.ReleasedBy);
                 r.HoldMetaSeen = Copy(totals.Holds.MetaSeenFlags);
+                r.PinchStrengthSeconds = Copy(totals.Holds.StrengthTime.Seconds);
             }
 
             _record = null;
@@ -361,6 +366,17 @@ namespace HandHero.Core
             sb.Append(']');
             Numbers(sb, "peak_strength", r.HoldPeakStrength);
             Flags(sb, "meta_seen", r.HoldMetaSeen);
+            // Deep review DR-9, second pass: {"<0.50":s,"0.71":s,...}, bins with time only.
+            sb.Append(",\"pinch_strength_s\":{");
+            bool first = true;
+            for (int i = 0; i < r.PinchStrengthSeconds.Length; i++)
+            {
+                if (!(r.PinchStrengthSeconds[i] > 0f)) continue;
+                if (!first) sb.Append(',');
+                first = false;
+                Quote(sb, PinchStrengthTime.Label(i)).Append(':').Append(Format(r.PinchStrengthSeconds[i]));
+            }
+            sb.Append('}');
             sb.Append('}');
             return sb.ToString();
         }
