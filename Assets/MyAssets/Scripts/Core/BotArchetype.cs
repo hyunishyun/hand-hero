@@ -65,6 +65,13 @@ namespace HandHero.Core
         public BotAttack AltAttack;
         [Tooltip("Attacks before switching between Attack and AltAttack; 0 = never")]
         public int SwitchEvery;
+
+        // Round 5 T2 (D4): movement personality per pattern. All zero (an entry
+        // serialized before round 5) moves like the Striker.
+        [Tooltip("How the bot moves while Attack is its pattern (Striker = today's bot)")]
+        public BotMovement Movement;
+        [Tooltip("How the bot moves while AltAttack is its pattern (the boss: the Lancer's dash and hold)")]
+        public BotMovement AltMovement;
     }
 
     // The four archetypes plus the boss (first guesses, round 4; tuned on device).
@@ -143,6 +150,16 @@ namespace HandHero.Core
         }
 
         public static BotArchetype Get(BotArchetypeId id)
+        {
+            // Round 5 T2 (D4): the movement that goes with each pattern.
+            BotArchetype a = LooksAndAttacks(id);
+            a.Movement = BotMovements.For(a.Id);
+            a.AltMovement = BotMovements.AltFor(a.Id);
+            return a;
+        }
+
+        // Round 4 (S6): body, silhouette and attack patterns.
+        private static BotArchetype LooksAndAttacks(BotArchetypeId id)
         {
             switch (id)
             {

@@ -65,6 +65,9 @@ public class RunDirector : MonoBehaviour
     private readonly List<float> _corpseTimers = new List<float>();
     // Per-spawn bot seeds (D9), drawn from the run's own stream.
     private System.Random _spawnSeeds;
+    // Round 5 (T2-P4): world boxes of the terrain pieces turned on, refilled at
+    // every spawn, so a bot's dash and hold spots keep out of them.
+    private readonly Bounds[] _obstacleBoxes = new Bounds[32];
 
     // Run telemetry (P13, D16).
     private readonly RunRecorder _recorder = new RunRecorder();
@@ -350,6 +353,7 @@ public class RunDirector : MonoBehaviour
         BotArchetypeId kind = RunRules.PickArchetype(_run.Island, _run.Spec.Type, rules, _spawnSeeds);
         bot.Activate(at, arena, playerHealth != null ? playerHealth.transform : null, _run.Spec, botSeed,
             _run.Phase == RunPhase.Island && !_run.IsPaused, Archetype(kind));
+        bot.SetObstacles(_obstacleBoxes, layout != null ? layout.ObstacleBoxes(_obstacleBoxes) : 0);
         _bots.Add(bot);
         return true;
     }

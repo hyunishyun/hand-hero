@@ -91,4 +91,25 @@ public class ArenaLayoutApplier : MonoBehaviour
         for (int i = 0; i < n; i++)
             if (transforms[i] != null) transforms[i].localPosition = positions[i];
     }
+
+    // Round 5 (T2-P4): the world boxes (collider bounds) of the terrain pieces
+    // that are turned on, for the run bots' dash and hold spots. Writes at most
+    // boxes.Length and returns how many. Every terrain piece array belongs here
+    // (T3's pools too), or bots may stop inside those pieces.
+    public int ObstacleBoxes(Bounds[] boxes)
+    {
+        return AddObstacleBoxes(pieces, boxes, 0);
+    }
+
+    private static int AddObstacleBoxes(Transform[] from, Bounds[] boxes, int n)
+    {
+        if (from == null || boxes == null) return n;
+        for (int i = 0; i < from.Length && n < boxes.Length; i++)
+        {
+            Transform piece = from[i];
+            if (piece == null || !piece.gameObject.activeInHierarchy) continue;
+            if (piece.TryGetComponent(out Collider c) && c.enabled) boxes[n++] = c.bounds;
+        }
+        return n;
+    }
 }

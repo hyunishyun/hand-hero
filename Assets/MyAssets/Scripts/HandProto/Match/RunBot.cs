@@ -72,7 +72,15 @@ public class RunBot : MonoBehaviour
         SetControlled(controlled);
     }
 
-    // Looks and attacks only (D7): flight, health and the hit receiver stay the same.
+    // Round 5 (T2-P4): the terrain pieces turned on this island (world boxes;
+    // copied), so the bot never dashes to or holds at a spot inside one.
+    public void SetObstacles(Bounds[] boxes, int count)
+    {
+        if (input != null) input.SetObstacles(boxes, count);
+    }
+
+    // Looks, attacks (D7) and the movement personality (round 5, D4): the flight
+    // model, its speed caps, health and the hit receiver stay the same.
     private void ApplyArchetype(BotArchetype archetype)
     {
         Archetype = archetype;

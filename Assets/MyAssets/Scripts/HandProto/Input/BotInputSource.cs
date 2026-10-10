@@ -22,6 +22,8 @@ public class BotInputSource : HandInputSourceBehaviour
     [SerializeField] private BotDifficulty difficulty;
     [Tooltip("Random seed; 0 = different every play")]
     [SerializeField] private int seed;
+    [Tooltip("Run bots (round 5): how far a dash or hold spot keeps from a terrain piece, meters (the hero collider's radius is 0.9)")]
+    [SerializeField] private float obstacleClearance = 1f;
 
     private BotBrain _brain;
     private FlyingCharacter _enemyHero;
@@ -33,16 +35,25 @@ public class BotInputSource : HandInputSourceBehaviour
     // while sampling, so RunBot sets the beam's shot profile before it fires.
     public event System.Action<BotAttack> ShotFired;
 
-    // Run bot archetypes (S6): attack patterns from the next attack on. Call
-    // before Reseed so the first shot's delay uses the archetype's interval.
+    // Run bot archetypes (S6): attack patterns from the next attack on, and
+    // (round 5, T2) the movement that goes with each pattern. Call before
+    // Reseed so the first shot's delay uses the archetype's interval.
     public void SetArchetype(BotArchetype archetype)
     {
         _brain.SetAttacks(archetype.Attack, archetype.AltAttack, archetype.SwitchEvery);
+        _brain.SetMovement(archetype.Movement, archetype.AltMovement);
     }
 
     public void SetEnemy(Transform target)
     {
         enemy = target;
+    }
+
+    // Run bots (round 5, T2-P4): the terrain pieces turned on (world boxes),
+    // which dash and hold spots keep `obstacleClearance` away from.
+    public void SetObstacles(Bounds[] boxes, int count)
+    {
+        _brain.SetObstacles(boxes, count, obstacleClearance);
     }
 
     // Run bots (R8): the boss fires more often (< 1). 1 = the difficulty asset's timing.
