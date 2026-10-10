@@ -11,19 +11,29 @@ and what released each pinch, round 5), island themes and terrain pieces
 The device file keeps every run across `adb install -r`, so each run names the
 APK that wrote it ("build", deep review DR-7) and only the newest build is
 summarized unless --all or --build is given. Runs written before the stamp have
-no "build" and are listed as "no build stamp".
+no "build". They are split in two (deep review DR-5): "no build stamp (round 5)"
+for the round-5 APKs built before the stamp (they write release_by on every run)
+and "no build stamp (rounds 3-4)" for the older ones. The pinch-hold headline
+per aim mode counts only runs with release diagnostics; older holds get a line
+of their own, so --all cannot dilute the round-5 ASSIST share either.
 
 Usage:
-    python AUTO/tools/run_summary.py [--all | --build <part of a name>] <run_log.jsonl> [more.jsonl ...]
+    python AUTO/tools/run_summary.py [--all | --build <part of a name>] [--since <time>] <run_log.jsonl> [more.jsonl ...]
 
     --all            summarize every run in the files (all builds together)
-    --build TEXT     only the builds whose name contains TEXT ("none" = runs without a stamp)
+    --build TEXT     only the builds whose name contains TEXT ("none" = every run without a stamp,
+                     "round 5" = the unstamped round-5 runs)
+    --since TIME     only runs that started at or after TIME (headset local time,
+                     e.g. 2026-10-10 or "2026-10-10 14:00"); applied before the build choice
+
+Tests: python -m unittest discover -s AUTO/tools -p "test_*.py"
 
 Standard library only.
 """
 
 import argparse
 import json
+import re
 import statistics
 import sys
 from collections import Counter, defaultdict
@@ -34,6 +44,11 @@ LONG_HOLD_S = 1.0         # round 5: share of holds over this, per aim mode (ASS
 RELEASE_ORDER = ("meta", "absolute", "relative", "lost", "none")
 BOSS_ISLAND = 9
 NO_STAMP = "no build stamp"   # runs written before the deep-review build stamp (DR-7)
+# DR-5: unstamped runs split on release_by, which every round-5 APK writes (RunRecordJson)
+# and no round 3-4 APK did. The round-5 APKs in the report (0203, 0156) are unstamped.
+NO_STAMP_R5 = NO_STAMP + " (round 5)"
+NO_STAMP_OLD = NO_STAMP + " (rounds 3-4)"
+SINCE_FORMAT = re.compile(r"^\d{4}-\d{2}-\d{2}([T ]\d{2}(:\d{2}(:\d{2})?)?)?$")
 
 
 def load_runs(paths):
@@ -51,8 +66,23 @@ def load_runs(paths):
     return runs
 
 
+def has_release_diagnostics(run):
+    """True for runs written by a round-5 (or later) APK: release_by is always there, even empty."""
+    return run.get("release_by") is not None
+
+
 def build_of(run):
-    return run.get("build") or NO_STAMP
+    if run.get("build"):
+        return run["build"]
+    return NO_STAMP_R5 if has_release_diagnostics(run) else NO_STAMP_OLD
+
+
+def runs_since(runs, since):
+    """Runs that started at or after `since`. RunDirector writes "start" as headset local time
+    "yyyy-MM-ddTHH:mm:ss", so a plain string comparison works; "2026-10-10 14:00" and
+    "2026-10-10" are accepted too. Runs without a start time are dropped."""
+    since = since.strip().replace(" ", "T")
+    return [r for r in runs if r.get("start") and r["start"] >= since]
 
 
 def builds_in(runs):
@@ -83,9 +113,9 @@ def select_runs(runs, build_filter=None, all_builds=False):
         chosen = runs
         lines.append(f"Summarizing every build together ({len(runs)} runs).")
     elif build_filter:
-        wanted = NO_STAMP if build_filter.lower() == "none" else None
+        unstamped = build_filter.lower() == "none"
         names = [name for name, _ in builds
-                 if (name == wanted if wanted else build_filter in name)]
+                 if (name.startswith(NO_STAMP) if unstamped else build_filter in name)]
         chosen = [r for r in runs if build_of(r) in names]
         lines.append(f"Summarizing build {', '.join(names) if names else '(none matched)'}"
                      f" ({len(chosen)} of {len(runs)} runs).")
@@ -229,17 +259,22 @@ def pinch_holds_by_mode(runs):
     release_by per hold: meta (Meta's index-pinch flag), absolute (the old 0.6 reset
     would release too), relative (only the drop-from-peak rule released), lost
     (tracking / system gesture), none (CURSOR trigger holds, no pinch diagnostics).
-    Strengths are the unsmoothed thumb-index values (1 = pinched, 0.71 = 2.8 cm)."""
-    modes = defaultdict(lambda: {"durations": [], "release": Counter(), "recorded": 0, "diag_durations": [],
+    Strengths are the unsmoothed thumb-index values (1 = pinched, 0.71 = 2.8 cm).
+
+    Deep review DR-5: the headline (holds, median, share over 1 s) counts only runs with
+    release diagnostics (round-5 APKs). Holds from older APKs, still in the device file
+    after `adb install -r`, are printed on their own line; a mode with only older holds
+    keeps them in the headline and says "not recorded"."""
+    modes = defaultdict(lambda: {"durations": [], "older": [], "release": Counter(), "recorded": 0,
                                  "meta_seen": 0, "peak": [], "low": [], "at_release": []})
     for r in runs:
         m = modes[r.get("aim", "?")]
         holds = r.get("hold_s", [])
-        m["durations"].extend(holds)
         released_by = r.get("release_by")
         if released_by is None:
+            m["older"].extend(holds)
             continue
-        m["diag_durations"].extend(holds)
+        m["durations"].extend(holds)
         m["recorded"] += len(released_by)
         m["release"].update(released_by)
         m["meta_seen"] += sum(r.get("meta_seen", []))
@@ -256,36 +291,37 @@ def pinch_holds_by_mode(runs):
             if i < len(at_release):
                 m["at_release"].append(at_release[i])
 
+    def holds_line(durations):
+        long_holds = sum(1 for d in durations if d > LONG_HOLD_S)
+        return (f"{len(durations)} holds, median {median(durations):.2f} s,"
+                f" {long_holds} over {LONG_HOLD_S:g} s ({long_holds / len(durations):.0%})")
+
     out = ["", f"Pinch holds by aim mode (over {LONG_HOLD_S:g} s / what released them):"]
-    if not any(m["durations"] for m in modes.values()):
+    if not any(m["durations"] or m["older"] for m in modes.values()):
         out.append("  none recorded")
         return out
     for mode in sorted(modes):
         m = modes[mode]
-        durations = m["durations"]
+        durations, older = m["durations"], m["older"]
         if not durations:
+            if older:
+                out.append(f"  {mode}: {holds_line(older)}")
+                out.append("    released by: not recorded (logs before round 5)")
             continue
-        long_holds = sum(1 for d in durations if d > LONG_HOLD_S)
-        out.append(f"  {mode}: {len(durations)} holds, median {median(durations):.2f} s,"
-                   f" {long_holds} over {LONG_HOLD_S:g} s ({long_holds / len(durations):.0%})")
-        if not m["recorded"]:
-            out.append("    released by: not recorded (logs before round 5)")
-            continue
+        out.append(f"  {mode}: {holds_line(durations)}")
         total = m["recorded"]
-        diag = m["diag_durations"]
-        if len(diag) < len(durations):
-            # --all over old and new APKs: the lines below cover only the round-5 holds (DR-7).
-            diag_long = sum(1 for d in diag if d > LONG_HOLD_S)
-            share = f"{diag_long / len(diag):.0%}" if diag else "-"
-            out.append(f"    of these, with release diagnostics (round 5 APKs): {len(diag)} holds,"
-                       f" {diag_long} over {LONG_HOLD_S:g} s ({share})")
-        kinds = [k for k in RELEASE_ORDER if m["release"][k]] + sorted(
-            k for k in m["release"] if k not in RELEASE_ORDER)
-        mix = ", ".join(f"{k} {m['release'][k]} ({m['release'][k] / total:.0%})" for k in kinds)
-        out.append(f"    released by: {mix}; Meta flag seen in {m['meta_seen']}/{total} holds")
+        if total:
+            kinds = [k for k in RELEASE_ORDER if m["release"][k]] + sorted(
+                k for k in m["release"] if k not in RELEASE_ORDER)
+            mix = ", ".join(f"{k} {m['release'][k]} ({m['release'][k] / total:.0%})" for k in kinds)
+            out.append(f"    released by: {mix}; Meta flag seen in {m['meta_seen']}/{total} holds")
+        else:
+            out.append("    released by: not recorded")
         if m["peak"]:
             out.append(f"    strength (median, unsmoothed): peak {median(m['peak']):.2f},"
                        f" lowest while held {median(m['low']):.2f}, at release {median(m['at_release']):.2f}")
+        if older:
+            out.append(f"    older APKs (rounds 3-4, not in the numbers above): {holds_line(older)}")
     return out
 
 
@@ -359,20 +395,35 @@ def main(argv):
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--all", action="store_true", help="summarize every build together")
     group.add_argument("--build", metavar="TEXT",
-                       help='only builds whose name contains TEXT ("none" = runs without a build stamp)')
+                       help='only builds whose name contains TEXT ("none" = every run without a build stamp,'
+                            ' "round 5" = the unstamped round-5 runs)')
+    parser.add_argument("--since", metavar="TIME",
+                        help='only runs that started at or after TIME (headset local time, e.g. 2026-10-10'
+                             ' or "2026-10-10 14:00")')
     parser.add_argument("files", nargs="+", help="run_log.jsonl files")
     args = parser.parse_args(argv[1:])
+    if args.since is not None and not SINCE_FORMAT.match(args.since.strip()):
+        parser.error(f"--since: expected yyyy-MM-dd[ HH[:mm[:ss]]], got {args.since!r}")
 
     runs = load_runs(args.files)
     if not runs:
         print("No runs found.")
         return 1
+    since = []
+    if args.since is not None:
+        kept = runs_since(runs, args.since)
+        since.append(f"Runs started at or after {args.since.strip()}: {len(kept)} of {len(runs)}.")
+        runs = kept
+        if not runs:
+            print(since[0])
+            print("No runs found.")
+            return 1
     chosen, header = select_runs(runs, args.build, args.all)
     if not chosen:
-        print("\n".join(header))
+        print("\n".join(since + header))
         print("No runs from that build.")
         return 1
-    print("\n".join(header + [summarize(chosen)]))
+    print("\n".join(since + header + [summarize(chosen)]))
     return 0
 
 

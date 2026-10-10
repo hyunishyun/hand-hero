@@ -75,3 +75,15 @@ STATUS: ALL_DONE
   - 주의:
     - 1042·1046 APK는 검증용이다. 다른 딥 리뷰 수정이 끝나면 APK 2종(release, dev clean)을 다시 빌드하고 보고서의 APK 목록을 바꾼다.
     - 메뉴의 묻는 창과 저장 확인은 배치로 시험할 수 없다. 보고서 2절 31번에 넣었다.
+- 2026-10-10 딥 리뷰 런 요약 수정 (DR-5), 커밋 "[auto] Deep review: run-meta fixes (DR-5)":
+  - 문제: `pinch_holds_by_mode`가 모든 런의 `hold_s`를 모드별 첫 줄(쥐기 수, 1초 넘는 비율)에 넣고, `released by` 줄은 5차 런만 셌다. DR-7의 빌드별 묶음도 보고서의 5차 APK(`0203`, `0156`)에는 듣지 않았다. 도장 전에 빌드해서 3·4차 런과 같은 "no build stamp" 묶음에 들어갔기 때문이다. 그래서 기기 파일을 지우지 않으면 A4의 Assist 비율이 예전 런에 묻혔다(예: 3번/63번 대신 40번/194번, 21%).
+  - 수정(`AUTO/tools/run_summary.py`):
+    - 모드별 첫 줄과 `released by`·`strength` 줄은 `release_by`가 있는 런만 센다. 예전 쥐기는 `older APKs (rounds 3-4, not in the numbers above)` 줄에 따로 적는다. DR-7의 "of these" 줄은 이 줄로 바뀌었다. 예전 런만 있는 모드는 지금처럼 첫 줄 + "not recorded"다.
+    - 도장 없는 런을 `no build stamp (round 5)`(`release_by` 있음)와 `no build stamp (rounds 3-4)`로 나눈다. 기본 요약은 최근 묶음만 센다. `--build none`은 둘 다 고른다.
+    - 새 옵션 `--since <시각>`: 그 시각 뒤에 시작한 런만 남긴다(빌드 고르기 전).
+    - 보고서 2절(설치 전 설명, 요약 읽는 법, A4)과 4.2 표, `QUESTIONS_FOR_HYUN.md` 57번을 고쳤다. 기기 로그를 받아 두고 지우는 DR-7 단계는 그대로 둔다.
+  - 검증:
+    - 새 Python 테스트 `AUTO/tools/test_run_summary.py` 13개(`python -m unittest discover -s AUTO/tools -p "test_*.py"`). 고치기 전에 9개가 실패했고, 지금 13/13이다. 나머지 4개는 지금 동작(예전 런만 있는 파일, `--build none`, 도장 있는 최근 빌드)을 고정한다.
+    - 4차 기기 파일 + 5차 샘플: 기본과 `--all` 모두 "Assist: 10 holds, median 0.13 s, 1 over 1 s (10%)"이다. `--all`은 예전 Assist 131번 중 37번(28%)을 따로 적는다. 4차 파일만 돌리면 예전과 같은 숫자다(131번 중 37번 + not recorded).
+    - 지적의 경우(4차 파일 + 빠른 탭 60번과 1초 차지 3번인 5차 런): "Assist: 63 holds, … 3 over 1 s (5%)"이다.
+    - C#은 바꾸지 않았다. Unity 컴파일 OK, EditMode 775/775. 씬과 APK는 다시 만들 필요가 없다.

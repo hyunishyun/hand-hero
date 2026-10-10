@@ -36,7 +36,8 @@
 
 설치하기 전에 기기에 남은 예전 로그를 PC로 받아 두고, 기기에서는 지운다(딥 리뷰 DR-7).
 - `run_log.jsonl`은 `adb install -r`로 다시 설치해도 지워지지 않고 계속 쌓인다. 4차 때 받은 파일에도 3차 APK 런 3개와 4차 APK 런 1개가 같이 들어 있었다.
-- 그대로 두면 `run_summary.py`가 예전 런과 새 런을 한 통에 더한다. 예를 들어 4차 파일에 새 런 하나(10번 중 1번이 1초 넘음)를 붙이면 "141번 중 38번(27%)"으로 나온다. ASSIST 버그가 그대로인 것처럼 보인다.
+- 딥 리뷰 DR-5 전의 `run_summary.py`는 예전 런과 새 런을 한 통에 더했다. 예를 들어 4차 파일에 새 런 하나(10번 중 1번이 1초 넘음)를 붙이면 "141번 중 38번(27%)"으로 나와서, ASSIST 버그가 그대로인 것처럼 보였다.
+- 지금은 아래처럼 나눠서 보여 준다. 그래도 지워 두면 파일에 이번 런만 남아서 읽기 쉽다.
 
 ```powershell
 $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
@@ -64,8 +65,15 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 - `run_summary.py`는 가장 최근에 시작한 런의 빌드만 요약한다(딥 리뷰 DR-7).
   - 파일에 빌드가 여럿이면 맨 위 "Builds in the log"에 빌드마다 런 수와 시작 시각이 나온다.
   - 모두 합치려면 `--all`을 붙인다. 다른 빌드 하나만 보려면 `--build 1042`처럼 이름 일부를 준다.
-  - 도장이 없는 예전 런은 `no build stamp` 한 묶음이다(`--build none`).
-- `--all`로 합쳐 볼 때는 "of these, with release diagnostics" 줄이 5차 APK 런만의 1초 넘는 비율을 따로 보여 준다. 바로 아래 `released by` 줄도 그 런들만 센 것이다.
+  - 도장이 없는 런은 두 묶음이다(딥 리뷰 DR-5).
+    - `no build stamp (round 5)`: 도장 전에 빌드한 5차 APK(위의 `0203`, `0156` 포함)의 런이다. 5차 APK는 런마다 `release_by`를 남기므로 이것으로 가른다.
+    - `no build stamp (rounds 3-4)`: 3·4차 APK의 런이다.
+    - `--build none`은 둘 다, `--build "round 5"`는 5차 쪽만 고른다.
+    - 그래서 예전 로그를 지우지 못했어도, `0203` APK로 RUN을 한 뒤의 기본 요약은 5차 런만 센다.
+  - 설치한 뒤의 런만 보려면 `--since "2026-10-10 14:00"`처럼 헤드셋 시각을 준다. `--all`·`--build`보다 먼저 걸린다.
+- "Pinch holds by aim mode"의 모드별 첫 줄(쥐기 수, 중앙값, 1초 넘는 비율)과 `released by`·`strength` 줄은 진단값이 있는 런(5차 이후 APK)만 센다(딥 리뷰 DR-5).
+  - `--all`로 예전 런을 합치면, 예전 쥐기는 그 아래 `older APKs (rounds 3-4, not in the numbers above)` 줄에 따로 나온다.
+  - 예전 런만 있는 모드는 첫 줄에 예전 숫자를 쓰고 `released by: not recorded (logs before round 5)`라고 적는다.
 
 **A. ASSIST 연사와 차지 (가장 먼저)**
 
@@ -78,7 +86,7 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
    - 쥐고 있는데 차지가 끊기거나 차지샷이 일찍 나가는지 본다.
 4. 런을 끝내거나 포기한 뒤 위 명령으로 `run_summary.py`를 돌린다. "Pinch holds by aim mode"에서 볼 것:
    - Assist의 1초 넘는 쥐기 비율. 3차 APK로 한 18:07 런은 103번 중 22번이었다(4차 APK의 23:02 런은 20번 중 15번이 차지를 시작했다). 이번에는 일부러 한 차지 3번 정도만 남아야 한다.
-   - 맨 위 "Build:" 또는 "Summarizing the newest build only:" 줄이 방금 설치한 APK인지 먼저 본다.
+   - 맨 위 "Build:" 또는 "Summarizing the newest build only:" 줄이 방금 설치한 APK인지 먼저 본다. `0203` APK는 `no build stamp (round 5)`로 나온다.
    - `meta_seen`: Meta 검지 핀치 신호가 이 펌웨어에서 실제로 오는지 보여 준다.
    - `release_by` 분포를 읽을 때 주의할 점이 두 가지다(리뷰 Minor, 고치지 않음).
      - `relative`가 거의 전부로 나와도 정상이다. 이 라벨은 "새 규칙만 놓았다"는 뜻이 아니다. 손을 보통 속도로 펴면 상대 기준이 먼저 걸린다(T0-R2-5, F1-1).
@@ -321,6 +329,7 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | APK 버전 이름(딥 리뷰 DR-7) | `9.2.0` → `9.2.0+<yyyyMMdd_HHmm>_<release·dev>`(APK 파일 이름과 같음). ProjectSettings의 `9.2.0`은 그대로 | `BuildScript.BuildQuestApk`(빌드 동안만 바꾸고 되돌림) | 4.1의 57번 |
 | 런 기록(딥 리뷰 DR-7) | 새 필드 `build`(APK 버전 이름, 에디터는 `editor`). `v`는 1 그대로 | `RunRecordJson.ToJson`, `RunLogFile.BuildId` | 필드를 지운다. |
 | `run_summary.py` 기본 범위(딥 리뷰 DR-7) | 파일의 모든 런 → 가장 최근 빌드의 런 | `select_runs` | `--all` |
+| `run_summary.py` 핀치 요약과 묶음(딥 리뷰 DR-5) | 모드별 첫 줄이 파일의 모든 런 → 진단값이 있는 런(5차 이후)만, 예전 런은 `older APKs` 줄. 도장 없는 런 한 묶음 → `(round 5)`·`(rounds 3-4)` 두 묶음. 새 옵션 `--since` | `pinch_holds_by_mode`, `build_of`, `runs_since`, 테스트 `AUTO/tools/test_run_summary.py` | `--build none`은 예전처럼 도장 없는 런을 모두 고른다. |
 | APK 빌드 메뉴(딥 리뷰 DR-4) | 4개 → 6개(`keep scene edits` 2개), `Check Scene Edits` | `BuildScript` | 4.1의 56번 |
 
 ProjectSettings, 매니페스트, 패키지, XR·렌더 설정은 바뀌지 않았다(APK 버전 이름의 도장은 빌드하는 동안만 단다, DR-7). 퀵 매치와 튜토리얼의 수치와 배치도 그대로다. 4차 게임 수치(`HordeTime`, 보스 체력, `EnemyDamageMult`, 원형 공격 숫자)도 그대로다.
