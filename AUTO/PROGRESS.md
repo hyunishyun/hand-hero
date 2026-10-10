@@ -4,7 +4,7 @@
 
 | 태스크 | 상태 | 메모 |
 |---|---|---|
-| T0 ASSIST 핀치 놓기 판정 | TODO | |
+| T0 ASSIST 핀치 놓기 판정 | IN_PROGRESS | |
 | T1 남은 Minor 13건 | TODO | |
 | T2 적 움직임 성격 | TODO | |
 | T3 지형 2단계(새 조각·테마) | TODO | |

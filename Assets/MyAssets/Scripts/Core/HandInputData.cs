@@ -54,6 +54,10 @@ namespace HandHero.Core
         // its pinch opens the OS menu, so a held charge is cancelled (round 4, S3).
         public bool AimSystemGesture;
 
+        // Diagnostics only (round 5, D2): set on the frame the aim-hand pinch ended
+        // (hand-tracked input). Feeds the run log; gameplay never reads it.
+        public PinchRelease PinchRelease;
+
         public Ray AimRay => new Ray(AimOrigin, AimDirection);
 
         public bool Has(HandGestures gesture) => (Gestures & gesture) == gesture;

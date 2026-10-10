@@ -346,5 +346,84 @@ namespace HandHero.Tests
             rec.IslandStarted(1, IslandType.Arena);
             Assert.IsFalse(Finish(rec, RunResult.Quit, 1f).Islands[0].HasLayoutSeed);
         }
+
+        // Round 5 (D2): per hold, the pinch that ended it, for retuning the release on device.
+        private static PinchHoldStats HoldsWithDiagnostics()
+        {
+            var holds = new PinchHoldStats();
+            holds.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.15f }, new PinchRelease
+            {
+                By = PinchReleaseBy.Relative, PeakStrength = 1f, MinStrength = 0.85f, ReleaseStrength = 0.711f,
+                MetaSeen = true,
+            });
+            holds.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 1.2f, ChargeStarted = true, Released = true },
+                new PinchRelease { By = PinchReleaseBy.Meta, PeakStrength = 0.98f, MinStrength = 0.9f, ReleaseStrength = 0.93f });
+            holds.Add(new ChargeStep { HoldEnded = true, HoldSeconds = 0.1f }); // CURSOR trigger hold
+            return holds;
+        }
+
+        [Test]
+        public void PinchHoldStats_RecordsThePinchReleasePerHold()
+        {
+            PinchHoldStats holds = HoldsWithDiagnostics();
+            CollectionAssert.AreEqual(new[] { 1f, 0.98f, 0f }, holds.PeakStrengths);
+            CollectionAssert.AreEqual(new[] { 0.85f, 0.9f, 0f }, holds.MinStrengths);
+            CollectionAssert.AreEqual(new[] { 0.711f, 0.93f, 0f }, holds.ReleaseStrengths);
+            CollectionAssert.AreEqual(new[] { PinchReleaseBy.Relative, PinchReleaseBy.Meta, PinchReleaseBy.None },
+                holds.ReleasedBy);
+            CollectionAssert.AreEqual(new[] { true, false, false }, holds.MetaSeenFlags);
+
+            holds.Clear();
+            Assert.AreEqual(0, holds.ReleasedBy.Count);
+            Assert.AreEqual(0, holds.PeakStrengths.Count);
+        }
+
+        [Test]
+        public void PinchHoldStats_IgnoresReleasesWithoutAnEndedHold()
+        {
+            var holds = new PinchHoldStats();
+            holds.Add(new ChargeStep { Charging = true }, new PinchRelease { By = PinchReleaseBy.Relative });
+            Assert.AreEqual(0, holds.ReleasedBy.Count);
+            holds.Recording = false;
+            holds.Add(new ChargeStep { HoldEnded = true }, new PinchRelease { By = PinchReleaseBy.Relative });
+            Assert.AreEqual(0, holds.ReleasedBy.Count);
+        }
+
+        [Test]
+        public void Json_HasPerHoldPinchDiagnostics()
+        {
+            RunRecord r = Begun().Finish(RunResult.Quit, 1f, new RunTotals { Holds = HoldsWithDiagnostics() });
+            CollectionAssert.AreEqual(new[] { PinchReleaseBy.Relative, PinchReleaseBy.Meta, PinchReleaseBy.None },
+                r.HoldReleaseBy);
+            CollectionAssert.AreEqual(new[] { 0.85f, 0.9f, 0f }, r.HoldMinStrength);
+
+            string json = RunRecordJson.ToJson(r);
+            StringAssert.Contains("\"hold_s\":[0.15,1.2,0.1]", json);
+            StringAssert.Contains("\"min_strength\":[0.85,0.9,0]", json);
+            StringAssert.Contains("\"release_strength\":[0.711,0.93,0]", json);
+            StringAssert.Contains("\"release_by\":[\"relative\",\"meta\",\"none\"]", json);
+            StringAssert.Contains("\"peak_strength\":[1,0.98,0]", json);
+            StringAssert.Contains("\"meta_seen\":[1,0,0]", json);
+            StringAssert.EndsWith("}", json);
+        }
+
+        [Test]
+        public void Json_ReleaseByNames()
+        {
+            var holds = new PinchHoldStats();
+            foreach (PinchReleaseBy by in new[]
+                     { PinchReleaseBy.Absolute, PinchReleaseBy.Lost, PinchReleaseBy.None, PinchReleaseBy.Meta })
+                holds.Add(new ChargeStep { HoldEnded = true }, new PinchRelease { By = by });
+            string json = RunRecordJson.ToJson(Begun().Finish(RunResult.Quit, 1f, new RunTotals { Holds = holds }));
+            StringAssert.Contains("\"release_by\":[\"absolute\",\"lost\",\"none\",\"meta\"]", json);
+        }
+
+        [Test]
+        public void Json_NoHolds_EmptyDiagnosticArrays()
+        {
+            string json = RunRecordJson.ToJson(Finish(Begun(), RunResult.Quit, 1f));
+            StringAssert.Contains("\"release_by\":[]", json);
+            StringAssert.Contains("\"min_strength\":[]", json);
+        }
     }
 }

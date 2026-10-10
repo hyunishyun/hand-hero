@@ -26,10 +26,14 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     [SerializeField] private float releaseThreshold = 0.45f;
 
     [Header("Firing (pinch) thresholds with hysteresis")]
-    [Tooltip("Pinch strength above this fires once")]
+    [Tooltip("Pinch strength (unsmoothed since round 5) at or above this fires once")]
     [SerializeField] private float pinchFireThreshold = 0.8f;
-    [Tooltip("Pinch strength below this re-arms the next shot and ends a charge hold. 0.6 (was 0.5): the smoothed strength reaches it sooner, so a quick shot reads as released sooner (D13)")]
+    [Tooltip("Pinch strength (unsmoothed) at or below this ends the pinch and fully re-arms the next shot. 0.6 (was 0.5, D13). A pointing thumb rests above it (about 2.8 cm = 0.71), so pinchRelativeRelease also ends a pinch")]
     [SerializeField] private float pinchResetThreshold = 0.6f;
+    [Tooltip("Round 5 (D1): a pinch also ends when the strength falls this far below its peak in this press (0.2 = about 1 cm of thumb travel); the next press must then rise this far above the lowest point since. 0 = off (absolute reset only)")]
+    [SerializeField] private float pinchRelativeRelease = 0.2f;
+    [Tooltip("Round 5 (D1): a pinch also ends when Meta's own index-pinch flag (Hand Tracking Aim) is off for this many frames after it was on in this press. 0 = ignore the Meta flag")]
+    [SerializeField] private int metaPinchReleaseFrames = 2;
 
     [Header("CURSOR trigger (index finger) with hysteresis")]
     [Tooltip("Index curl above this pulls the trigger (fires once, holding charges)")]
@@ -64,7 +68,6 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     private readonly PalmsTogetherRecognizer _palmsTogether = new PalmsTogetherRecognizer();
     private readonly PalmPushRecognizer _leftPush = new PalmPushRecognizer();
     private readonly PalmPushRecognizer _rightPush = new PalmPushRecognizer();
-    private readonly SystemGestureGate _systemGesture = new SystemGestureGate();
 
     // Switched back on (resume from pause, round start): the pinch that pressed
     // RESUME (or a pulled trigger) is still closed and must open before it fires or charges.
@@ -79,7 +82,6 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         _leftPush.Reset();
         _rightPush.Reset();
         _palmsTogether.Reset();
-        _systemGesture.Reset();
     }
 
     protected override HandInputData Sample()
@@ -118,12 +120,27 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         // curled reads as a full fist and blocked every ASSIST pinch on device.
         // Keeps stepping through a palms charge so a pinch held through it doesn't
         // fire afterwards.
-        // The Meta system gesture's pinch opens the OS menu, never a shot (CR-7),
-        // and drops a held charge instead of releasing it (round 4, S3).
-        float pinchStrength = _systemGesture.Step(aimHand.SystemGesture, aimHand.PinchStrength, pinchResetThreshold);
-        data.AimSystemGesture = _systemGesture.Active;
-        PinchState pinch = _pinch.Step(aimHand.IsTracked, pinchStrength, pinchFireThreshold,
-            pinchResetThreshold, false, 0f, Time.deltaTime);
+        // Round 5 (D1): unsmoothed strength, released by Meta's pinch flag, the reset
+        // threshold or a drop from the press's peak (PinchTrigger).
+        // The Meta system gesture's pinch opens the OS menu, never a shot (CR-7): it
+        // drops the pinch, a held charge is cancelled instead of released (round 4,
+        // S3), and a pinch still closed afterwards must open before it fires.
+        data.AimSystemGesture = aimHand.SystemGesture;
+        PinchState pinch = _pinch.Step(new PinchSample
+        {
+            Tracked = aimHand.IsTracked,
+            Strength = aimHand.RawPinchStrength,
+            HasMeta = aimHand.HasMetaPinch,
+            MetaPinching = aimHand.MetaIndexPinching,
+            SystemGesture = aimHand.SystemGesture,
+        }, new PinchReleaseParams
+        {
+            FireThreshold = pinchFireThreshold,
+            ResetThreshold = pinchResetThreshold,
+            RelativeRelease = pinchRelativeRelease,
+            MetaReleaseFrames = metaPinchReleaseFrames,
+        });
+        data.PinchRelease = pinch.Release;
 
         if (!aimHand.IsTracked)
             return data; // HasAim = false: reticle freezes at the last aim point

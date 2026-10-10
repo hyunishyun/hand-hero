@@ -105,6 +105,13 @@ namespace HandHero.Core
         public bool[] HoldCharged = Array.Empty<bool>();
         // Per hold: did a charge start (slowdown + orb), shot or not (same order).
         public bool[] HoldStarted = Array.Empty<bool>();
+        // Per hold, same order (round 5, D2): the pinch that ended it. Unsmoothed
+        // strengths; zeros and None for holds without pinch diagnostics (CURSOR).
+        public float[] HoldPeakStrength = Array.Empty<float>();
+        public float[] HoldMinStrength = Array.Empty<float>();
+        public float[] HoldReleaseStrength = Array.Empty<float>();
+        public PinchReleaseBy[] HoldReleaseBy = Array.Empty<PinchReleaseBy>();
+        public bool[] HoldMetaSeen = Array.Empty<bool>();
     }
 
     // Collects run events into a RunRecord. Begin at run start, then island /
@@ -220,6 +227,11 @@ namespace HandHero.Core
                 r.HoldSeconds = Copy(totals.Holds.Durations);
                 r.HoldCharged = Copy(totals.Holds.ChargeShotFlags);
                 r.HoldStarted = Copy(totals.Holds.ChargeStartedFlags);
+                r.HoldPeakStrength = Copy(totals.Holds.PeakStrengths);
+                r.HoldMinStrength = Copy(totals.Holds.MinStrengths);
+                r.HoldReleaseStrength = Copy(totals.Holds.ReleaseStrengths);
+                r.HoldReleaseBy = Copy(totals.Holds.ReleasedBy);
+                r.HoldMetaSeen = Copy(totals.Holds.MetaSeenFlags);
             }
 
             _record = null;
@@ -306,8 +318,45 @@ namespace HandHero.Core
             sb.Append(']');
             Flags(sb, "hold_charged", r.HoldCharged);
             Flags(sb, "hold_started", r.HoldStarted);
+            // Round 5 (D2): per hold, same order as hold_s.
+            Numbers(sb, "min_strength", r.HoldMinStrength);
+            Numbers(sb, "release_strength", r.HoldReleaseStrength);
+            sb.Append(",\"release_by\":[");
+            for (int i = 0; i < r.HoldReleaseBy.Length; i++)
+            {
+                if (i > 0) sb.Append(',');
+                Quote(sb, ReleaseName(r.HoldReleaseBy[i]));
+            }
+            sb.Append(']');
+            Numbers(sb, "peak_strength", r.HoldPeakStrength);
+            Flags(sb, "meta_seen", r.HoldMetaSeen);
             sb.Append('}');
             return sb.ToString();
+        }
+
+        // Run log names of PinchReleaseBy (read by run_summary.py).
+        public static string ReleaseName(PinchReleaseBy by)
+        {
+            switch (by)
+            {
+                case PinchReleaseBy.Meta: return "meta";
+                case PinchReleaseBy.Absolute: return "absolute";
+                case PinchReleaseBy.Relative: return "relative";
+                case PinchReleaseBy.Lost: return "lost";
+                default: return "none";
+            }
+        }
+
+        private static void Numbers(StringBuilder sb, string key, float[] values)
+        {
+            sb.Append(',');
+            Quote(sb, key).Append(":[");
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(Format(values[i]));
+            }
+            sb.Append(']');
         }
 
         private static void Tally(StringBuilder sb, string key, NamedTally tally)

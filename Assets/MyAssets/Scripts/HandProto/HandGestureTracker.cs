@@ -7,7 +7,7 @@ using UnityEngine.XR.Hands;
 // Wraps XRHandSubsystem (Unity XR Hands package) and exposes simple values
 // the gameplay scripts consume:
 //   FistStrength  (0..1) -> puppeteer clutch (left hand)
-//   PinchStrength (0..1) -> fire trigger (right hand)
+//   PinchStrength (0..1) -> menus; RawPinchStrength + Meta's pinch flag -> ASSIST fire (right hand)
 //   GripStrength / IndexCurl (0..1) -> CURSOR aim: gun grip drags the marker, index fires
 //   AimRay               -> shoulder-anchored pointing ray (stable while pinching)
 // All poses are converted to WORLD space via the XR Origin transform,
@@ -26,8 +26,13 @@ public class HandGestureTracker : MonoBehaviour
         public float GripStrength;      // middle/ring/little only (CURSOR gun grip), 0..1
         public float IndexCurl;         // index finger alone (CURSOR trigger), 0..1
         public float PinchStrength;     // 0 = apart, 1 = thumb+index pinched
+        public float RawPinchStrength;  // PinchStrength before smoothing (round 5: ASSIST fire/release)
         public Ray AimRay;              // world space pointing ray
         public bool SystemGesture;      // Meta system gesture (palm toward the headset): its pinch belongs to the OS
+        // Meta Hand Tracking Aim (round 5, D1): the platform's own calibrated pinch.
+        public bool HasMetaPinch;       // the aim state is valid this frame (Meta "Valid" flag)
+        public bool MetaIndexPinching;  // Meta's index-pinching flag; false unless HasMetaPinch
+        public float MetaPinchStrength; // Meta's pinchStrengthIndex, 0..1; 0 unless HasMetaPinch
     }
 
     [Header("References")]
@@ -104,24 +109,45 @@ public class HandGestureTracker : MonoBehaviour
                 _right.IsTracked = false;
                 _left.SystemGesture = false;
                 _right.SystemGesture = false;
+                ClearMetaPinch(ref _left);
+                ClearMetaPinch(ref _right);
                 return;
             }
         }
 
         UpdateHand(_subsystem.leftHand, ref _left, isLeft: true);
         UpdateHand(_subsystem.rightHand, ref _right, isLeft: false);
-        UpdateSystemGesture(Handedness.Left, ref _left, 0);
-        UpdateSystemGesture(Handedness.Right, ref _right, 1);
+        UpdateAimState(Handedness.Left, ref _left, 0);
+        UpdateAimState(Handedness.Right, ref _right, 1);
+    }
+
+    private static void ClearMetaPinch(ref HandState state)
+    {
+        state.HasMetaPinch = false;
+        state.MetaIndexPinching = false;
+        state.MetaPinchStrength = 0f;
     }
 
     // Meta Hand Tracking Aim (XR_FB_hand_tracking_aim, on for Android and Standalone)
-    // flags the system gesture per hand (CR-7). Without the extension the aim state
-    // is invalid and the flag stays off. Edges go to the perf log.
-    private void UpdateSystemGesture(Handedness handedness, ref HandState state, int hand)
+    // flags the system gesture per hand (CR-7) and reports the platform's own index
+    // pinch (round 5, D1). Without the extension the aim state is invalid: the system
+    // gesture stays off and HasMetaPinch false. System gesture edges go to the perf log.
+    // Structs only: nothing allocates.
+    private void UpdateAimState(Handedness handedness, ref HandState state, int hand)
     {
         bool active = false;
+        ClearMetaPinch(ref state);
         if (state.IsTracked && _subsystem.TryGetAimState(handedness, out XRHandAimState aim))
-            active = (new MetaAimHandState(in aim).aimFlags & MetaAimFlags.SystemGesture) != 0;
+        {
+            MetaAimFlags flags = new MetaAimHandState(in aim).aimFlags;
+            active = (flags & MetaAimFlags.SystemGesture) != 0;
+            if ((flags & MetaAimFlags.Valid) != 0)
+            {
+                state.HasMetaPinch = true;
+                state.MetaIndexPinching = (flags & MetaAimFlags.IndexPinching) != 0;
+                state.MetaPinchStrength = aim.pinchStrengthIndex;
+            }
+        }
 
         if (active == state.SystemGesture) return;
         state.SystemGesture = active;
@@ -256,8 +282,9 @@ public class HandGestureTracker : MonoBehaviour
             hand.GetJoint(XRHandJointID.IndexTip).TryGetPose(out Pose indexTipPose))
         {
             float d = Vector3.Distance(thumbPose.position, indexTipPose.position);
-            float rawPinch = Mathf.InverseLerp(pinchOpenDistance, pinchClosedDistance, d);
-            state.PinchStrength = Mathf.Lerp(state.PinchStrength, Mathf.Clamp01(rawPinch), valT);
+            float rawPinch = Mathf.Clamp01(Mathf.InverseLerp(pinchOpenDistance, pinchClosedDistance, d));
+            state.RawPinchStrength = rawPinch;
+            state.PinchStrength = Mathf.Lerp(state.PinchStrength, rawPinch, valT);
         }
 
         // ---- Aim ray: shoulder-anchored, through the index knuckle ----

@@ -4,7 +4,8 @@
 Reads one or more run_log.jsonl files written by RunDirector (one JSON line per
 run, see HandHero.Core.RunRecordJson) and prints run count, win rate, run times
 against the 10-minute limit, deaths per island, slowest islands, most-picked
-items, the ASSIST charge misfire rate and which RunParams knob to turn first.
+items, the ASSIST charge misfire rate, pinch holds per aim mode (share over 1 s
+and what released each pinch, round 5) and which RunParams knob to turn first.
 
 Usage:
     python AUTO/tools/run_summary.py <run_log.jsonl> [more.jsonl ...]
@@ -19,6 +20,8 @@ from collections import Counter, defaultdict
 
 RUN_LIMIT_S = 600.0       # judged session: a full run must fit in 10 minutes
 QUICK_HOLD_S = 0.5        # a charge started by a shorter hold was probably meant as a normal shot
+LONG_HOLD_S = 1.0         # round 5: share of holds over this, per aim mode (ASSIST release bug)
+RELEASE_ORDER = ("meta", "absolute", "relative", "lost", "none")
 BOSS_ISLAND = 9
 
 
@@ -148,9 +151,69 @@ def summarize(runs):
     if shots:
         out(f"Hit rate: {hits / shots:.0%} ({hits}/{shots} shots)")
 
+    lines.extend(pinch_holds_by_mode(runs))
+
     out("")
     out("Suggestion: " + suggest(runs, finished, win_rate, win_times, fight_by_type, lost_on, quick, misfires))
     return "\n".join(lines)
+
+
+def pinch_holds_by_mode(runs):
+    """Round 5 (D2): per aim mode, how long pinches were held and what released them.
+
+    release_by per hold: meta (Meta's index-pinch flag), absolute (the old 0.6 reset
+    would release too), relative (only the drop-from-peak rule released), lost
+    (tracking / system gesture), none (CURSOR trigger holds, no pinch diagnostics).
+    Strengths are the unsmoothed thumb-index values (1 = pinched, 0.71 = 2.8 cm)."""
+    modes = defaultdict(lambda: {"durations": [], "release": Counter(), "recorded": 0,
+                                 "meta_seen": 0, "peak": [], "low": [], "at_release": []})
+    for r in runs:
+        m = modes[r.get("aim", "?")]
+        holds = r.get("hold_s", [])
+        m["durations"].extend(holds)
+        released_by = r.get("release_by")
+        if released_by is None:
+            continue
+        m["recorded"] += len(released_by)
+        m["release"].update(released_by)
+        m["meta_seen"] += sum(r.get("meta_seen", []))
+        peaks = r.get("peak_strength", [])
+        lows = r.get("min_strength", [])
+        at_release = r.get("release_strength", [])
+        for i, kind in enumerate(released_by):
+            if kind == "none":
+                continue
+            if i < len(peaks):
+                m["peak"].append(peaks[i])
+            if i < len(lows):
+                m["low"].append(lows[i])
+            if i < len(at_release):
+                m["at_release"].append(at_release[i])
+
+    out = ["", f"Pinch holds by aim mode (over {LONG_HOLD_S:g} s / what released them):"]
+    if not any(m["durations"] for m in modes.values()):
+        out.append("  none recorded")
+        return out
+    for mode in sorted(modes):
+        m = modes[mode]
+        durations = m["durations"]
+        if not durations:
+            continue
+        long_holds = sum(1 for d in durations if d > LONG_HOLD_S)
+        out.append(f"  {mode}: {len(durations)} holds, median {median(durations):.2f} s,"
+                   f" {long_holds} over {LONG_HOLD_S:g} s ({long_holds / len(durations):.0%})")
+        if not m["recorded"]:
+            out.append("    released by: not recorded (logs before round 5)")
+            continue
+        total = m["recorded"]
+        kinds = [k for k in RELEASE_ORDER if m["release"][k]] + sorted(
+            k for k in m["release"] if k not in RELEASE_ORDER)
+        mix = ", ".join(f"{k} {m['release'][k]} ({m['release'][k] / total:.0%})" for k in kinds)
+        out.append(f"    released by: {mix}; Meta flag seen in {m['meta_seen']}/{total} holds")
+        if m["peak"]:
+            out.append(f"    strength (median, unsmoothed): peak {median(m['peak']):.2f},"
+                       f" lowest while held {median(m['low']):.2f}, at release {median(m['at_release']):.2f}")
+    return out
 
 
 def suggest(runs, finished, win_rate, win_times, fight_by_type, lost_on, quick, misfires):

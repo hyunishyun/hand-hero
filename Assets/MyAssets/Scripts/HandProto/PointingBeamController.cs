@@ -272,7 +272,8 @@ public class PointingBeamController : MonoBehaviour
         ChargeStep step = default;
         if (action == ChargeInputAction.Cancel) _charge.Cancel();
         else step = _charge.Step(action == ChargeInputAction.Hold, Time.deltaTime, CombatMath.Charge(charge, stats));
-        _pinchHolds.Add(step);
+        // The pinch that ended this hold (round 5, D2); CURSOR holds are trigger holds.
+        _pinchHolds.Add(step, mode == AimMode.Cursor ? default : input.PinchRelease);
 
         UpdateChargeIndicator(step);
         UpdateChargeSounds(step);

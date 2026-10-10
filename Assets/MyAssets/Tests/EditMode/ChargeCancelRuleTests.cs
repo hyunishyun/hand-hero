@@ -69,8 +69,9 @@ namespace HandHero.Tests
             Assert.AreEqual(ChargeInputAction.Cancel, ChargeInputRule.Decide(input, heroAlive: true));
         }
 
-        // The whole ASSIST chain as XRHandsInputSource wires it: system gesture gate
-        // -> pinch trigger -> charge rule -> charge model. A ready charge held into
+        // The whole ASSIST chain as XRHandsInputSource wired it in round 4: system gesture
+        // gate -> pinch trigger -> charge rule -> charge model (round 5 moved the system
+        // gesture into PinchSample: PinchReleaseTests has that chain). A ready charge held into
         // the system gesture, through it and past its end never fires, and the pinch
         // still closed after the gesture must open before it shoots or charges again.
         [Test]
