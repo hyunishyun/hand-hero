@@ -1,3 +1,5 @@
+STATUS: ALL_DONE
+
 # PROGRESS — Round 5 (ASSIST pinch release, minors, enemy movement, terrain stage 2, demo mode)
 
 상태 값: TODO / IN_PROGRESS / DONE / BLOCKED(<이유>)
@@ -9,7 +11,7 @@
 | T2 적 움직임 성격 | DONE | `207a8a9`(`draft/r5b-T2` 병합). 테스트 670/670(새 20개). Sniper 18 m·쏜 뒤 8 m 이동, Gunner 8.4 m·넓게 좌우, Lancer 0.9초 전 10 m 돌진 → 멈춰 예고·발사 → 다시 돌진, 보스는 패턴별, Striker는 4차와 같음. 돌진·멈춤 자리는 지형 조각을 피함(T2-P4). 씬 2개와 RunBot 프리팹 재생성. |
 | T3 지형 2단계(새 조각·테마) | DONE | `35a2b6e`(`draft/r5b-T3` 병합). 테스트 704/704(새 34개). 섬 깊이별로 낮은 벽·떠 있는 발판·가는 기둥(풀 2개씩)을 시드로 더 놓고, 테마 3종(Dusk/Frost/Ember)을 섬마다 바꾼다. 발판은 2–7.2 m, 위아래 2.5 m 통로. 시작점에서 보이는 스폰 중 하나 이상은 좌석·TABLE 눈에서도 발판에 가리지 않음(T3-P3). 씬 2개 재생성. 리뷰 수정(T3-R2-1): 영웅이 발판·기둥·벽 안에서 쏘면 빔이 그 자리에서 막힌다(피해 없음, 플레이어·봇 같음). 기기 확인: 영웅을 발판 속에 두고 쏘면 영웅 자리에서 이펙트만 나오고, 발판 속 봇도 플레이어를 맞히지 못한다. 선택 52번. |
 | T4 데모 모드 | DONE | `a5691a5`(`draft/r5b-T4` 병합, 충돌 없음). 테스트 747/747(새 43개). 메인 메뉴 아랫줄 DEMO / MR TABLE / AIM. 죽지 않는 연습장(느린 Striker 2마리, 과녁 4개는 데모에서만 ASSIST가 붙음), 반투명 손, 동작 캡션. 사전 리뷰 4건 반영(캡션 외곽선 재질, 영웅 크기만큼 비키기, 테스트 2개, 로드 워밍업). 씬 2개 재생성, 재질 2개 새로 만듦. 리뷰 수정(T4-R2-1): 캡션이 영웅 반대쪽으로 먼저 비킨다(영웅이 아래면 위로). 6걸음 안에 비킬 곳이 없으면 손바닥 옆에 남는다. 새 테스트 6개(고치기 전 빨강 확인). 선택 53번. |
-| T5 씬·테스트·APK·리뷰·보고서 | IN_PROGRESS | 1부 완료(`deb63c5` 위, 커밋 "[auto] T5: scenes and APKs"): `BuildAll`로 씬 2개 재생성(순서·fileID만 바뀜), 테스트 766/766. APK: `MetaAwards\Build\HandHero_20261010_0156_dev.apk`(126.7 MB, 132,844,720 B, 클린 개발 빌드 6.5분), `MetaAwards\Build\HandHero_20261010_0203_release.apk`(55.5 MB, 58,166,708 B, 3.6분). 남은 것: 최종 리뷰 수정, `REPORT_FOR_HYUN.md`, `STATUS: ALL_DONE`. |
+| T5 씬·테스트·APK·리뷰·보고서 | DONE | 1부 `34514c0`: `BuildAll`로 씬 2개 재생성(순서·fileID만 바뀜), 테스트 766/766. APK: `MetaAwards\Build\HandHero_20261010_0156_dev.apk`(126.7 MB, 132,844,720 B, 클린 개발 빌드 6.5분), `MetaAwards\Build\HandHero_20261010_0203_release.apk`(55.5 MB, 58,166,708 B, 3.6분). 2부: 최종 리뷰에서 고칠 것 없음(Minor는 보고서 5절), `AUTO/REPORT_FOR_HYUN.md` 작성, 병합된 초안 브랜치 `draft/r5b-T1`–`T4`와 워크트리 정리. |
 
 ## 세션 로그
 
@@ -42,3 +44,8 @@
 - 2026-10-10 T5 1부 (`deb63c5` 위):
   - 결과: `HandHeroSceneBuilder.BuildAll`로 씬 2개를 다시 만들었다(배선 오류 0, 바뀐 것은 순서와 fileID뿐). EditMode 테스트 766/766. APK 2종: `MetaAwards\Build\HandHero_20261010_0156_dev.apk`(클린 개발 빌드, 126.7 MB), `MetaAwards\Build\HandHero_20261010_0203_release.apk`(55.5 MB).
   - 주의: 최종 리뷰에서 코드가 바뀌면 이 APK들은 오래된 것이 되므로 다시 빌드해야 한다. `ProjectSettings/UnityConnectSettings.asset`은 되돌렸다.
+- 2026-10-10 T5 2부 DONE (커밋 "[auto] T5: report for Hyun, all tasks done"):
+  - 결과: 최종 리뷰(F1–F4)에서 고칠 것은 없었다. 그래서 위 APK 2종이 최종 코드다. `AUTO/REPORT_FOR_HYUN.md`를 썼다. 태스크 표, 헤드셋 체크리스트, 녹화 가이드, 대신 내린 결정과 바뀐 값, 리뷰 결과, 다음 단계 3가지가 들어 있다.
+  - 진행 방식(D7 울트라코드): T0은 메인 체크아웃에서, T1–T4 초안은 git 워크트리 4개에서 같은 시간에 썼다. 그 뒤 하나씩 통합했다. Unity 명령은 한 번에 하나만 돌릴 수 있어서, 통합·빌드·보고서 구간은 에이전트 하나가 차례로 진행한다.
+  - 정리: `git worktree remove`로 워크트리 4개(`.claude/worktrees/wf_91393227-d0a-2`–`5`)를 지웠다. 이어서 `git branch -d`로 `draft/r5b-T1`–`T4`를 지웠다(모두 병합된 상태, 거부 없음). 다른 브랜치(`draft/r5-*`, `worktree-wf_*`)는 그대로 두었다.
+  - 주의: 리뷰가 짚은 `PROGRESS.md` T3의 "`Platform Max Y` 6" 처방은 효과가 없다(T3-R2-2, F3-4). 기기 확인 때는 보고서 2절 D23을 따른다. T0 기기 확인은 RUN에서 한다(F4-3, 보고서 2절 A1).
