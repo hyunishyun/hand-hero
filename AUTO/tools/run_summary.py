@@ -439,7 +439,7 @@ def terrain_lines(runs):
 
 def suggest(runs, finished, win_rate, win_times, fight_by_type, lost_on, quick, misfires):
     """Rule-based, in the order from the round-2 report:
-    EnemyHealthPerIsland (0.15), BossHealthMult (6), Arena bot count."""
+    EnemyHealthPerIsland (0.15), BossHealthMult (5), Arena bot count."""
     if not finished:
         return "no finished runs yet; play at least one run to Victory or Defeat."
 
@@ -450,7 +450,7 @@ def suggest(runs, finished, win_rate, win_times, fight_by_type, lost_on, quick, 
     if too_long:
         if boss_s > 0.2 * median(win_times):
             return (f"runs are over 10 min and the boss takes {boss_s:.0f} s:"
-                    " lower RunParams.BossHealthMult (6) first.")
+                    " lower RunParams.BossHealthMult (5) first.")
         if arena_s > 60:
             return (f"runs are over 10 min and Arena islands take {arena_s:.0f} s each:"
                     " lower the Arena bot count (RunRules.Island: 1/2/3).")
@@ -458,7 +458,7 @@ def suggest(runs, finished, win_rate, win_times, fight_by_type, lost_on, quick, 
 
     if len(finished) >= 3 and win_rate < 0.3:
         if lost_on.get(BOSS_ISLAND, 0) >= max(lost_on.values()):
-            return "most runs are lost at the boss: lower RunParams.BossHealthMult (6)."
+            return "most runs are lost at the boss: lower RunParams.BossHealthMult (5)."
         return "few runs are won: lower RunParams.EnemyHealthPerIsland (0.15) first."
 
     if quick >= 10 and misfires / quick > 0.1:

@@ -17,7 +17,7 @@ STATUS: ALL_DONE
 
 - 2026-10-09 Phase 0 (대화형): 브랜치 `auto/2026-10-09-r5`(`a8cd3c2` 위). 4차 기기 로그 `AUTO/device_logs/2026-10-09-r4/` 분석: ASSIST에서 핀치 놓기를 못 읽음(쥔 시간 중앙값 최대 7.9초, 최대 22초; CURSOR는 0.125초). 4차 AUTO 파일은 `AUTO/archive/2026-10-09-r4/`로. 시작 테스트 601/601.
 - 2026-10-10 T0 DONE (`38ca4b6`):
-  - 결과: 쉬는 엄지(2.8 cm = 0.71)에서도 3프레임 안에 놓음을 읽는다. 빠른 탭 10번 → 발사 10번, 차지 시작 0번. 1초 쥐기 → 0.25초 뒤 차지가 시작되고, 놓으면 차지샷이 나간다. 예전 규칙은 같은 입력에 1발만 쏘고 계속 쥔 채로 남는다(테스트로 재현). 누르기·놓기는 부드럽게 하기 전 값을 쓴다. 시스템 제스처는 `PinchTrigger` 안에서 처리한다.
+  - 결과: 쉬는 엄지(2.8 cm = 0.71)에서도 4프레임 안에 놓음을 읽는다(처음 기준은 3프레임이었고, 리뷰 수정 `deb63c5`에서 강도 놓기를 2프레임 연속으로 확인하게 되면서 테스트가 4프레임으로 바뀌었다. 딥 리뷰 M-21). 빠른 탭 10번 → 발사 10번, 차지 시작 0번. 1초 쥐기 → 0.25초 뒤 차지가 시작되고, 놓으면 차지샷이 나간다. 예전 규칙은 같은 입력에 1발만 쏘고 계속 쥔 채로 남는다(테스트로 재현). 누르기·놓기는 부드럽게 하기 전 값을 쓴다. 시스템 제스처는 `PinchTrigger` 안에서 처리한다.
   - 런 기록: 핀치마다 `min_strength`, `release_strength`, `release_by`(meta/absolute/relative/lost/none), `peak_strength`, `meta_seen`. 샘플은 `AUTO/tools/fixtures/run_log_round5_sample.jsonl`.
   - 주의: Meta 플래그는 이번 누름에서 한 번 켜진 뒤에만 놓기에 쓴다. 이 펌웨어에서 오는지는 기기에서 `meta_seen`으로 확인한다. 선택 7건은 `QUESTIONS_FOR_HYUN.md`에 있다. 씬 2개를 다시 만들었다(새 직렬화 필드).
   - 기기 확인: ASSIST로 30초 연사 → 발사 수가 핀치 수와 비슷하고, 의도하지 않은 차지가 없는지(`run_summary.py`의 "Pinch holds by aim mode": Assist의 1초 넘는 쥐기 비율, release_by 분포).
@@ -124,3 +124,8 @@ STATUS: ALL_DONE
     - Unity 컴파일 OK. 바꾼 파일에서 나온 경고는 없다(레거시 스크립트의 예전 경고만 있다). 직렬화 필드가 바뀌지 않아서 씬은 다시 만들지 않았다.
     - 시뮬레이션: 쉬는 엄지 0.71–0.82, 떨림 0.03까지에서 r 오차 0.006 이하.
   - 주의: APK는 아직 다시 빌드하지 않았다. 딥 리뷰 수정은 모두 0203·0156 APK 뒤의 코드다.
+- 2026-10-10 딥 리뷰 마무리, 커밋 "[auto] Deep review: report, tests and APKs":
+  - 결과: `AUTO/DEEP_REVIEW.md`를 썼다(확인된 지적 74건: Important 10, Minor 64, 기각 2건). Important는 9건 해결, DR-9는 일부. Minor는 4건 해결, 5건 일부, 55건은 기록만. `REPORT_FOR_HYUN.md` 맨 끝에 "정밀 리뷰 (추가)"를 더하고, 맨 위 APK 목록과 설치 명령을 새 APK로 바꿨다.
+  - 이 커밋에서 고친 Minor: `run_summary.py` 제안 문구의 `BossHealthMult (6)` → `(5)`(M-07·M-22), 이 파일 T0 줄의 "3프레임" → "4프레임"(M-21).
+  - 검증: EditMode 818/818, Python 25/25. `BuildAll` OK(씬은 ID와 줄 순서만 바뀜, ID를 빼고 정렬해 비교하면 차이 0줄). APK: `MetaAwards\Build\HandHero_20261010_1155_dev.apk`(클린 개발 빌드, 126.7 MB, 132,891,684 B, 6.6분, `versionName` `9.2.0+20261010_1155_dev`), `MetaAwards\Build\HandHero_20261010_1202_release.apk`(55.5 MB, 58,176,476 B, 3.7분, `9.2.0+20261010_1202_release`). `[BuildScript] NOTE:` 없음. ProjectSettings `bundleVersion`은 9.2.0으로 돌아왔고, `UnityConnectSettings.asset`은 되돌렸다.
+  - 주의: 헤드셋 확인은 하지 않았다. 딥 리뷰 수정은 위 두 APK에 처음 들어간다. push는 하지 않았다.
