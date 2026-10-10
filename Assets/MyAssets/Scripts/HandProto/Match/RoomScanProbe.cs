@@ -19,6 +19,10 @@ using UnityEngine.Android;
 // Without the permission, without the features, or if a subsystem fails, the
 // managers stay off and MR TABLE works exactly as before. A debug wireframe of
 // the found planes and boxes shows in dev builds.
+// Round 5 (T1): a dismissed dialog counts as a denial, a failure logs one
+// UNAVAILABLE line and nothing else, the permission JNI check is throttled and
+// stops once the answer is known, and the summary and shutdown wait a few
+// frames after the menu closes (console copies only in dev builds).
 public class RoomScanProbe : MonoBehaviour
 {
     public const string ScenePermission = "com.oculus.permission.USE_SCENE";
@@ -50,6 +54,10 @@ public class RoomScanProbe : MonoBehaviour
     [SerializeField] private float nearTableHeightGap = 0.5f;
     [Tooltip("The summary is logged this many seconds after the last change, and again on stop")]
     [SerializeField] private float summaryDelay = 3f;
+    [Tooltip("Seconds between permission checks (a JNI call) while the answer is still open; none once it is known")]
+    [SerializeField] private float permissionPollInterval = 0.5f;
+    [Tooltip("Frames the managers keep running after the MR TABLE menu ends; the summary and the shutdown then miss the match-start frame (0 = same frame)")]
+    [SerializeField] private int stopDelayFrames = 2;
 
     [Header("Wireframe")]
     [Tooltip("Debug outline of the found planes and boxes: on in dev builds and the editor by default, off in release")]
@@ -64,6 +72,7 @@ public class RoomScanProbe : MonoBehaviour
     [SerializeField] private Color boxColor = new Color(1f, 0.85f, 0.2f, 0.9f);
 
     private readonly RoomScanFlow _flow = new RoomScanFlow();
+    private readonly RoomScanPermissionPoll _permissionPoll = new RoomScanPermissionPoll();
     private readonly RoomScanTimer _timer = new RoomScanTimer();
     private readonly List<RoomItem> _items = new List<RoomItem>();
     private readonly Dictionary<TrackableId, LineRenderer> _wires = new Dictionary<TrackableId, LineRenderer>();
@@ -72,12 +81,15 @@ public class RoomScanProbe : MonoBehaviour
     private bool _available;
     private bool _availabilityChecked;
     private bool _managersOn;
-    private bool _failed;
     private bool _dirty;
     private double _lastChange;
     private bool _summarySinceChange = true;
 
-    // Written by the Android permission callbacks, read in Update: 0 none, 1 granted, 2 denied.
+    // Written by the Android permission callbacks, read in Update.
+    private const int AnswerNone = 0;
+    private const int AnswerGranted = 1;
+    private const int AnswerDenied = 2;
+    private const int AnswerDismissed = 3; // round 5 (S8-1-2)
     private volatile int _permissionAnswer;
 
     private bool ShowWireframe =>
@@ -99,21 +111,33 @@ public class RoomScanProbe : MonoBehaviour
 
     private void Update()
     {
-        _flow.Enabled = probeEnabled && !_failed;
+        _flow.Enabled = probeEnabled;
+        // Round 5 (F2-2): leaving the menu starts a match; the summary and the
+        // manager shutdown come stopDelayFrames later, off the match-start frame.
+        _flow.StopDelayFrames = stopDelayFrames;
 
         int answer = _permissionAnswer;
-        if (answer != 0)
+        if (answer != AnswerNone)
         {
-            _permissionAnswer = 0;
-            Report(_flow.OnPermissionResult(answer == 1), null);
+            _permissionAnswer = AnswerNone;
+            RoomScanEvent result = answer == AnswerDismissed
+                ? _flow.OnPermissionDismissed()
+                : _flow.OnPermissionResult(answer == AnswerGranted);
+            Report(result, null);
         }
 
         bool tabletop = viewMode != null && viewMode.IsTabletop && InMenu();
-        RoomScanCommand c = _flow.Step(tabletop, tabletop && Available(), tabletop && Granted());
+        // Round 5 (S8-2-1 / F2-3 / F4-2): the JNI permission check runs only while the
+        // answer is open, at most every permissionPollInterval seconds.
+        _permissionPoll.Interval = permissionPollInterval;
+        if (_permissionPoll.Due(tabletop && _flow.NeedsPermissionQuery, Time.realtimeSinceStartupAsDouble))
+            _permissionPoll.Answer(Granted());
+        RoomScanCommand c = _flow.Step(tabletop, tabletop && Available(), tabletop && _permissionPoll.LastAnswer);
 
         if (c.RequestPermission) RequestPermission();
         if (c.Event == RoomScanEvent.Stopped) LogSummary(force: false);
-        SetManagers(c.RunManagers);
+        // Round 5 (S8-1-3): a failed switch has logged UNAVAILABLE (Fail); nothing else follows.
+        if (!SetManagers(c.RunManagers)) return;
         if (c.Event == RoomScanEvent.Started) Report(RoomScanEvent.Started, StartNote());
         else if (c.Event != RoomScanEvent.None) Report(c.Event, null);
 
@@ -144,7 +168,7 @@ public class RoomScanProbe : MonoBehaviour
         _hasPlanes = planes && planeManager != null;
         _hasBoxes = boxes && boxManager != null;
         _available = _hasPlanes || _hasBoxes;
-        Debug.Log($"[RoomScanProbe] subsystems: planes={(planes ? 1 : 0)} boxes={(boxes ? 1 : 0)}");
+        HHLog.Info($"[RoomScanProbe] subsystems: planes={(planes ? 1 : 0)} boxes={(boxes ? 1 : 0)}");
         return _available;
     }
 
@@ -165,29 +189,33 @@ public class RoomScanProbe : MonoBehaviour
 #if UNITY_ANDROID
         if (Application.platform != RuntimePlatform.Android)
         {
-            _permissionAnswer = 1;
+            _permissionAnswer = AnswerGranted;
             return;
         }
         try
         {
             var callbacks = new PermissionCallbacks();
-            callbacks.PermissionGranted += _ => _permissionAnswer = 1;
-            callbacks.PermissionDenied += _ => _permissionAnswer = 2;
+            callbacks.PermissionGranted += _ => _permissionAnswer = AnswerGranted;
+            callbacks.PermissionDenied += _ => _permissionAnswer = AnswerDenied;
+            // Round 5 (S8-1-2): closing the dialog without an answer used to leave the
+            // probe waiting all session; it now counts as a denial for this session.
+            callbacks.PermissionRequestDismissed += _ => _permissionAnswer = AnswerDismissed;
             Permission.RequestUserPermission(ScenePermission, callbacks);
         }
         catch (System.Exception e)
         {
             Debug.LogWarning($"[RoomScanProbe] permission request failed: {e.Message}");
-            _permissionAnswer = 2;
+            _permissionAnswer = AnswerDenied;
         }
 #else
-        _permissionAnswer = 1;
+        _permissionAnswer = AnswerGranted;
 #endif
     }
 
-    private void SetManagers(bool on)
+    // False when switching threw: Fail has turned the probe off and logged it.
+    private bool SetManagers(bool on)
     {
-        if (on == _managersOn) return;
+        if (on == _managersOn) return true;
         _managersOn = on;
         try
         {
@@ -196,11 +224,12 @@ public class RoomScanProbe : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Fail($"enabling the managers threw {e.GetType().Name}: {e.Message}");
-            return;
+            Fail($"{(on ? "enabling" : "disabling")} the managers threw {e.GetType().Name}: {e.Message}");
+            return false;
         }
         if (on && !_timer.Started) _timer.Start(Time.realtimeSinceStartupAsDouble);
         SetWiresVisible(on && ShowWireframe);
+        return true;
     }
 
     // AR Foundation disables a manager whose subsystem fails to start.
@@ -215,17 +244,24 @@ public class RoomScanProbe : MonoBehaviour
         if (!_hasPlanes && !_hasBoxes) Fail("no subsystem left running");
     }
 
+    // Round 5 (S8-1-3): off for the rest of the session. UNAVAILABLE is logged once,
+    // with the reason, and the flow reports nothing after it (no STARTED, STOPPED
+    // or SUMMARY). The managers are switched off directly, never through
+    // SetManagers, so a second throw cannot come back here.
     private void Fail(string why)
     {
-        _failed = true;
-        Debug.LogWarning($"[RoomScanProbe] off for this session: {why}");
-        PerfSpikeLogger.Mark(PerfRecordKind.RoomScan, (int)RoomScanEvent.Unavailable, "failed: " + why);
-        _managersOn = true; // force the switch below
         _hasPlanes = _hasBoxes = false;
-        try { SetManagers(false); }
-        catch (System.Exception) { /* already reported */ }
-        if (planeManager != null) planeManager.enabled = false;
-        if (boxManager != null) boxManager.enabled = false;
+        _managersOn = false;
+        try
+        {
+            if (planeManager != null) planeManager.enabled = false;
+            if (boxManager != null) boxManager.enabled = false;
+        }
+        catch (System.Exception) { /* already broken; reported below */ }
+        SetWiresVisible(false);
+        Debug.LogWarning($"[RoomScanProbe] off for this session: {why}");
+        RoomScanEvent e = _flow.OnFailed();
+        if (e != RoomScanEvent.None) PerfSpikeLogger.Mark(PerfRecordKind.RoomScan, (int)e, "failed: " + why);
     }
 
     private string StartNote()
@@ -233,10 +269,13 @@ public class RoomScanProbe : MonoBehaviour
         return $"planes_subsystem={(_hasPlanes ? 1 : 0)} boxes_subsystem={(_hasBoxes ? 1 : 0)}";
     }
 
+    // Round 5 (F2-2): the perf log line is the record. The console copy exists only
+    // in the editor and dev builds (HHLog), so a release build never builds a
+    // Debug.Log stack trace, e.g. for the summary when the menu closes.
     private void Report(RoomScanEvent e, string note)
     {
         PerfSpikeLogger.Mark(PerfRecordKind.RoomScan, (int)e, note);
-        Debug.Log($"[RoomScanProbe] {RoomScanSummary.EventName(e)}{(note != null ? " " + note : "")}");
+        HHLog.Info($"[RoomScanProbe] {RoomScanSummary.EventName(e)}{(note != null ? " " + note : "")}");
     }
 
     private void OnPlanesChanged(ARTrackablesChangedEventArgs<ARPlane> args)

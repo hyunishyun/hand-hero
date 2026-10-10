@@ -5,16 +5,21 @@ using UnityEngine;
 // button (CONFIRM RESET), a second press within confirmWindow seconds clears
 // the meta progression (starting relics, personal bests). The aim mode and the
 // tutorial flag stay. Unscaled time: the pause panel runs at Time.timeScale 0.
+// A reset during a run also keeps that run out of the meta progression (round 5, F3-3).
 [RequireComponent(typeof(HandMenuButton))]
 public class ResetProgressButton : MonoBehaviour
 {
+    [Tooltip("Owns the meta progression the confirmed press clears")]
     [SerializeField] private RunDirector run;
     [Tooltip("Seconds the button waits for the confirming second press")]
     [SerializeField] private float confirmWindow = 3f;
     [Tooltip("Seconds the done label stays after a reset")]
     [SerializeField] private float doneTime = 1.5f;
+    [Tooltip("Label before the first press")]
     [SerializeField] private string idleText = "RESET PROGRESS";
+    [Tooltip("Label while the button waits for the confirming second press")]
     [SerializeField] private string confirmText = "CONFIRM RESET";
+    [Tooltip("Label for doneTime seconds after a reset")]
     [SerializeField] private string doneText = "PROGRESS RESET";
 
     private enum LabelState { None, Idle, Confirm, Done }

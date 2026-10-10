@@ -806,7 +806,7 @@ namespace HandHero.EditorTools
         // Round 4 (S6): archetype silhouette parts under the bot's Visual (they turn
         // with it), inactive until RunBot.Activate shows the archetype's set. No
         // colliders: the root sphere stays the only hit volume (same hitbox for all).
-        // The body, fins and parts take the archetype color; the nose keeps its own.
+        // The body and parts take the archetype color; the nose and the fins keep their own.
         private static void ArchetypeShapes(FlyingCharacter hero, RunBot runBot, Material mat)
         {
             Transform visual = hero.transform.Find("Visual");
@@ -833,7 +833,9 @@ namespace HandHero.EditorTools
             SetArray(runBot, "shapes", needle, block, lance);
 
             var tinted = new System.Collections.Generic.List<Object>();
-            foreach (string part in new[] { "Body", "Fin_L", "Fin_R" })
+            // Round 5 T1 (F4-1): only the body takes the archetype color. The fins
+            // (Fin_L / Fin_R) keep the bot material's red, as decided in round 4 (S6-3).
+            foreach (string part in new[] { "Body" })
             {
                 Transform t = visual.Find(part);
                 if (t != null) tinted.Add(t.GetComponent<Renderer>());
