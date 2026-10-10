@@ -27,6 +27,18 @@ namespace HandHero.Core
         [Tooltip("Whole-layout tries before the fallback layout is used")]
         public int Attempts;
 
+        // Round 5 T3 (D5): floating pieces (the platforms).
+        [Tooltip("Lowest center height of a floating platform (m, arena-local: the player starts at 0, the floor is at -10)")]
+        public float PlatformMinY;
+        [Tooltip("Highest center height of a floating platform (m, arena-local); FlightLaneClearance below the ceiling wins")]
+        public float PlatformMaxY;
+        [Tooltip("Open height kept between a floating platform and the floor, the ceiling and any piece it hangs over (a flight lane heroes and beams pass through)")]
+        public float FlightLaneClearance;
+        [Tooltip("Floating platforms stay out of this band around the player start height (start y +/- this), so the lane at the hero's height stays open")]
+        public float StartLaneHalfHeight;
+        [Tooltip("The viewer's eye points (arena-local: the VR seat, the MR TABLE eye). The opening sight line must also be open from each of them past every floating platform, so no platform hides that spawn from the player's eye or hand aim ray")]
+        public Vector3[] ViewerEyes;
+
         public static ArenaLayoutParams Default => new ArenaLayoutParams
         {
             Margin = 1.5f,
@@ -39,13 +51,22 @@ namespace HandHero.Core
             MinPieceForward = 2f,
             KeepClearPadding = 0.5f,
             Attempts = 200,
+            // Round 5 T3: the plan's 2-8 m band; the ceiling clearance caps the center at 7.2.
+            PlatformMinY = 2f,
+            PlatformMaxY = 8f,
+            FlightLaneClearance = 2.5f,
+            StartLaneHalfHeight = 1.5f,
+            // T3-P3: the VR seat eye (1.2 m above the origin, arena center at world
+            // (0, 2, 20)) and the MR TABLE eye (ViewLayout.Tabletop with
+            // TabletopParams.Default: world (0, 9, -4.5)).
+            ViewerEyes = new[] { new Vector3(0f, -0.8f, -20f), new Vector3(0f, 7f, -24.5f) },
         };
     }
 
     public struct ArenaLayoutResult
     {
-        // Piece centers (on the floor), same order as the piece sizes. Null after a
-        // fallback without fallback pieces.
+        // Piece centers (on the floor, or in the air for floating pieces), same order
+        // as the piece sizes. Null after a fallback without fallback pieces.
         public Vector3[] Pieces;
         // Null after a fallback without fallback spawn points.
         public Vector3[] SpawnPoints;
@@ -55,8 +76,12 @@ namespace HandHero.Core
         public bool UsedFallback;
     }
 
-    // Seeded random placement of the current terrain pieces (the pillars) and the
-    // run bot spawn points. Same inputs and seed, same layout.
+    // Seeded random placement of the terrain pieces and the run bot spawn points.
+    // Same inputs and seed, same layout. Round 5 (T3): a piece flagged as floating
+    // (a platform) gets a height in the platform band instead of standing on the
+    // floor, and may hang over another piece with a full flight lane between them;
+    // every other rule is the same for every piece. Without floating flags the
+    // draws are exactly the round-4 ones.
     public static class ArenaLayout
     {
         private const int SamplesPerItem = 30;
@@ -79,12 +104,13 @@ namespace HandHero.Core
         }
 
         // Tries whole layouts until one meets every rule (bounds, gaps, clear radii,
-        // keep-clear boxes, an open sight line from the start to at least one spawn).
+        // keep-clear boxes, an open sight line from the start to at least one spawn,
+        // which no floating piece hides from the viewer eyes either).
         // After p.Attempts failed tries: UsedFallback, with copies of the fallback
         // arrays, or null for an array that was not given.
         public static ArenaLayoutResult Generate(Vector3 arenaSize, Vector3 start, Vector3[] pieceSizes, int spawnCount,
             ArenaLayoutParams p, int seed, Vector3[] fallbackPieces = null, Vector3[] fallbackSpawns = null,
-            Vector3[] keepClearCenters = null, Vector3[] keepClearSizes = null)
+            Vector3[] keepClearCenters = null, Vector3[] keepClearSizes = null, bool[] floating = null)
         {
             int pieceCount = pieceSizes != null ? pieceSizes.Length : 0;
             spawnCount = Math.Max(0, spawnCount);
@@ -95,9 +121,10 @@ namespace HandHero.Core
 
             for (int attempt = 0; attempt < attempts; attempt++)
             {
-                if (!PlacePieces(rng, arenaSize, start, pieceSizes, p, pieces, keepClearCenters, keepClearSizes)) continue;
+                if (!PlacePieces(rng, arenaSize, start, pieceSizes, p, pieces, keepClearCenters, keepClearSizes,
+                        floating)) continue;
                 if (!PlaceSpawns(rng, pieceSizes, p, pieces, spawns)) continue;
-                if (!HasOpeningSightLine(start, spawns, pieces, pieceSizes)) continue;
+                if (!HasOpeningSightLine(start, spawns, pieces, pieceSizes, floating, p.ViewerEyes)) continue;
                 return new ArenaLayoutResult { Pieces = pieces, SpawnPoints = spawns, UsedFallback = false };
             }
 
@@ -123,7 +150,7 @@ namespace HandHero.Core
         }
 
         private static bool PlacePieces(System.Random rng, Vector3 arenaSize, Vector3 start, Vector3[] sizes,
-            ArenaLayoutParams p, Vector3[] pieces, Vector3[] keepCenters, Vector3[] keepSizes)
+            ArenaLayoutParams p, Vector3[] pieces, Vector3[] keepCenters, Vector3[] keepSizes, bool[] floating)
         {
             float floor = -arenaSize.y * 0.5f;
             for (int i = 0; i < pieces.Length; i++)
@@ -134,15 +161,27 @@ namespace HandHero.Core
                 float minZ = Mathf.Max(-maxZ, start.z + p.MinPieceForward);
                 if (maxX < 0f || minZ > maxZ) return false;
                 float radius = Radius(size);
+                // Round 5 T3: a floating piece's center height band (floor and ceiling lanes kept open).
+                bool floats = IsFloating(floating, i);
+                float minY = 0f, maxY = 0f;
+                if (floats && !PlatformBand(arenaSize, size, p, out minY, out maxY)) return false;
 
                 bool placed = false;
                 for (int s = 0; s < SamplesPerItem && !placed; s++)
                 {
                     var c = new Vector3(Range(rng, -maxX, maxX), floor + size.y * 0.5f, Range(rng, minZ, maxZ));
+                    if (floats)
+                    {
+                        // Drawn after x and z: ground pieces keep the round-4 draws.
+                        c.y = Range(rng, minY, maxY);
+                        if (InStartLane(c.y, size.y, start, p)) continue;
+                    }
                     if (Flat(c, start) - radius < p.StartClearRadius) continue;
                     bool ok = true;
                     for (int j = 0; j < i && ok; j++)
-                        ok = Flat(c, pieces[j]) - radius - Radius(sizes[j]) >= p.MinPieceGap;
+                        ok = Flat(c, pieces[j]) - radius - Radius(sizes[j]) >= p.MinPieceGap
+                             || ((floats || IsFloating(floating, j))
+                                 && VerticalGap(c, size, pieces[j], sizes[j]) >= p.FlightLaneClearance);
                     if (ok && keepCenters != null && keepSizes != null)
                     {
                         var box = new Bounds(c, size);
@@ -185,12 +224,33 @@ namespace HandHero.Core
             return true;
         }
 
-        private static bool HasOpeningSightLine(Vector3 start, Vector3[] spawns, Vector3[] pieces, Vector3[] sizes)
+        // At least one spawn is open from the start past every piece and (round 5,
+        // T3-P3) from every viewer eye past every floating piece. Ground pieces keep
+        // the round-4 start-only check, so layouts without floating pieces are unchanged.
+        private static bool HasOpeningSightLine(Vector3 start, Vector3[] spawns, Vector3[] pieces, Vector3[] sizes,
+            bool[] floating, Vector3[] eyes)
         {
             if (spawns.Length == 0) return true;
             for (int s = 0; s < spawns.Length; s++)
-                if (!SegmentBlocked(start, spawns[s], pieces, sizes)) return true;
+                if (!SegmentBlocked(start, spawns[s], pieces, sizes)
+                    && InViewOfEyes(spawns[s], eyes, pieces, sizes, floating)) return true;
             return false;
+        }
+
+        // True when no floating piece stands between any viewer eye and the target.
+        private static bool InViewOfEyes(Vector3 target, Vector3[] eyes, Vector3[] pieces, Vector3[] sizes,
+            bool[] floating)
+        {
+            if (eyes == null || floating == null) return true;
+            int n = Math.Min(pieces.Length, floating.Length);
+            for (int i = 0; i < n; i++)
+            {
+                if (!floating[i]) continue;
+                Vector3 min = pieces[i] - sizes[i] * 0.5f, max = pieces[i] + sizes[i] * 0.5f;
+                for (int e = 0; e < eyes.Length; e++)
+                    if (SegmentHitsBox(eyes[e], target, min, max)) return false;
+            }
+            return true;
         }
 
         // Slab test: the segment a-b against the box [min, max].
@@ -215,6 +275,37 @@ namespace HandHero.Core
                 if (t0 > t1) return false;
             }
             return true;
+        }
+
+        // Round 5 T3: floating pieces (platforms).
+        private static bool IsFloating(bool[] floating, int i) => floating != null && i < floating.Length && floating[i];
+
+        // Center heights a floating piece may take: the platform band, with a full
+        // flight lane kept above the floor and below the ceiling. False when empty.
+        private static bool PlatformBand(Vector3 arenaSize, Vector3 size, ArenaLayoutParams p, out float minY,
+            out float maxY)
+        {
+            float half = size.y * 0.5f;
+            float floor = -arenaSize.y * 0.5f;
+            float ceiling = arenaSize.y * 0.5f;
+            minY = Mathf.Max(p.PlatformMinY, floor + p.FlightLaneClearance + half);
+            maxY = Mathf.Min(Mathf.Max(p.PlatformMaxY, p.PlatformMinY), ceiling - p.FlightLaneClearance - half);
+            return minY <= maxY;
+        }
+
+        // True when a piece of this height centered at y reaches into start.y +/- StartLaneHalfHeight.
+        private static bool InStartLane(float y, float height, Vector3 start, ArenaLayoutParams p)
+        {
+            float half = height * 0.5f;
+            return y + half > start.y - p.StartLaneHalfHeight && y - half < start.y + p.StartLaneHalfHeight;
+        }
+
+        // Open height between two boxes stacked one over the other (negative when their heights overlap).
+        private static float VerticalGap(Vector3 a, Vector3 sizeA, Vector3 b, Vector3 sizeB)
+        {
+            float above = (a.y - sizeA.y * 0.5f) - (b.y + sizeB.y * 0.5f);
+            float below = (b.y - sizeB.y * 0.5f) - (a.y + sizeA.y * 0.5f);
+            return Mathf.Max(above, below);
         }
 
         private static float Flat(Vector3 a, Vector3 b)

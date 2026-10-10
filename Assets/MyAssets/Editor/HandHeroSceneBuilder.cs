@@ -277,6 +277,31 @@ namespace HandHero.EditorTools
             SetRefs(runDirector, ("layout", layoutApplier));
             SetArray(runDirector, "hideDuringRun", botFlying.gameObject, botMarker);
 
+            // Round 5 T3: terrain stage 2 - pooled low walls, floating platforms and thin
+            // pillars (disabled; a run island turns some on) and the island colour themes
+            // (floor, back wall, pieces, sun). Quick Match and the tutorial see neither.
+            Transform[] lowWalls = PiecePool("LowWall", arena.transform, Core.ArenaPieceTable.LowWallSize, wallMat);
+            Transform[] platforms = PiecePool("Platform", arena.transform, Core.ArenaPieceTable.PlatformSize, wallMat);
+            Transform[] thinPillars = PiecePool("ThinPillar", arena.transform, Core.ArenaPieceTable.ThinPillarSize,
+                wallMat);
+            SetArray(layoutApplier, "lowWalls", lowWalls);
+            SetArray(layoutApplier, "platforms", platforms);
+            SetArray(layoutApplier, "thinPillars", thinPillars);
+            var themeApplier = match.AddComponent<ArenaThemeApplier>();
+            SetArray(themeApplier, "floor", arena.transform.Find("Floor").GetComponent<Renderer>());
+            SetArray(themeApplier, "walls", arena.transform.Find("BackWall").GetComponent<Renderer>());
+            var pieceRenderers = new System.Collections.Generic.List<Object>
+            {
+                pillarL.GetComponent<Renderer>(), pillarR.GetComponent<Renderer>(),
+            };
+            foreach (Transform[] pool in new[] { lowWalls, platforms, thinPillars })
+                foreach (Transform piece in pool)
+                    pieceRenderers.Add(piece.GetComponent<Renderer>());
+            SetArray(themeApplier, "pieces", pieceRenderers.ToArray());
+            SetRefs(themeApplier, ("sun", light));
+            SetRefs(layoutApplier, ("themes", themeApplier));
+            // Round 5 T3 end.
+
             // Freeze hunt (P1): frame spikes and tracking / focus / phase edges -> perf_log.txt.
             var perfLogger = match.AddComponent<PerfSpikeLogger>();
             SetRefs(perfLogger, ("match", director), ("run", runDirector), ("tracker", tracker));
@@ -909,6 +934,22 @@ namespace HandHero.EditorTools
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(temp, KillBurstPrefabPath);
             Object.DestroyImmediate(temp);
             return prefab;
+        }
+
+        // Round 5 T3: a pool of disabled terrain pieces (cubes with colliders, so they
+        // stop beams like the pillars) for ArenaLayoutApplier. Parked on the far half
+        // of the floor; the applier places a piece before turning it on.
+        private static Transform[] PiecePool(string name, Transform arena, Vector3 size, Material mat)
+        {
+            var pool = new Transform[Core.ArenaPieceTable.DefaultPoolSize];
+            for (int i = 0; i < pool.Length; i++)
+            {
+                var parked = new Vector3(0f, -ArenaSize.y * 0.5f + size.y * 0.5f, ArenaSize.z * 0.25f);
+                GameObject piece = Cube($"{name}_{i + 1}", arena, parked, size, mat);
+                piece.SetActive(false);
+                pool[i] = piece.transform;
+            }
+            return pool;
         }
 
         private static GameObject Cube(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat)

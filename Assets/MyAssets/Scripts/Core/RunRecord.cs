@@ -20,6 +20,11 @@ namespace HandHero.Core
         // Seeded arena layout of this island (round 4, S7); written only when one was applied.
         public bool HasLayoutSeed;
         public int LayoutSeed;
+        // Round 5 (T3): colour theme ("" = today's look) and extra terrain pieces;
+        // written only when the layout applier ran for this island.
+        public bool HasTerrain;
+        public string Theme = "";
+        public ArenaPieceCounts Pieces;
     }
 
     public struct ItemPick
@@ -147,6 +152,15 @@ namespace HandHero.Core
             if (_island == null) return;
             _island.HasLayoutSeed = true;
             _island.LayoutSeed = seed;
+        }
+
+        // Round 5 (T3): the current island's theme and extra pieces; ignored before the first island.
+        public void IslandTerrain(string theme, ArenaPieceCounts pieces)
+        {
+            if (_island == null) return;
+            _island.HasTerrain = true;
+            _island.Theme = theme ?? "";
+            _island.Pieces = pieces;
         }
 
         // Times are run seconds (RunStateMachine.RunTime).
@@ -290,6 +304,14 @@ namespace HandHero.Core
                 Num(sb, "damage", island.DamageTaken);
                 Int(sb, "deaths", island.Deaths);
                 if (island.HasLayoutSeed) Int(sb, "layout_seed", island.LayoutSeed);
+                if (island.HasTerrain)
+                {
+                    // Round 5 (T3).
+                    Str(sb, "theme", island.Theme);
+                    Int(sb, "low_walls", island.Pieces.LowWalls);
+                    Int(sb, "platforms", island.Pieces.Platforms);
+                    Int(sb, "thin_pillars", island.Pieces.ThinPillars);
+                }
                 sb.Append('}');
             }
             sb.Append(']');
