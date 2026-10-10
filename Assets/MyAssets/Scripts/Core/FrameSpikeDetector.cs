@@ -104,11 +104,12 @@ namespace HandHero.Core
     // a file write would add a hitch of its own.
     public static class PerfFlushPolicy
     {
-        // The tutorial counts as combat too (the player is flying and shooting).
+        // The tutorial and the demo (round 5, T4: it is being recorded) count as
+        // combat too (the player is flying and shooting).
         public static bool InCombat(MatchPhase match, RunPhase run, bool paused)
         {
             if (paused) return false;
-            return match == MatchPhase.Fight || match == MatchPhase.Tutorial
+            return match == MatchPhase.Fight || match == MatchPhase.Tutorial || match == MatchPhase.Demo
                 || (match == MatchPhase.Run && run == RunPhase.Island);
         }
 

@@ -168,6 +168,15 @@ public class HeroHealth : MonoBehaviour
         Stunned?.Invoke();
     }
 
+    // Round 5 T4: demo mode (D6). Hits still flash, sound and slow the hero, but
+    // health never drops and the hero never dies. Kept across ResetHealth.
+    public void SetInvulnerable(bool on)
+    {
+        _model.Invulnerable = on;
+    }
+
+    public bool IsInvulnerable => _model != null && _model.Invulnerable;
+
     // Run (BR-5, BC-1): off while a run is on, so a dead player comes back only
     // through Revive / ResetHealth (never behind the DEFEAT screen).
     public void SetAutoRespawn(bool on)

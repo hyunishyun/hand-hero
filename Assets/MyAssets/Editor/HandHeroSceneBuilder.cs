@@ -357,7 +357,7 @@ namespace HandHero.EditorTools
             Vector3 panelPos = seat + new Vector3(0f, -0.5f, 2.5f);
             GameObject mainPanel = Panel("MainPanel", menuGo.transform, panelPos);
             // Main menu is a 3x2 grid (0.15 m gaps, R10): QUICK MATCH / RUN / TUTORIAL
-            // on top, then the passthrough view (Arena_Main only, T10) and the aim mode.
+            // on top, then DEMO, the passthrough view (Arena_Main only, T10) and the aim mode.
             const float gridX = 0.95f;
             const float gridY = 0.235f;
             MenuButton(mainPanel.transform, "QUICK MATCH", MatchDirector.MenuAction.StartMatch, -gridX, gridY,
@@ -365,12 +365,16 @@ namespace HandHero.EditorTools
             MenuButton(mainPanel.transform, "RUN", MatchDirector.MenuAction.StartRun, 0f, gridY, director, buttonMat);
             MenuButton(mainPanel.transform, "TUTORIAL", MatchDirector.MenuAction.StartWithTutorial, gridX, gridY,
                 director, buttonMat);
+            // Round 5 T4: DEMO opens the bottom row, a full row of three in Arena_Main
+            // (DEMO / MR TABLE / AIM) and a centered pair in the sandbox (DEMO / AIM).
+            MenuButton(mainPanel.transform, "DEMO", MatchDirector.MenuAction.StartDemo, xr ? -gridX : -gridX * 0.5f,
+                -gridY, director, buttonMat);
             HandMenuButton viewButton = xr
-                ? MenuButton(mainPanel.transform, "MR TABLE", MatchDirector.MenuAction.ToggleViewMode, -gridX * 0.5f,
+                ? MenuButton(mainPanel.transform, "MR TABLE", MatchDirector.MenuAction.ToggleViewMode, 0f,
                     -gridY, director, buttonMat)
                 : null;
             HandMenuButton aimButton = MenuButton(mainPanel.transform, "AIM: ASSIST",
-                MatchDirector.MenuAction.ToggleAimMode, xr ? gridX * 0.5f : 0f, -gridY, director, buttonMat);
+                MatchDirector.MenuAction.ToggleAimMode, xr ? gridX : gridX * 0.5f, -gridY, director, buttonMat);
             GameObject pausePanel = Panel("PausePanel", menuGo.transform, panelPos);
             MenuButton(pausePanel.transform, "RESUME", MatchDirector.MenuAction.Resume, -0.5f, 0f, director, buttonMat);
             MenuButton(pausePanel.transform, "MENU", MatchDirector.MenuAction.ReturnToMenu, 0.5f, 0f, director,
@@ -472,6 +476,60 @@ namespace HandHero.EditorTools
             var tutorialSo = new SerializedObject(tutorial);
             Prop(tutorialSo, "ringRadius").floatValue = ringRadius;
             tutorialSo.ApplyModifiedPropertiesWithoutUndo();
+
+            // ---- Round 5 T4: demo mode (D6) ----
+            // DemoDirector runs MatchPhase.Demo: the player invulnerable, two slow
+            // Strikers made from the run bot prefab, the arena's practice targets
+            // snappable by the aim assist (their AimAssistTarget is off outside the
+            // demo), the Quick Match bot hidden. GhostHands draws the tracked hands (one
+            // translucent material, a property block per hand); GestureCaptions names
+            // each gesture beside them (seat space: the tabletop view keeps their size).
+            var demoGo = new GameObject("Demo");
+            demoGo.transform.SetParent(match.transform, false);
+            var demoAssistTargets = new Object[targets.Length];
+            for (int i = 0; i < targets.Length; i++)
+            {
+                var assist = ((Transform)targets[i]).gameObject.AddComponent<AimAssistTarget>();
+                assist.enabled = false;
+                demoAssistTargets[i] = assist;
+            }
+            var demo = demoGo.AddComponent<DemoDirector>();
+            SetRefs(demo, ("match", director), ("playerHealth", flying.GetComponent<HeroHealth>()),
+                ("botPrefab", runBotPrefab), ("arena", arena.transform));
+            SetArray(demo, "botSpawnPoints", runSpawns);
+            SetArray(demo, "hideDuringDemo", botFlying.gameObject, botMarker);
+            SetArray(demo, "demoAssistTargets", demoAssistTargets);
+
+            Material ghostHandsMat = TransparentUnlitMaterial("GhostHands");
+            // Depth-tested like the world (the vignette's material draws over everything).
+            if (ghostHandsMat.HasProperty("_ZTest"))
+                ghostHandsMat.SetFloat("_ZTest", (float)UnityEngine.Rendering.CompareFunction.LessEqual);
+            ghostHandsMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            EditorUtility.SetDirty(ghostHandsMat);
+            GameObject sphereProbe = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            Mesh sphereMesh = sphereProbe.GetComponent<MeshFilter>().sharedMesh;
+            Object.DestroyImmediate(sphereProbe);
+            var ghostHands = demoGo.AddComponent<GhostHands>();
+            SetRefs(ghostHands, ("demo", demo), ("tracker", tracker), ("playerInput", playerInput),
+                ("aimModeSetting", aimMode), ("material", ghostHandsMat), ("jointMesh", sphereMesh));
+
+            var captionLabels = new TextMeshPro[2];
+            for (int i = 0; i < captionLabels.Length; i++)
+            {
+                TextMeshPro label = WorldText(i == 0 ? "DemoCaption_L" : "DemoCaption_R", seatUI,
+                    seat + new Vector3(i == 0 ? -0.3f : 0.3f, -0.3f, 0.5f), 0.26f);
+                label.rectTransform.sizeDelta = new Vector2(0.5f, 0.08f);
+                label.textWrappingMode = TextWrappingModes.NoWrap;
+                label.fontStyle = FontStyles.Bold;
+                label.gameObject.SetActive(false);
+                captionLabels[i] = label;
+            }
+            var captions = demoGo.AddComponent<GestureCaptions>();
+            SetRefs(captions, ("demo", demo), ("tracker", tracker), ("head", camGo.transform),
+                ("playerInput", playerInput), ("playerAim", pointing), ("playerShockwave", shockwave),
+                ("aimModeSetting", aimMode), ("playerHero", flying.transform), ("leftLabel", captionLabels[0]),
+                ("rightLabel", captionLabels[1]));
+            // ---- end Round 5 T4 ----
 
             if (xr) ViewModeSwitch(cam, director, arena.transform, viewButton, beamMat);
 

@@ -53,6 +53,10 @@ namespace HandHero.Core
         // Off during a run (BR-5, BC-1): a dead hero waits for Revive / Reset
         // instead of coming back for free after RespawnDelay.
         public bool AutoRespawn { get; set; } = true;
+        // Demo mode (round 5, T4 / D6): hits still count (DamageCount, the slow
+        // penalty, so every hit effect plays) but health never drops and the hero
+        // never dies. A mode flag like AutoRespawn: Reset keeps it.
+        public bool Invulnerable { get; set; }
         public float CurrentHealth { get; private set; }
         public bool IsDead { get; private set; }
         // Bumped per hit (the networked version change-detects this for effects).
@@ -94,6 +98,12 @@ namespace HandHero.Core
         public HitOutcome ApplyDamage(float damage)
         {
             if (IsDead || damage <= 0f) return HitOutcome.Ignored;
+            if (Invulnerable)
+            {
+                DamageCount++;
+                _slowTimer = Params.SlowDuration;
+                return HitOutcome.Damaged;
+            }
 
             CurrentHealth = Mathf.Max(0f, CurrentHealth - damage);
             DamageCount++;

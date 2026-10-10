@@ -13,6 +13,7 @@ namespace HandHero.Core
         RoundEnd,  // shows the round result
         MatchEnd,  // shows the match result, then back to the menu
         Run,       // RUN mode (R8): RunStateMachine drives the game; stays until ReturnToMenu
+        Demo,      // demo / practice mode (round 5, T4): no timer, no KOs; stays until ReturnToMenu
     }
 
     public enum MatchSide
@@ -110,6 +111,17 @@ namespace HandHero.Core
             if (Phase != MatchPhase.Menu) return false;
             _runAfterTutorial = withTutorial;
             Enter(withTutorial ? MatchPhase.Tutorial : MatchPhase.Run);
+            return true;
+        }
+
+        // Demo mode (round 5, T4 / D6): a practice arena for recordings. Like Run,
+        // the match only hosts pause and menu return; Tick and ReportKO do nothing
+        // in this phase. Never goes through the tutorial.
+        public bool StartDemo()
+        {
+            if (Phase != MatchPhase.Menu) return false;
+            _runAfterTutorial = false;
+            Enter(MatchPhase.Demo);
             return true;
         }
 
