@@ -418,6 +418,29 @@ namespace HandHero.Tests
             StringAssert.Contains("\"release_by\":[\"absolute\",\"lost\",\"none\",\"meta\"]", json);
         }
 
+        // Deep review DR-7: run_log.jsonl keeps runs across `adb install -r`, so each
+        // run names the APK that wrote it (run_summary.py groups by it).
+        [Test]
+        public void Json_NamesTheBuildThatWroteTheRun()
+        {
+            var rec = new RunRecorder();
+            rec.Begin(42, "Assist", "Arena", "2026-10-10T14:00:00", "9.2.0+20261010_1500_release");
+            string json = RunRecordJson.ToJson(Finish(rec, RunResult.Quit, 1f));
+            StringAssert.StartsWith("{\"v\":1,\"build\":\"9.2.0+20261010_1500_release\",\"seed\":42,", json);
+        }
+
+        [Test]
+        public void Json_BuildIsEmpty_WhenNotGiven_AndResetByBegin()
+        {
+            var rec = new RunRecorder();
+            rec.Begin(1, "Assist", "Arena", "t", "editor");
+            Finish(rec, RunResult.Quit, 1f);
+            rec.Begin(2, "Assist", "Arena", "t");
+            string json = RunRecordJson.ToJson(Finish(rec, RunResult.Quit, 1f));
+            StringAssert.Contains("\"build\":\"\"", json);
+            StringAssert.DoesNotContain("editor", json);
+        }
+
         [Test]
         public void Json_NoHolds_EmptyDiagnosticArrays()
         {

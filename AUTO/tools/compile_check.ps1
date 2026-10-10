@@ -6,6 +6,8 @@
 #   powershell -ExecutionPolicy Bypass -File AUTO\tools\compile_check.ps1 -Tests
 #   powershell -ExecutionPolicy Bypass -File AUTO\tools\compile_check.ps1 -ExecuteMethod HandHero.EditorTools.HandHeroSceneBuilder.BuildAll
 #   powershell -ExecutionPolicy Bypass -File AUTO\tools\compile_check.ps1 -BuildTarget Android -TimeoutMinutes 120 -ExecuteMethod HandHero.EditorTools.BuildScript.BuildQuestApk
+#   (BuildQuestApkRelease / BuildQuestApkDev regenerate the scenes first, which resets inspector
+#    edits; BuildQuestApkReleaseKeepScenes / BuildQuestApkDevKeepScenes build the saved scenes as they are)
 #
 # Exit codes:
 #   0 = OK
@@ -92,6 +94,12 @@ if ($csErrors) {
     $csErrors | Select-Object -First 40 | ForEach-Object { Write-Output "  $_" }
     exit 1
 }
+
+# BuildScript NOTE lines (deep review DR-4): saved scene edits that an APK build
+# resets, and the result of BuildScript.CheckSceneEdits.
+$notes = Select-String -Path $logFile -Pattern '\[BuildScript\] NOTE:' -ErrorAction SilentlyContinue |
+    ForEach-Object { $_.Line.Trim() } | Select-Object -Unique
+if ($notes) { $notes | ForEach-Object { Write-Output "  $_" } }
 
 if ($Tests) {
     if (-not (Test-Path $resultsFile)) {

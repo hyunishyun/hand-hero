@@ -34,10 +34,24 @@
 
 **릴리스** APK로 A–D와 F를 확인하고, E만 **개발** APK로 확인한다. 패키지 이름은 `com.hyun.handhero`다. PowerShell에서 한 줄씩 실행한다.
 
+설치하기 전에 기기에 남은 예전 로그를 PC로 받아 두고, 기기에서는 지운다(딥 리뷰 DR-7).
+- `run_log.jsonl`은 `adb install -r`로 다시 설치해도 지워지지 않고 계속 쌓인다. 4차 때 받은 파일에도 3차 APK 런 3개와 4차 APK 런 1개가 같이 들어 있었다.
+- 그대로 두면 `run_summary.py`가 예전 런과 새 런을 한 통에 더한다. 예를 들어 4차 파일에 새 런 하나(10번 중 1번이 1초 넘음)를 붙이면 "141번 중 38번(27%)"으로 나온다. ASSIST 버그가 그대로인 것처럼 보인다.
+
 ```powershell
 $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+& $adb pull /sdcard/Android/data/com.hyun.handhero/files/run_log.jsonl .\run_log_before_r5.jsonl
+& $adb pull /sdcard/Android/data/com.hyun.handhero/files/perf_log.txt .\perf_log_before_r5.txt
+& $adb shell rm -f /sdcard/Android/data/com.hyun.handhero/files/run_log.jsonl /sdcard/Android/data/com.hyun.handhero/files/perf_log.txt
 & $adb install -r "C:\Users\AISTUDIO\Desktop\Hyun's Playground\MetaAwards\Build\HandHero_20261010_0203_release.apk"
+& $adb shell dumpsys package com.hyun.handhero | Select-String versionName
 ```
+
+- 두 `pull` 줄은 기기에 파일이 없으면 오류를 내지만 괜찮다.
+- 마지막 줄은 지금 설치된 APK를 보여 준다.
+  - 딥 리뷰 DR-7 뒤에 빌드한 APK는 `versionName=9.2.0+20261010_1042_release`처럼 APK 파일 이름과 같은 날짜·시각·종류를 단다.
+  - 같은 값이 런 기록마다 `build`로, `perf_log` 머리줄에는 `app`으로 남는다.
+  - 그 전에 빌드한 APK(위의 `0203`, `0156` 포함)는 `9.2.0`만 나온다.
 
 로그는 플레이가 끝난 뒤(메뉴로 한 번 돌아간 뒤) 가져온다.
 
@@ -46,6 +60,12 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 & $adb pull /sdcard/Android/data/com.hyun.handhero/files/perf_log.txt .\perf_log.txt
 python AUTO\tools\run_summary.py .\run_log.jsonl
 ```
+
+- `run_summary.py`는 가장 최근에 시작한 런의 빌드만 요약한다(딥 리뷰 DR-7).
+  - 파일에 빌드가 여럿이면 맨 위 "Builds in the log"에 빌드마다 런 수와 시작 시각이 나온다.
+  - 모두 합치려면 `--all`을 붙인다. 다른 빌드 하나만 보려면 `--build 1042`처럼 이름 일부를 준다.
+  - 도장이 없는 예전 런은 `no build stamp` 한 묶음이다(`--build none`).
+- `--all`로 합쳐 볼 때는 "of these, with release diagnostics" 줄이 5차 APK 런만의 1초 넘는 비율을 따로 보여 준다. 바로 아래 `released by` 줄도 그 런들만 센 것이다.
 
 **A. ASSIST 연사와 차지 (가장 먼저)**
 
@@ -57,12 +77,16 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 3. 핀치를 1초쯤 쥐었다 놓기를 3번 한다. 0.25초 뒤 차지가 시작되고, 놓을 때 차지샷이 나가야 한다.
    - 쥐고 있는데 차지가 끊기거나 차지샷이 일찍 나가는지 본다.
 4. 런을 끝내거나 포기한 뒤 위 명령으로 `run_summary.py`를 돌린다. "Pinch holds by aim mode"에서 볼 것:
-   - Assist의 1초 넘는 쥐기 비율. 4차(18:07)는 103번 중 22번이었다. 이번에는 일부러 한 차지 3번 정도만 남아야 한다.
+   - Assist의 1초 넘는 쥐기 비율. 3차 APK로 한 18:07 런은 103번 중 22번이었다(4차 APK의 23:02 런은 20번 중 15번이 차지를 시작했다). 이번에는 일부러 한 차지 3번 정도만 남아야 한다.
+   - 맨 위 "Build:" 또는 "Summarizing the newest build only:" 줄이 방금 설치한 APK인지 먼저 본다.
    - `meta_seen`: Meta 검지 핀치 신호가 이 펌웨어에서 실제로 오는지 보여 준다.
    - `release_by` 분포를 읽을 때 주의할 점이 두 가지다(리뷰 Minor, 고치지 않음).
      - `relative`가 거의 전부로 나와도 정상이다. 이 라벨은 "새 규칙만 놓았다"는 뜻이 아니다. 손을 보통 속도로 펴면 상대 기준이 먼저 걸린다(T0-R2-5, F1-1).
      - `lost`는 항상 0이다. 추적이 끊기거나 시스템 제스처로 끝난 쥐기는 `hold_s`에서도 빠진다. 그래서 1초 넘는 비율이 실제보다 조금 낮게 나올 수 있다(T0-R1-3 외).
-5. 쉬는 엄지가 남보다 가까운 편이면 연사가 끊길 수 있다. 그때는 `release_strength`·`min_strength`를 보고 인스펙터 `XRHandsInputSource`의 `pinchReleaseFloorMargin`을 0.03으로 줄인다(4절).
+5. 쉬는 엄지가 남보다 가까운 편이면 연사가 끊길 수 있다. 그때는 `release_strength`·`min_strength`를 보고 `XRHandsInputSource`의 `pinchReleaseFloorMargin`을 0.03으로 줄인다.
+   - 인스펙터에서 바꾸고 `Arena_Main` 씬을 저장한 뒤 **`HandHero > Build Quest APK (release, keep scene edits)`**로 빌드한다. PowerShell이면 `-ExecuteMethod HandHero.EditorTools.BuildScript.BuildQuestApkReleaseKeepScenes`다(4절 첫머리).
+   - 다른 빌드 메뉴와 `compile_check`의 `BuildQuestApkRelease`는 빌드 전에 씬을 코드로 다시 만든다. 그러면 이 값이 0.05로 돌아가서, 다시 해 봐도 똑같이 느껴진다(딥 리뷰 DR-4).
+   - 0.03을 계속 쓰기로 하면 `XRHandsInputSource.cs`의 기본값(`pinchReleaseFloorMargin = 0.05f`)을 바꾸고 씬을 다시 만든다.
 6. CURSOR로도 한 판 쏴 본다. CURSOR의 검지 방아쇠는 바뀌지 않았다.
 
 **B. 데모 모드와 녹화 (3절 가이드와 같이)**
@@ -97,7 +121,7 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
     - Gunner의 빨간 예고선이 예고 동안 크게 돌아가서 피하기 어려운지 본다(리뷰 T2-R2-2).
 16. 기둥이나 벽 근처에서 Lancer와 보스가 조각 안에 멈춰 쏘지 않는지 본다. Sniper가 경기장 벽에 붙어 있는 시간이 거슬리는지도 본다.
     - Sniper, Gunner, Lancer, 보스가 플레이어 옆(정면에서 45° 넘게)이나 얼굴 앞(8 m 안)으로 오지 않는지 본다. 영웅을 좌석 쪽으로 몰아도 마찬가지여야 한다(딥 리뷰 DR-2, 4.1의 55번).
-    - 시야 끝에서 되돌아갈 때 멈칫하는 모습이 거슬리는지, Sniper가 늘 영웅 뒤쪽에만 있어서 단조로운지 본다. 거슬리면 `RunBot` 프리팹 `BotInputSource`의 `Seat Max Yaw`를 50–55로 넓힌다.
+    - 시야 끝에서 되돌아갈 때 멈칫하는 모습이 거슬리는지, Sniper가 늘 영웅 뒤쪽에만 있어서 단조로운지 본다. 거슬리면 `RunBot` 프리팹 `BotInputSource`의 `Seat Max Yaw`를 50–55로 넓힌다. 프리팹을 저장한 뒤 keep-scene-edits 빌드로 만든다(4절 첫머리).
 17. Gunner의 연두가 과녁·CURSOR 주황과 헷갈리지 않는지 본다.
     - **ASSIST 조준점(노랑)이 Gunner 몸 위에서 잘 보이는지** 특히 본다. 밝기 차이가 작다(리뷰 T1-R2-1). Dusk·Ember 섬에서는 색상도 더 가까워진다(F3-2).
     - 모든 원형의 지느러미는 빨강이어야 한다.
@@ -132,6 +156,10 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
     - NEW BEST와 UNLOCKED가 뜨는지 본다.
     - 런 중에 일시정지 > RESET PROGRESS를 두 번 누른 뒤 런을 끝낸다. NEW BEST·UNLOCKED가 없어야 하고, 다음 런은 평소대로 기록되어야 한다.
     - 유물이 해금된 상태에서 STARTING RELIC 화면에 30초 머문 뒤 런을 한다. 끝 화면과 `run_log`의 시간에 그 30초가 들어가지 않아야 한다.
+31. 빌드 도장과 빌드 메뉴를 확인한다(딥 리뷰 DR-7, DR-4). DR-7 뒤에 빌드한 APK에서 본다.
+    - 설치 뒤 `dumpsys`의 `versionName`이 APK 파일 이름의 도장(예: `20261010_1042_release`)과 같아야 한다.
+    - RUN 한 판 뒤 `run_log.jsonl` 마지막 줄의 `"build"`와 `perf_log.txt` 머리줄의 `app`도 같은 값이어야 한다.
+    - Unity 에디터에서 `Arena_Main`의 값 하나를 바꿔 저장하고 `HandHero > Build Quest APK (release)`를 누른다. "scene edits will be reset" 창이 떠야 한다. Cancel을 누르면 빌드하지 않는다. 시험한 값은 되돌린다.
 
 ## 3. 녹화 가이드 (T4, 원본 `AUTO/RECORDING_GUIDE.md`)
 
@@ -209,7 +237,27 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 
 ## 4. Hyun 대신 내린 결정과 바뀐 값
 
-### 4.1 대신 내린 결정 (모두 되돌릴 수 있음, 자세한 내용은 `QUESTIONS_FOR_HYUN.md` 1–53번)
+**씬과 인스펙터에서 값을 바꿀 때 (딥 리뷰 DR-4, 먼저 읽기)**
+- 아래 표에서 "씬", "인스펙터", "프리팹"으로 적은 값은 `Arena_Main` 씬과 `RunBot` 프리팹에 저장된다. `XRHandsInputSource`, `RunDirector`, `ArenaLayoutApplier`, `ArenaThemeApplier`, `DemoDirector`, `GestureCaptions`, `RenderWarmup`, `BotInputSource` 같은 것들이다.
+- 보통 APK 빌드는 빌드하기 전에 씬과 프리팹을 코드로 다시 만든다. 그래서 인스펙터에서 바꾼 값이 C# 기본값으로 돌아간다.
+  - 해당하는 빌드: `HandHero > Build Quest APK (release)`·`(dev)`·`(… clean)` 메뉴, `compile_check`의 `BuildQuestApkRelease`·`BuildQuestApkDev`·`BuildQuestApkDevClean`.
+  - 다시 만들어도 남는 것은 `BotDifficulty_Normal.asset`뿐이다.
+- **인스펙터 값으로 시험하는 방법**
+  1. 값을 바꾸고 씬(또는 프리팹)을 저장한다.
+  2. `HandHero > Build Quest APK (release, keep scene edits)`로 빌드한다. 개발 APK는 `(dev, keep scene edits)`다.
+  3. PowerShell이면 Unity를 닫고 아래 명령을 쓴다(개발 APK는 끝을 `BuildQuestApkDevKeepScenes`로 바꾼다).
+     ```powershell
+     powershell -NoProfile -ExecutionPolicy Bypass -File "AUTO\tools\compile_check.ps1" -BuildTarget Android -TimeoutMinutes 120 -ExecuteMethod HandHero.EditorTools.BuildScript.BuildQuestApkReleaseKeepScenes
+     ```
+  - 이 빌드는 저장된 씬을 그대로 쓴다. 그래서 그 뒤에 빌더나 직렬화 필드를 바꾼 코드(다음 라운드 등)는 씬을 다시 만들기 전까지 APK에 들어가지 않는다.
+- **값을 계속 쓰기로 했으면** C# 기본값을 바꾼다(필드 초기값, `*.Default`, `Defaults()`, 빌더). 그다음 `HandHero > Build All Scenes`로 씬을 다시 만든다. 다음 라운드의 씬 재생성에도 남는 방법은 이것뿐이다.
+- 보통 빌드 메뉴는 저장된 씬이나 프리팹이 빌더가 마지막으로 쓴 것과 다르면 먼저 묻는다(Rebuild scenes / Cancel / Keep my scene edits).
+  - `compile_check` 빌드는 묻지 않는다. `[BuildScript] NOTE:` 줄을 출력하고 다시 만든다.
+  - 미리 보려면 `HandHero > Check Scene Edits`를 쓴다(PowerShell: `-ExecuteMethod HandHero.EditorTools.BuildScript.CheckSceneEdits`).
+  - 이 PC에서 씬을 만든 기록과 비교한다. 그래서 git으로 다른 커밋을 받은 뒤에도 "EDITED"로 나올 수 있다.
+- 에디터 Play(Link)는 인스펙터 값을 그대로 쓴다.
+
+### 4.1 대신 내린 결정 (모두 되돌릴 수 있음, 자세한 내용은 `QUESTIONS_FOR_HYUN.md` 1–57번)
 
 | # | 결정 | 되돌리려면 |
 |---|---|---|
@@ -246,6 +294,8 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | 41–43, 53 | 캡션은 0.8초 + 0.3초 동안 뜬다. 손 바깥쪽 7 cm, 위 4 cm에 둔다. 영웅을 가리면 영웅 반대쪽으로 먼저 비킨다. 외곽선 재질 `DemoCaption.mat`을 쓴다. | `GestureCaptions` > `Timing`·`Layout`, 빌더의 `captionMat` 줄 |
 | 44–45 | 반투명 손은 손마다 관절 구 26개와 뼈 선 6개다. 로드 워밍업에 손과 캡션을 더했다. | `GhostHands` 필드, 씬 `RenderWarmup`의 `Ghost Hands`·`Captions` |
 | 47 | 디버그 키 `G` = 데모 시작. 데모 중에는 퀵 매치 봇을 숨긴다. 잡는 손은 왼손으로 둔다. | `GhostHands`·`GestureCaptions`의 `Clutch Is Left` 등 |
+| 56 | 딥 리뷰 DR-4: 보통 APK 빌드는 그대로 씬을 다시 만든다(씬이 늘 코드와 같다). 인스펙터 값을 쓰는 빌드 `…KeepScenes`와 `Check Scene Edits`를 더했다. 저장된 씬이 빌더가 쓴 것과 다르면 메뉴는 묻고, 배치 빌드는 NOTE를 남긴다. | 새 빌드를 쓰지 않으면 예전과 같다. 묻는 창은 `BuildScript.PrepareScenes`, 기록은 `Library/HandHero/SceneBuildFingerprints.txt`다. |
+| 57 | 딥 리뷰 DR-7: APK 버전 이름에 빌드 도장(`9.2.0+날짜_시각_종류`)을 빌드하는 동안만 단다. 런 기록에 `build`를 넣었다. `run_summary.py`는 가장 최근 빌드만 요약한다. | 도장: `BuildScript.BuildQuestApk`의 `bundleVersion` 두 줄. 요약: `--all` |
 
 ### 4.2 바뀐 값과 되돌리는 법
 
@@ -268,8 +318,12 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | 데모 속도 배수(딥 리뷰 DR-1) | 손 속도 상한만 → 옆으로 끌기·피하기·상하 흔들기·손 속도 상한·히어로 최고 속도 | `BotParams.Paced`, `BotInputSource.SetPace`, `FlyingCharacter.SetPaceSpeedMultiplier` | 4.1의 54번 |
 | 봇 좌석 시야(딥 리뷰 DR-2) | 없음 → 사거리를 지키는 원형은 좌석 정면 45° 안, 눈에서 8 m 밖 | `RunBot` 프리팹 `BotInputSource` > Seat view(빌더 기본값) | `keepInSeatView` 끄기, 4.1의 55번 |
 | 새 재질 | `Generated/Materials/GhostHands.mat`, `DemoCaption.mat` | 빌더가 만든다. | 빌더 데모 블록 |
+| APK 버전 이름(딥 리뷰 DR-7) | `9.2.0` → `9.2.0+<yyyyMMdd_HHmm>_<release·dev>`(APK 파일 이름과 같음). ProjectSettings의 `9.2.0`은 그대로 | `BuildScript.BuildQuestApk`(빌드 동안만 바꾸고 되돌림) | 4.1의 57번 |
+| 런 기록(딥 리뷰 DR-7) | 새 필드 `build`(APK 버전 이름, 에디터는 `editor`). `v`는 1 그대로 | `RunRecordJson.ToJson`, `RunLogFile.BuildId` | 필드를 지운다. |
+| `run_summary.py` 기본 범위(딥 리뷰 DR-7) | 파일의 모든 런 → 가장 최근 빌드의 런 | `select_runs` | `--all` |
+| APK 빌드 메뉴(딥 리뷰 DR-4) | 4개 → 6개(`keep scene edits` 2개), `Check Scene Edits` | `BuildScript` | 4.1의 56번 |
 
-ProjectSettings, 매니페스트, 패키지, XR·렌더 설정은 바뀌지 않았다. 퀵 매치와 튜토리얼의 수치와 배치도 그대로다. 4차 게임 수치(`HordeTime`, 보스 체력, `EnemyDamageMult`, 원형 공격 숫자)도 그대로다.
+ProjectSettings, 매니페스트, 패키지, XR·렌더 설정은 바뀌지 않았다(APK 버전 이름의 도장은 빌드하는 동안만 단다, DR-7). 퀵 매치와 튜토리얼의 수치와 배치도 그대로다. 4차 게임 수치(`HordeTime`, 보스 체력, `EnemyDamageMult`, 원형 공격 숫자)도 그대로다.
 
 ## 5. 리뷰 결과
 

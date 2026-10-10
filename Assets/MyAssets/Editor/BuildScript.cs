@@ -4,6 +4,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+using UnityEditor.SceneManagement;
 using UnityEditor.XR.OpenXR;
 using UnityEngine;
 using UnityEngine.XR.OpenXR;
@@ -18,6 +19,11 @@ namespace HandHero.EditorTools
     // Output: <MetaAwards>\Build\HandHero_<yyyyMMdd_HHmm>_release.apk / _dev.apk, so the
     // two never overwrite each other (round 3, D2). Compare perf numbers only
     // within one build type: a dev build runs slower.
+    // The APK's version name carries the same stamp ("9.2.0+20261010_1500_release"),
+    // so run_log.jsonl and perf_log.txt say which APK wrote them (deep review DR-7).
+    // Scenes (deep review DR-4): the usual builds regenerate Arena_Main and the RunBot
+    // prefab from code first, which resets inspector edits to the C# defaults. The
+    // *KeepScenes builds use the saved scene and prefab as they are.
     public static class BuildScript
     {
         public const string ApplicationId = "com.hyun.handhero";
@@ -59,10 +65,49 @@ namespace HandHero.EditorTools
         [MenuItem("HandHero/Build Quest APK (release, clean)")]
         public static void BuildQuestApkReleaseClean() => BuildQuestApk(development: false, clean: true);
 
+        // Deep review DR-4: build with the saved Arena_Main scene and RunBot prefab, so
+        // values changed in the inspector (and saved) ship. Builder or serialized-field
+        // changes in code are not applied until the scenes are rebuilt (Build All Scenes).
+        [MenuItem("HandHero/Build Quest APK (release, keep scene edits)")]
+        public static void BuildQuestApkReleaseKeepScenes() => BuildQuestApk(development: false, keepScenes: true);
+
+        [MenuItem("HandHero/Build Quest APK (dev, keep scene edits)")]
+        public static void BuildQuestApkDevKeepScenes() => BuildQuestApk(development: true, keepScenes: true);
+
         // Old command name, kept so earlier scripts still work: the release build.
         public static void BuildQuestApk() => BuildQuestApkRelease();
 
-        private static void BuildQuestApk(bool development, bool clean = false)
+        // The saved files a rebuild overwrites: the APK's scene and the run bot prefab.
+        private static readonly string[] GeneratedSceneFiles =
+        {
+            HandHeroSceneBuilder.ArenaMainScenePath,
+            HandHeroSceneBuilder.RunBotPrefabPath,
+        };
+
+        // Says whether the saved scene and prefab still match what the scene builder last
+        // wrote on this PC. Batch mode:
+        //   -executeMethod HandHero.EditorTools.BuildScript.CheckSceneEdits
+        [MenuItem("HandHero/Check Scene Edits")]
+        public static void CheckSceneEdits()
+        {
+            foreach (string path in GeneratedSceneFiles)
+            {
+                string state;
+                switch (SceneBuildFingerprints.Check(path))
+                {
+                    case SceneBuildFingerprints.State.AsBuilt: state = "as the scene builder wrote it"; break;
+                    case SceneBuildFingerprints.State.Edited:
+                        state = "EDITED since the scene builder wrote it (inspector edit or git checkout); " +
+                                "the usual APK builds reset it, the keep-scene-edits builds keep it";
+                        break;
+                    case SceneBuildFingerprints.State.Missing: state = "missing"; break;
+                    default: state = "no scene build recorded on this PC yet"; break;
+                }
+                Debug.Log($"[BuildScript] NOTE: {path}: {state}");
+            }
+        }
+
+        private static void BuildQuestApk(bool development, bool clean = false, bool keepScenes = false)
         {
             if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
             {
@@ -71,7 +116,7 @@ namespace HandHero.EditorTools
                 return;
             }
 
-            HandHeroSceneBuilder.BuildAll();
+            if (!PrepareScenes(keepScenes)) return;
             ConfigurePlayer();
             ConfigureOpenXR();
             if (!CheckOpenXRValidation()) return;
@@ -79,7 +124,8 @@ namespace HandHero.EditorTools
             string buildDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "Build"));
             Directory.CreateDirectory(buildDir);
             string suffix = development ? "dev" : "release";
-            string apkPath = Path.Combine(buildDir, $"HandHero_{DateTime.Now:yyyyMMdd_HHmm}_{suffix}.apk");
+            string stamp = $"{DateTime.Now:yyyyMMdd_HHmm}_{suffix}";
+            string apkPath = Path.Combine(buildDir, $"HandHero_{stamp}.apk");
 
             var options = new BuildPlayerOptions
             {
@@ -102,7 +148,14 @@ namespace HandHero.EditorTools
                 PlayerSettings.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
             }
 
-            Debug.Log($"[BuildScript] Building {suffix}{(clean ? " (clean)" : "")} APK -> {apkPath}");
+            // Deep review DR-7: the version name carries the APK's stamp for this build only
+            // (Application.version on the device; ProjectSettings keeps the plain version).
+            // A "+..." left by an interrupted build is dropped first.
+            string baseVersion = BaseVersion(PlayerSettings.bundleVersion);
+            PlayerSettings.bundleVersion = $"{baseVersion}+{stamp}";
+
+            Debug.Log($"[BuildScript] Building {suffix}{(clean ? " (clean)" : "")} APK -> {apkPath} " +
+                      $"(version {PlayerSettings.bundleVersion})");
             BuildReport report;
             try
             {
@@ -110,12 +163,13 @@ namespace HandHero.EditorTools
             }
             finally
             {
+                PlayerSettings.bundleVersion = baseVersion;
                 if (!development)
                 {
                     PlayerSettings.SetStackTraceLogType(LogType.Log, logTrace);
                     PlayerSettings.SetStackTraceLogType(LogType.Warning, warningTrace);
-                    AssetDatabase.SaveAssets();
                 }
+                AssetDatabase.SaveAssets();
             }
             BuildSummary summary = report.summary;
             if (summary.result != BuildResult.Succeeded)
@@ -126,7 +180,72 @@ namespace HandHero.EditorTools
             // summary.totalSize is not the APK size (it reported 2 GB for a 207 MB APK).
             long apkBytes = File.Exists(apkPath) ? new FileInfo(apkPath).Length : 0;
             Debug.Log($"[BuildScript] BUILD OK {apkPath} ({apkBytes / (1024f * 1024f):F1} MB, " +
-                      $"{summary.totalTime.TotalMinutes:F1} min)");
+                      $"{summary.totalTime.TotalMinutes:F1} min, version {baseVersion}+{stamp})");
+        }
+
+        // "9.2.0+20261010_1500_release" -> "9.2.0".
+        private static string BaseVersion(string version)
+        {
+            if (string.IsNullOrEmpty(version)) return "0";
+            int plus = version.IndexOf('+');
+            return plus > 0 ? version.Substring(0, plus) : version;
+        }
+
+        // Deep review DR-4. Rebuilding stays the default (the scenes always match the code).
+        // When the saved scene or prefab differs from what the builder last wrote, the
+        // rebuild would reset those edits: the menu asks, batch mode logs a NOTE
+        // (compile_check prints it) and rebuilds. keepScenes uses the saved files and
+        // builds them only when they don't exist yet.
+        private static bool PrepareScenes(bool keepScenes)
+        {
+            // The build reads the saved scene: offer to save unsaved inspector edits first.
+            if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                Debug.Log("[BuildScript] Build cancelled.");
+                return false;
+            }
+
+            bool scenesExist = Array.TrueForAll(GeneratedSceneFiles, File.Exists);
+            if (keepScenes && scenesExist)
+            {
+                Debug.Log("[BuildScript] Keeping the saved Arena_Main scene and RunBot prefab: inspector edits " +
+                          "ship; builder changes in code are not applied until Build All Scenes.");
+                return true;
+            }
+            if (keepScenes)
+                Debug.Log("[BuildScript] No saved Arena_Main scene or RunBot prefab yet: building them.");
+
+            List<string> edited = keepScenes ? new List<string>() : SceneBuildFingerprints.Edited(GeneratedSceneFiles);
+            if (edited.Count > 0)
+            {
+                string files = string.Join(", ", edited);
+                const string Why = "changed since the scene builder last wrote it (an inspector edit or a git " +
+                                   "checkout). This build regenerates the scenes from code, so those edits go " +
+                                   "back to the C# defaults.";
+                if (!Application.isBatchMode)
+                {
+                    int choice = EditorUtility.DisplayDialogComplex("Hand Hero: scene edits will be reset",
+                        $"{files} {Why}", "Rebuild scenes", "Cancel", "Keep my scene edits");
+                    if (choice == 1)
+                    {
+                        Debug.Log("[BuildScript] Build cancelled.");
+                        return false;
+                    }
+                    if (choice == 2)
+                    {
+                        Debug.Log("[BuildScript] Keeping the saved Arena_Main scene and RunBot prefab (chosen in the dialog).");
+                        return true;
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning($"[BuildScript] NOTE: {files} {Why} To keep them, build with " +
+                                     "BuildQuestApkReleaseKeepScenes or BuildQuestApkDevKeepScenes.");
+                }
+            }
+
+            HandHeroSceneBuilder.BuildAll();
+            return true;
         }
 
         // Every value set here is listed in AUTO/PROGRESS.md (T9). Most already

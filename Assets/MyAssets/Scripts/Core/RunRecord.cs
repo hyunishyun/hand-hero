@@ -80,6 +80,10 @@ namespace HandHero.Core
     // One finished run (round 3, D16): one JSON line in run_log.jsonl.
     public class RunRecord
     {
+        // Deep review DR-7: the APK that wrote this run (Application.version, which
+        // BuildScript stamps "<version>+<yyyyMMdd_HHmm>_<release|dev>"); "editor" in
+        // the editor, "" when not given. run_log.jsonl keeps every run across installs.
+        public string Build = "";
         public int Seed;
         public string AimMode;
         public string ViewMode;
@@ -131,9 +135,13 @@ namespace HandHero.Core
 
         public bool IsRecording => _record != null;
 
-        public void Begin(int seed, string aimMode, string viewMode, string startTime)
+        // `build`: which APK is running (RunRecord.Build).
+        public void Begin(int seed, string aimMode, string viewMode, string startTime, string build = "")
         {
-            _record = new RunRecord { Seed = seed, AimMode = aimMode, ViewMode = viewMode, StartTime = startTime };
+            _record = new RunRecord
+            {
+                Build = build ?? "", Seed = seed, AimMode = aimMode, ViewMode = viewMode, StartTime = startTime,
+            };
             _island = null;
             _fightStart = -1f;
         }
@@ -272,6 +280,7 @@ namespace HandHero.Core
         {
             var sb = new StringBuilder(512);
             sb.Append("{\"v\":").Append(Version);
+            Str(sb, "build", r.Build); // deep review DR-7: which APK wrote this run
             Int(sb, "seed", r.Seed);
             Str(sb, "aim", r.AimMode);
             Str(sb, "view", r.ViewMode);

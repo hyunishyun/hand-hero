@@ -8,12 +8,21 @@ items, the ASSIST charge misfire rate, pinch holds per aim mode (share over 1 s
 and what released each pinch, round 5), island themes and terrain pieces
 (round 5) and which RunParams knob to turn first.
 
+The device file keeps every run across `adb install -r`, so each run names the
+APK that wrote it ("build", deep review DR-7) and only the newest build is
+summarized unless --all or --build is given. Runs written before the stamp have
+no "build" and are listed as "no build stamp".
+
 Usage:
-    python AUTO/tools/run_summary.py <run_log.jsonl> [more.jsonl ...]
+    python AUTO/tools/run_summary.py [--all | --build <part of a name>] <run_log.jsonl> [more.jsonl ...]
+
+    --all            summarize every run in the files (all builds together)
+    --build TEXT     only the builds whose name contains TEXT ("none" = runs without a stamp)
 
 Standard library only.
 """
 
+import argparse
 import json
 import statistics
 import sys
@@ -24,6 +33,7 @@ QUICK_HOLD_S = 0.5        # a charge started by a shorter hold was probably mean
 LONG_HOLD_S = 1.0         # round 5: share of holds over this, per aim mode (ASSIST release bug)
 RELEASE_ORDER = ("meta", "absolute", "relative", "lost", "none")
 BOSS_ISLAND = 9
+NO_STAMP = "no build stamp"   # runs written before the deep-review build stamp (DR-7)
 
 
 def load_runs(paths):
@@ -39,6 +49,56 @@ def load_runs(paths):
                 except json.JSONDecodeError as e:
                     print(f"warning: {path}:{number} skipped ({e})", file=sys.stderr)
     return runs
+
+
+def build_of(run):
+    return run.get("build") or NO_STAMP
+
+
+def builds_in(runs):
+    """Per build, oldest first (by its newest run): run count and first / last start time."""
+    groups = {}
+    for index, r in enumerate(runs):
+        key = (r.get("start", ""), index)
+        g = groups.setdefault(build_of(r), {"runs": 0, "first": key, "last": key})
+        g["runs"] += 1
+        g["first"] = min(g["first"], key)
+        g["last"] = max(g["last"], key)
+    return sorted(groups.items(), key=lambda kv: kv[1]["last"])
+
+
+def select_runs(runs, build_filter=None, all_builds=False):
+    """The runs to summarize and the header lines that say which ones.
+    Default: the build of the newest run (by start time, then file order)."""
+    builds = builds_in(runs)
+    lines = []
+    if len(builds) > 1 or build_filter or all_builds:
+        lines.append("Builds in the log (oldest first):")
+        for name, g in builds:
+            first, last = g["first"][0] or "?", g["last"][0] or "?"
+            span = first if first == last else f"{first} .. {last}"
+            lines.append(f"  {name}: {g['runs']} run{'s' if g['runs'] != 1 else ''}, {span}")
+
+    if all_builds:
+        chosen = runs
+        lines.append(f"Summarizing every build together ({len(runs)} runs).")
+    elif build_filter:
+        wanted = NO_STAMP if build_filter.lower() == "none" else None
+        names = [name for name, _ in builds
+                 if (name == wanted if wanted else build_filter in name)]
+        chosen = [r for r in runs if build_of(r) in names]
+        lines.append(f"Summarizing build {', '.join(names) if names else '(none matched)'}"
+                     f" ({len(chosen)} of {len(runs)} runs).")
+    else:
+        newest = builds[-1][0]
+        chosen = [r for r in runs if build_of(r) == newest]
+        if len(builds) > 1:
+            lines.append(f"Summarizing the newest build only: {newest} ({len(chosen)} of {len(runs)} runs)."
+                         " --all for every run, --build <part of a name> for another build.")
+        else:
+            lines.append(f"Build: {newest}")
+    lines.append("")
+    return chosen, lines
 
 
 def fmt_time(seconds):
@@ -170,7 +230,7 @@ def pinch_holds_by_mode(runs):
     would release too), relative (only the drop-from-peak rule released), lost
     (tracking / system gesture), none (CURSOR trigger holds, no pinch diagnostics).
     Strengths are the unsmoothed thumb-index values (1 = pinched, 0.71 = 2.8 cm)."""
-    modes = defaultdict(lambda: {"durations": [], "release": Counter(), "recorded": 0,
+    modes = defaultdict(lambda: {"durations": [], "release": Counter(), "recorded": 0, "diag_durations": [],
                                  "meta_seen": 0, "peak": [], "low": [], "at_release": []})
     for r in runs:
         m = modes[r.get("aim", "?")]
@@ -179,6 +239,7 @@ def pinch_holds_by_mode(runs):
         released_by = r.get("release_by")
         if released_by is None:
             continue
+        m["diag_durations"].extend(holds)
         m["recorded"] += len(released_by)
         m["release"].update(released_by)
         m["meta_seen"] += sum(r.get("meta_seen", []))
@@ -211,6 +272,13 @@ def pinch_holds_by_mode(runs):
             out.append("    released by: not recorded (logs before round 5)")
             continue
         total = m["recorded"]
+        diag = m["diag_durations"]
+        if len(diag) < len(durations):
+            # --all over old and new APKs: the lines below cover only the round-5 holds (DR-7).
+            diag_long = sum(1 for d in diag if d > LONG_HOLD_S)
+            share = f"{diag_long / len(diag):.0%}" if diag else "-"
+            out.append(f"    of these, with release diagnostics (round 5 APKs): {len(diag)} holds,"
+                       f" {diag_long} over {LONG_HOLD_S:g} s ({share})")
         kinds = [k for k in RELEASE_ORDER if m["release"][k]] + sorted(
             k for k in m["release"] if k not in RELEASE_ORDER)
         mix = ", ".join(f"{k} {m['release'][k]} ({m['release'][k] / total:.0%})" for k in kinds)
@@ -287,11 +355,24 @@ def main(argv):
     if len(argv) < 2:
         print(__doc__.strip())
         return 2
-    runs = load_runs(argv[1:])
+    parser = argparse.ArgumentParser(description="Summarize Hand Hero run_log.jsonl files.")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--all", action="store_true", help="summarize every build together")
+    group.add_argument("--build", metavar="TEXT",
+                       help='only builds whose name contains TEXT ("none" = runs without a build stamp)')
+    parser.add_argument("files", nargs="+", help="run_log.jsonl files")
+    args = parser.parse_args(argv[1:])
+
+    runs = load_runs(args.files)
     if not runs:
         print("No runs found.")
         return 1
-    print(summarize(runs))
+    chosen, header = select_runs(runs, args.build, args.all)
+    if not chosen:
+        print("\n".join(header))
+        print("No runs from that build.")
+        return 1
+    print("\n".join(header + [summarize(chosen)]))
     return 0
 
 

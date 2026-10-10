@@ -503,7 +503,7 @@ public class RunDirector : MonoBehaviour
     {
         string aim = aimModeSetting != null ? aimModeSetting.Mode.ToString() : "Unknown";
         string view = viewMode == null ? "Vr" : viewMode.IsTabletop ? "Table" : "Vr";
-        _recorder.Begin(_rngSeed, aim, view, System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"));
+        _recorder.Begin(_rngSeed, aim, view, System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"), RunLogFile.BuildId);
         if (playerAim == null) return;
         playerAim.ResetShotStats();
         playerAim.SetHoldRecording(true);

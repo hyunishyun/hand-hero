@@ -14,6 +14,10 @@ namespace HandHero.EditorTools
     // Generates the HandHero scenes from code (never hand-edit scene YAML).
     // Idempotent: every run rebuilds the scenes and reuses/updates the generated materials.
     // Batch mode: -executeMethod HandHero.EditorTools.HandHeroSceneBuilder.BuildAll
+    // Every component starts from its C# defaults, so a value changed in the inspector
+    // is reset by the next build (only BotDifficulty_Normal.asset is kept). To keep a
+    // tuning, change the C# default; to build an APK with saved inspector edits, use
+    // BuildScript.BuildQuestApk*KeepScenes (deep review DR-4).
     public static class HandHeroSceneBuilder
     {
         private const string SceneDir = "Assets/MyAssets/Scenes";
@@ -589,6 +593,8 @@ namespace HandHero.EditorTools
 
             EditorSceneManager.SaveScene(scene, scenePath);
             AssetDatabase.SaveAssets();
+            // Deep review DR-4: lets an APK build tell a saved inspector edit from the builder's output.
+            SceneBuildFingerprints.Record(scenePath, RunBotPrefabPath);
             Debug.Log($"[HandHeroSceneBuilder] Built {scenePath}");
         }
 

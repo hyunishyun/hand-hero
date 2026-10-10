@@ -2,6 +2,12 @@
 
 대신 내린 결정. (형식: 태스크 / 질문 / 택한 답 / 이유 / 뒤집으려면)
 
+> **"인스펙터에서", "씬의 …", "프리팹 …"으로 되돌리는 항목 (딥 리뷰 DR-4)**
+> - 보통 APK 빌드(`HandHero > Build Quest APK` 메뉴, `compile_check`의 `BuildQuestApkRelease`·`BuildQuestApkDev*`)는 빌드 전에 `Arena_Main` 씬과 `RunBot` 프리팹을 코드로 다시 만든다. 그래서 인스펙터에서 바꾼 값이 C# 기본값으로 돌아간다.
+> - 인스펙터 값으로 APK를 만들려면 씬(프리팹)을 저장한 뒤 `HandHero > Build Quest APK (release, keep scene edits)`(배치: `BuildScript.BuildQuestApkReleaseKeepScenes`, 개발: `…DevKeepScenes`)로 빌드한다.
+> - 오래 쓸 값은 C# 기본값(필드 초기값, `*.Default`, `Defaults()`, 빌더)을 바꾸고 `HandHero > Build All Scenes`로 씬을 다시 만든다.
+> - 자세한 내용은 `REPORT_FOR_HYUN.md` 4절 첫머리에 있다.
+
 ## T0 ASSIST 핀치 놓기
 
 1. **T0 / 누르기 판정: 강도 0.8인가, Meta 플래그가 켜지는 순간인가 / 강도 0.8 유지.**
@@ -118,7 +124,8 @@
     - 섬 7–8: 1–2 / 1–2 / 1–2
     - 섬 9(보스): 1 / 1 / 1
     - 이유: 깊은 섬일수록 엄폐물이 늘어난다(평균 1.5 → 4 → 4.5개). 보스전은 길어서 7–8섬보다 덜 복잡하게 했다. 섬 1에도 새 조각이 나올 수 있어서 기기 테스트에서 바로 보인다. 모든 행의 최대 개수에서 시드 200개가 모두 대체 배치 없이 놓인다(테스트).
-    - 뒤집으려면: `ArenaLayoutApplier` > `Piece Table`. 모든 `Max`를 0으로 하면 4차 아레나(기둥 2개)와 같다. 3개 이상으로 올리려면 `ArenaPieceTable.DefaultPoolSize`도 올리고 씬을 다시 만든다.
+    - 뒤집으려면: `ArenaLayoutApplier` > `Piece Table`. 모든 `Max`를 0으로 하면 4차 아레나(기둥 2개)와 같다. 이 시험은 씬을 저장하고 keep-scene-edits 빌드로 한다(맨 위 상자).
+    - 3개 이상으로 올리려면 씬을 다시 만들어야 한다. 그러면 인스펙터 값은 돌아간다. 그래서 `ArenaPieceTable.Defaults()`의 `Max`와 `ArenaPieceTable.DefaultPoolSize`를 코드에서 함께 올리고 `BuildAll`을 돌린다. `ArenaTerrainTests`의 조각 표 테스트가 이 기본값을 검사하므로 함께 돌린다.
 31. **T3 / 낮은 벽(6 × 3 × 1)을 돌려서 놓을까? / 돌리지 않는다. 긴 변이 x축(좌석을 마주보는 방향)이다.**
     - 이유: 배치 규칙(시야선, 과녁 피하기)이 축 정렬 상자로 계산한다. 좌석을 마주보는 방향이 엄폐물로 가장 쓸모 있다.
     - 뒤집으려면: 다음 라운드에 `ArenaLayoutResult`에 조각별 90° 회전 플래그를 넣고, 회전한 조각은 x/z 크기를 바꿔 계산한다.
@@ -200,6 +207,7 @@
     - 이유: 쉬는 엄지는 0.71(2.8 cm)이고 누르기는 0.8(2.4 cm)이라 둘 사이가 4 mm뿐이다. 최고값만 기준으로 하면 최고값이 0.91보다 낮은 핀치, 곧 엄지가 1.9 cm보다 덜 닫힌 핀치는 쉬는 엄지에서 놓이지 않았다. 4차 기기 버그와 같은 증상이다. 다시 누르기도 "가장 낮은 값 + 0.2 = 0.91"이 필요해서, 세게 한 번 쏜 뒤의 2 cm 탭은 아예 쏘지 않았다.
     - 0.05인 이유: 바닥을 0.08(0.72)로 두면 쉬는 엄지가 2.7 cm(0.733)로 1 mm만 가까워져도 다시 놓이지 않는다. 다시 누르기 0.85는 쉬는 엄지에서 0.14(약 0.6 cm)까지 떨려도 쏘지 않는다.
     - 뒤집으려면: 인스펙터 `XRHandsInputSource`의 `pinchReleaseFloorMargin`(0 = 바닥 끔, 최고값 기준만)과 `pinchRearmMargin`. 쉬는 엄지가 더 가까운 사람이면 `pinchReleaseFloorMargin`을 줄인다(0.03 = 0.77 ≈ 2.5 cm). 기기 런 기록의 `release_strength`·`min_strength`를 보고 맞춘다.
+    - 인스펙터 값은 keep-scene-edits 빌드로만 APK에 들어간다(맨 위 상자, 딥 리뷰 DR-4). 보통 빌드는 0.05로 되돌린다. 계속 쓸 값은 `XRHandsInputSource.cs`의 기본값을 바꾸고 씬을 다시 만든다.
 49. **T0 / 한 프레임만 튀는 값은? (리뷰 T0-R1-2, T0-R2-3) / 강도로 놓는 규칙(절대·상대·바닥)과 다시 여는 규칙은 2프레임 연속 맞을 때만 센다(`pinchConfirmFrames` = 2). 다시 여는 규칙에는 추적이 끊긴 뒤와 시스템 제스처 뒤도 들어간다.**
     - 이유: 이제 부드럽게 하기 전 값을 쓴다. 그래서 쥔 동안 한 프레임만 낮게 읽혀도 핀치가 놓였고, 다음 프레임에 다시 쏘았다. 차지샷, 일반 발사, 새 차지가 한꺼번에 나온 셈이다. 추적이 돌아온 첫 프레임이 낮게 읽혀도 다시 연 것으로 쳤다. 이 수정으로 놓기가 1프레임(약 14 ms) 늦어진다. 그래서 테스트 "3프레임 안에 놓음"을 "4프레임 안"으로 바꿨다.
     - 누르기는 지금처럼 한 프레임에 쏜다(사격 지연 없음). 그래서 손을 완전히 편 뒤(0.6 아래) 쉬는 엄지가 한 프레임 0.8을 넘으면 한 발이 나갈 수 있다. 그래도 2프레임 안에 놓이고 차지는 시작되지 않는다. 그 뒤로는 0.85 아래 떨림이 쏘지 않는다. 이 한 발까지 막으려면 누르기도 2프레임을 기다려야 하는데, 그러면 모든 발사가 14 ms 늦어진다.
@@ -233,3 +241,30 @@
     - 새 난수는 쓰지 않는다. 좌석을 주지 않은 기존 테스트의 움직임은 그대로다.
     - 남는 것: 4차 Striker도 영웅이 좌석 쪽 (0, 0, −8)에 있으면 시간의 36%를 45° 밖에 있다. 이번 수정 범위(사거리를 지키는 원형)가 아니고, Striker는 4차와 프레임 단위로 같아야 해서 건드리지 않았다.
     - 뒤집으려면: `BotInputSource.keepInSeatView`의 기본값을 false로 바꾸고 `BuildAll`을 돌린다(빌더가 `RunBot` 프리팹을 다시 만든다). 넓히려면 `seatMaxYaw`(55면 Quest 3 시야 끝)와 `seatMinDistance`.
+
+## 딥 리뷰 수정 (빌드)
+
+56. **딥 리뷰 DR-4 / APK 빌드가 `Arena_Main`을 코드로 다시 만들어서, 보고서가 시킨 인스펙터 조정과 되돌리기가 말없이 사라졌다. 어떻게 할까? / 보통 빌드는 지금처럼 씬을 다시 만든다. 인스펙터 값을 쓰는 빌드를 따로 두고, 사라질 수정이 있으면 알린다.**
+    - 새 빌드: `HandHero > Build Quest APK (release, keep scene edits)`·`(dev, keep scene edits)`. 배치 이름은 `BuildScript.BuildQuestApkReleaseKeepScenes`·`BuildQuestApkDevKeepScenes`다. 저장된 `Arena_Main` 씬과 `RunBot` 프리팹을 그대로 쓴다. 둘이 없을 때만 새로 만든다.
+    - 알림: 빌더가 씬과 프리팹을 저장할 때마다 파일 해시를 `Library/HandHero/SceneBuildFingerprints.txt`에 적는다(이 PC 전용, git 밖).
+      - 보통 빌드는 저장된 파일이 그 해시와 다르면 메뉴에서 묻는다(Rebuild scenes / Cancel / Keep my scene edits).
+      - 배치 빌드는 묻지 않는다. `[BuildScript] NOTE:` 경고를 남기고 다시 만든다. `compile_check.ps1`이 그 줄을 출력한다.
+      - `HandHero > Check Scene Edits`(`BuildScript.CheckSceneEdits`)로 미리 볼 수 있다.
+    - 메뉴 빌드는 빌드 전에 저장하지 않은 씬을 저장할지 묻는다. 빌드는 저장된 씬 파일을 읽기 때문이다.
+    - 이유: 씬은 빌더로만 만든다는 규칙(DECISIONS)을 지키면서, 기기 조정(보고서 2절 A5)을 한 번에 시험할 수 있게 했다. 리뷰가 낸 다른 안 두 가지는 이번에 하지 않았다.
+      - 씬에서 조정 값만 복사해 오기: 코드에서 기본값을 일부러 바꿔도 예전 씬 값이 덮어써서, 반대 방향의 같은 함정이 생긴다.
+      - 조정 값을 ScriptableObject 에셋으로 옮기기: `BotDifficulty_Normal.asset`처럼 남지만, 조정 값이 있는 컴포넌트를 모두 바꿔야 한다.
+    - 남는 것: keep 빌드는 그 뒤에 바뀐 빌더 코드를 넣지 않는다. 해시 기록은 이 PC 것이라, git으로 다른 커밋의 씬을 받으면 "EDITED"로 나올 수 있다(물어보기만 한다).
+    - 뒤집으려면: `BuildScript.PrepareScenes`에서 `HandHeroSceneBuilder.BuildAll()`만 남긴다. 해시 기록은 `HandHeroSceneBuilder.BuildScene`의 `SceneBuildFingerprints.Record` 줄이다.
+57. **딥 리뷰 DR-7 / 기기의 `run_log.jsonl`은 다시 설치해도 남고, 어느 APK가 쓴 런인지 알 수 없었다. 어떻게 구별할까? / APK 버전 이름에 빌드 도장을 달고, 런마다 `build`로 남긴다. `run_summary.py`는 가장 최근 빌드만 요약한다. 보고서 2절에 설치 전에 예전 로그를 받아 두고 지우는 단계를 넣었다.**
+    - 도장: `BuildScript`가 빌드하는 동안만 `PlayerSettings.bundleVersion`을 `9.2.0+<yyyyMMdd_HHmm>_<release·dev>`로 둔다. APK 파일 이름과 같은 값이다. 빌드가 끝나면(실패해도) `9.2.0`으로 되돌려서, ProjectSettings는 바뀌지 않는다. 중간에 끊긴 빌드가 `+…`를 남겼으면 다음 빌드가 떼어 낸다.
+      - 기기에서는 `Application.version`이 이 값이다. 그래서 런 기록의 `build`와 `perf_log` 머리줄의 `app`에 같은 값이 남는다.
+      - `adb shell dumpsys package com.hyun.handhero`의 `versionName`으로 지금 설치된 APK도 알 수 있다.
+      - 에디터 런은 `editor`, Build Profiles로 만든 APK는 `9.2.0`이다.
+    - 고르지 않은 안: `Application.buildGUID`(어느 APK 파일인지 사람이 알 수 없다), 빌드마다 C# 상수 파일 만들기(빌드 중 스크립트를 다시 컴파일해야 하고 git에 흔적이 남는다).
+    - `run_summary.py`
+      - 파일에 빌드가 여럿이면 빌드별 런 수와 시작 시각을 먼저 보여 준다. 그다음 가장 최근에 시작한 런의 빌드만 요약한다.
+      - `--all`은 모두 합친다. `--build <이름 일부>`는 그 빌드만 본다. `--build none`은 도장이 없는 예전 런만 본다.
+      - `--all`일 때 Assist 줄 아래에 진단값이 있는 핀치(5차 APK)만의 1초 넘는 비율을 따로 적는다. 바로 아래 `released by` 줄도 그 핀치만 센다(리뷰가 짚은 "두 줄이 다른 핀치를 센다").
+    - 런 기록의 `v`는 1 그대로다(필드 추가는 의미 변경이 아니다).
+    - 뒤집으려면: 도장은 `BuildScript.BuildQuestApk`의 `bundleVersion` 두 줄, 기록은 `RunRecordJson.ToJson`의 `build` 줄, 요약 범위는 `--all`.

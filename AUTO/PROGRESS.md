@@ -53,3 +53,25 @@ STATUS: ALL_DONE
   - DR-1: 데모 속도 ×0.6이 손 속도 상한만 줄여서 봇이 느려지지 않았다(9.44 대 9.49 m/s). 이제 `BotParams.Paced`가 옆으로 끌기·피하기·상하 흔들기·손 속도 상한을 줄이고, 봇 히어로 최고 속도도 줄인다(데모 5.97 m/s). DR-2: 사거리를 지키는 원형은 VR 좌석 정면 45° 안, 눈에서 수평 8 m 밖에서만 돈다(`BotSeat`, Sniper 45° 밖 39% → 0%). Striker는 그대로.
   - 검증: 새 테스트 7개(고치기 전 Unity에서 7개 모두 실패 확인), 테스트 773/773, `BuildAll`로 씬 2개와 `RunBot` 프리팹 재생성(새 직렬화 필드 4개). 선택은 `QUESTIONS_FOR_HYUN.md` 54–55번.
   - 주의: 코드가 바뀌었으므로 T5의 APK 2종은 오래된 것이다. 다시 빌드해야 한다. 기기 확인은 보고서 2절 7·16번에 더했다.
+- 2026-10-10 딥 리뷰 빌드 수정 (DR-4, DR-7), 커밋 "[auto] Deep review: build fixes (DR-4, DR-7)":
+  - DR-4: APK 빌드는 먼저 `BuildAll`로 씬을 코드에서 다시 만든다. 그래서 보고서가 시킨 인스펙터 조정(2절 A5의 `pinchReleaseFloorMargin` 0.03)과 4절의 씬 되돌리기가 말없이 C# 기본값으로 돌아갔다.
+    - 새 빌드 `BuildQuestApkReleaseKeepScenes`·`BuildQuestApkDevKeepScenes`(메뉴 "keep scene edits")는 저장된 씬과 `RunBot` 프리팹을 그대로 쓴다.
+    - 보통 빌드는 지금처럼 다시 만든다. 다만 저장된 파일이 빌더가 마지막으로 쓴 것과 다르면 알린다(해시 기록 `Library/HandHero/SceneBuildFingerprints.txt`). 메뉴는 묻고, 배치는 `[BuildScript] NOTE:`를 남긴다. `compile_check.ps1`이 그 줄을 출력한다. `CheckSceneEdits`로 미리 볼 수 있다.
+    - 보고서 2절 A5·16번과 4절 첫머리, `QUESTIONS_FOR_HYUN.md` 맨 위 상자·30·48·56번을 고쳤다.
+  - DR-7: 기기의 `run_log.jsonl`은 다시 설치해도 남는데, 어느 APK가 쓴 런인지 알 수 없었다.
+    - 빌드하는 동안만 `bundleVersion`을 `9.2.0+<APK 도장>`으로 둔다. 기기의 `Application.version`과 perf_log 머리줄이 APK를 가리킨다.
+    - 런 기록에 `build` 필드를 넣었다(Core `RunRecord.Build`, TDD).
+    - `run_summary.py`는 빌드별로 묶고, 기본으로 가장 최근 빌드만 요약한다(`--all`, `--build`). `--all`일 때는 진단값이 있는 핀치만의 1초 넘는 비율을 따로 적는다.
+    - 보고서 2절에 단계를 더했다: 설치 전에 예전 로그를 받아 두고 지우기, 설치된 `versionName` 확인. A4의 "4차(18:07)"를 "3차 APK 18:07 런"으로 고쳤다. 선택은 57번.
+  - 검증:
+    - 새 테스트 2개는 고치기 전 Unity에서 빨강인 것을 확인했다. 테스트 775/775.
+    - `BuildAll`로 씬 2개를 다시 만들었다. 입력 액션 `m_Id`와 fileID만 바뀌었다. `RunBot` 프리팹은 그대로다.
+    - `CheckSceneEdits`: 빌드 직후에는 "as the scene builder wrote it"이고, 기록을 일부러 바꾸면 "EDITED"다.
+    - 검증 빌드 2개:
+      - `MetaAwards\Build\HandHero_20261010_1042_release.apk`(keep 빌드, 2.5분): 씬 해시가 그대로이고 NOTE가 없다.
+      - `MetaAwards\Build\HandHero_20261010_1046_release.apk`(보통 빌드): 바꾼 기록 때문에 NOTE를 남기고 씬을 다시 만든 뒤 해시를 새로 적었다.
+      - 두 APK 모두 `aapt`의 `versionName`이 도장과 같고, `globalgamemanagers`에도 들어 있다. ProjectSettings의 `bundleVersion`은 9.2.0 그대로다.
+    - `run_summary.py`: 4차 파일과 샘플을 다시 돌렸다. 맨 위 "Build:" 줄과 `--all` 비율 줄 말고는 예전 출력과 같다. 도장이 있는 파일(4차 런 4개 + 새 빌드 2개)에서는 가장 최근 빌드만 나온다(Assist 10번 중 1번, 10%). `--all`은 모두 합친 151번과, 진단값이 있는 20번 중 2번(10%)을 따로 보여 준다.
+  - 주의:
+    - 1042·1046 APK는 검증용이다. 다른 딥 리뷰 수정이 끝나면 APK 2종(release, dev clean)을 다시 빌드하고 보고서의 APK 목록을 바꾼다.
+    - 메뉴의 묻는 창과 저장 확인은 배치로 시험할 수 없다. 보고서 2절 31번에 넣었다.
