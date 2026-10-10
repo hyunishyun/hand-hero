@@ -44,10 +44,14 @@ namespace HandHero.Core
 
     public struct ArenaLayoutResult
     {
-        // Piece centers (on the floor), same order as the piece sizes.
+        // Piece centers (on the floor), same order as the piece sizes. Null after a
+        // fallback without fallback pieces.
         public Vector3[] Pieces;
+        // Null after a fallback without fallback spawn points.
         public Vector3[] SpawnPoints;
-        // True when no layout met the rules and the fallback (or the last try) came back.
+        // True when no layout met the rules: the arrays are copies of the fallback
+        // arrays, or null where none was given (round 5, S7-1-2: never the last,
+        // half-placed try).
         public bool UsedFallback;
     }
 
@@ -74,6 +78,10 @@ namespace HandHero.Core
             }
         }
 
+        // Tries whole layouts until one meets every rule (bounds, gaps, clear radii,
+        // keep-clear boxes, an open sight line from the start to at least one spawn).
+        // After p.Attempts failed tries: UsedFallback, with copies of the fallback
+        // arrays, or null for an array that was not given.
         public static ArenaLayoutResult Generate(Vector3 arenaSize, Vector3 start, Vector3[] pieceSizes, int spawnCount,
             ArenaLayoutParams p, int seed, Vector3[] fallbackPieces = null, Vector3[] fallbackSpawns = null,
             Vector3[] keepClearCenters = null, Vector3[] keepClearSizes = null)
@@ -93,10 +101,13 @@ namespace HandHero.Core
                 return new ArenaLayoutResult { Pieces = pieces, SpawnPoints = spawns, UsedFallback = false };
             }
 
+            // Round 5 (S7-1-2): the scratch arrays may hold a half-placed try (unplaced
+            // items at the origin); a caller without fallback arrays gets null and keeps
+            // its own layout.
             return new ArenaLayoutResult
             {
-                Pieces = fallbackPieces != null ? (Vector3[])fallbackPieces.Clone() : pieces,
-                SpawnPoints = fallbackSpawns != null ? (Vector3[])fallbackSpawns.Clone() : spawns,
+                Pieces = fallbackPieces != null ? (Vector3[])fallbackPieces.Clone() : null,
+                SpawnPoints = fallbackSpawns != null ? (Vector3[])fallbackSpawns.Clone() : null,
                 UsedFallback = true,
             };
         }

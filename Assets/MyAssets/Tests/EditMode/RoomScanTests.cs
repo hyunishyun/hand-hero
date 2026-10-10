@@ -145,6 +145,200 @@ namespace HandHero.Tests
             Assert.IsTrue(flow.Step(true, true, true).RunManagers);
         }
 
+        // ---- round 5: dismissed dialog, failures, deferred stop, permission polling ----
+
+        [Test]
+        public void Flow_DismissedDialog_IsADenialForTheSession_WithItsOwnEvent()
+        {
+            // S8-1-2: closing the dialog without an answer used to leave the flow in Asked.
+            var flow = new RoomScanFlow();
+            flow.Step(true, true, false);
+            Assert.AreEqual(RoomScanEvent.PermissionDismissed, flow.OnPermissionDismissed());
+
+            RoomScanCommand c = flow.Step(true, true, false);
+            Assert.IsFalse(c.RunManagers);
+            Assert.IsFalse(c.RequestPermission);
+
+            flow.Step(false, true, false);
+            c = flow.Step(true, true, granted: true); // granted later in the settings: next session
+            Assert.IsFalse(c.RunManagers);
+            Assert.IsFalse(c.RequestPermission, "never asked again this session");
+            Assert.AreEqual(RoomScanEvent.None, c.Event);
+        }
+
+        [Test]
+        public void EventName_PermissionDismissed()
+        {
+            Assert.AreEqual("PERMISSION_DISMISSED", RoomScanSummary.EventName(RoomScanEvent.PermissionDismissed));
+        }
+
+        [Test]
+        public void Flow_FailedOnTheStartFrame_ReportsUnavailableOnce_AndNothingElse()
+        {
+            // S8-1-3: the probe gets Started, switching the managers throws, it calls OnFailed.
+            var flow = new RoomScanFlow();
+            Assert.AreEqual(RoomScanEvent.Started, flow.Step(true, true, true).Event);
+
+            Assert.AreEqual(RoomScanEvent.Unavailable, flow.OnFailed());
+            Assert.AreEqual(RoomScanEvent.None, flow.OnFailed(), "logged once");
+            Assert.IsTrue(flow.Failed);
+            Assert.IsFalse(flow.Running);
+
+            bool[] tabletop = { true, false, true, false };
+            foreach (bool t in tabletop)
+            {
+                RoomScanCommand c = flow.Step(t, true, true);
+                Assert.IsFalse(c.RunManagers);
+                Assert.IsFalse(c.RequestPermission);
+                Assert.AreEqual(RoomScanEvent.None, c.Event, "no STARTED / STOPPED after a failure");
+            }
+        }
+
+        [Test]
+        public void Flow_FailedAfterUnavailableWasReported_LogsNothingMore()
+        {
+            var flow = new RoomScanFlow();
+            Assert.AreEqual(RoomScanEvent.Unavailable, flow.Step(true, available: false, granted: false).Event);
+            Assert.AreEqual(RoomScanEvent.None, flow.OnFailed());
+        }
+
+        [Test]
+        public void Flow_StopDelay_KeepsTheManagersOnForThoseFrames_ThenStops()
+        {
+            // F2-2: the summary and the shutdown move off the match-start frame.
+            var flow = new RoomScanFlow { StopDelayFrames = 2 };
+            flow.Step(true, true, true);
+
+            for (int frame = 0; frame < 2; frame++)
+            {
+                RoomScanCommand wait = flow.Step(false, true, true);
+                Assert.IsTrue(wait.RunManagers, $"frame {frame}");
+                Assert.AreEqual(RoomScanEvent.None, wait.Event, $"frame {frame}");
+            }
+            RoomScanCommand stop = flow.Step(false, true, true);
+            Assert.IsFalse(stop.RunManagers);
+            Assert.AreEqual(RoomScanEvent.Stopped, stop.Event);
+            Assert.AreEqual(RoomScanEvent.None, flow.Step(false, true, true).Event);
+            Assert.IsFalse(flow.Running);
+        }
+
+        [Test]
+        public void Flow_StopDelay_BackInTheMenuBeforeTheStop_KeepsRunning_WithoutANewStart()
+        {
+            var flow = new RoomScanFlow { StopDelayFrames = 2 };
+            flow.Step(true, true, true);
+            flow.Step(false, true, true);
+
+            RoomScanCommand back = flow.Step(true, true, true);
+            Assert.IsTrue(back.RunManagers);
+            Assert.AreEqual(RoomScanEvent.None, back.Event);
+
+            // A later exit waits the full delay again.
+            Assert.IsTrue(flow.Step(false, true, true).RunManagers);
+            Assert.IsTrue(flow.Step(false, true, true).RunManagers);
+            Assert.AreEqual(RoomScanEvent.Stopped, flow.Step(false, true, true).Event);
+        }
+
+        [Test]
+        public void Flow_StopDelay_NotRunning_NothingToWaitFor()
+        {
+            var flow = new RoomScanFlow { StopDelayFrames = 3 };
+            RoomScanCommand c = flow.Step(false, true, true);
+            Assert.IsFalse(c.RunManagers);
+            Assert.AreEqual(RoomScanEvent.None, c.Event);
+        }
+
+        [Test]
+        public void Flow_NeedsPermissionQuery_OnlyUntilTheAnswerIsKnown()
+        {
+            var flow = new RoomScanFlow();
+            Assert.IsTrue(flow.NeedsPermissionQuery, "before the first MR TABLE frame");
+            flow.Step(true, true, false);
+            Assert.IsTrue(flow.NeedsPermissionQuery, "dialog open");
+            flow.OnPermissionResult(true);
+            Assert.IsFalse(flow.NeedsPermissionQuery, "granted");
+
+            var denied = new RoomScanFlow();
+            denied.Step(true, true, false);
+            denied.OnPermissionResult(false);
+            Assert.IsFalse(denied.NeedsPermissionQuery, "denied");
+
+            var dismissed = new RoomScanFlow();
+            dismissed.Step(true, true, false);
+            dismissed.OnPermissionDismissed();
+            Assert.IsFalse(dismissed.NeedsPermissionQuery, "dismissed");
+
+            var alreadyGranted = new RoomScanFlow();
+            alreadyGranted.Step(true, true, true);
+            Assert.IsFalse(alreadyGranted.NeedsPermissionQuery, "granted before the app started");
+
+            var unavailable = new RoomScanFlow();
+            unavailable.Step(true, false, false);
+            Assert.IsFalse(unavailable.NeedsPermissionQuery, "no subsystem");
+
+            var failed = new RoomScanFlow();
+            failed.OnFailed();
+            Assert.IsFalse(failed.NeedsPermissionQuery, "failed");
+
+            Assert.IsFalse(new RoomScanFlow { Enabled = false }.NeedsPermissionQuery, "probe off");
+        }
+
+        [Test]
+        public void PermissionPoll_FirstQueryAtOnce_ThenAtMostOncePerInterval()
+        {
+            var poll = new RoomScanPermissionPoll { Interval = 0.5 };
+            Assert.IsTrue(poll.Due(true, 10.0));
+            Assert.IsFalse(poll.Due(true, 10.1));
+            Assert.IsFalse(poll.Due(true, 10.49));
+            Assert.IsTrue(poll.Due(true, 10.5));
+            Assert.IsFalse(poll.Due(true, 10.6));
+        }
+
+        [Test]
+        public void PermissionPoll_NeverWhenNotNeeded_AndKeepsTheLastAnswer()
+        {
+            var poll = new RoomScanPermissionPoll();
+            Assert.IsFalse(poll.Due(false, 0.0));
+            Assert.IsFalse(poll.Due(false, 100.0));
+            Assert.IsFalse(poll.LastAnswer);
+
+            Assert.IsTrue(poll.Due(true, 100.0));
+            poll.Answer(true);
+            Assert.IsTrue(poll.LastAnswer);
+            Assert.IsFalse(poll.Due(false, 200.0));
+            Assert.IsTrue(poll.LastAnswer);
+        }
+
+        [Test]
+        public void Probe_InTheMrTableMenu_QueriesTwicePerSecondWhileAsking_AndNeverOnceGranted()
+        {
+            // The probe's Update, one frame per step at 72 Hz.
+            var flow = new RoomScanFlow();
+            var poll = new RoomScanPermissionPoll { Interval = 0.5 };
+            int queries = 0;
+            int frame = 0;
+
+            void Frame(bool systemAnswer)
+            {
+                double now = frame++ / 72.0;
+                if (poll.Due(flow.NeedsPermissionQuery, now))
+                {
+                    queries++;
+                    poll.Answer(systemAnswer);
+                }
+                flow.Step(true, true, poll.LastAnswer);
+            }
+
+            for (int i = 0; i < 72; i++) Frame(false); // the dialog is open for a second
+            Assert.AreEqual(2, queries, "at 0 s and 0.5 s, not 72 times");
+
+            flow.OnPermissionResult(true);
+            queries = 0;
+            for (int i = 0; i < 720; i++) Frame(true); // ten seconds in the menu
+            Assert.AreEqual(0, queries, "decided: no more JNI calls");
+            Assert.IsTrue(flow.Running);
+        }
+
         // ---- RoomScanTimer ----
 
         [Test]

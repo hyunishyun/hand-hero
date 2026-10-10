@@ -31,6 +31,8 @@ namespace HandHero.Core
     // Chests; a Victory in another aim mode than the first one -> Dividends.
     // Bests never get worse; only a Victory sets a time. Written once per run end
     // (one Save), never mid-fight. A save from another version is reset.
+    // Round 5 (F3-3): a Reset during a run (between OnRunStarted and OnRunEnded)
+    // asks for a clean slate, so that run is not written when it ends.
     public class MetaProgress
     {
         public const int Version = 1;
@@ -54,6 +56,9 @@ namespace HandHero.Core
             { MetaUnlocks.SecondWind, MetaUnlocks.BigChests, MetaUnlocks.Dividends };
 
         private readonly IKeyValueStore _store;
+        // F3-3: a run is open from OnRunStarted to OnRunEnded; a Reset inside it voids it.
+        private bool _runOpen;
+        private bool _runVoided;
 
         public MetaProgress(IKeyValueStore store)
         {
@@ -72,8 +77,25 @@ namespace HandHero.Core
         // Fastest Victory in seconds, 0 = none yet.
         public float BestWinSeconds(string aimMode) => _store.GetFloat(TimeKey(Aim(aimMode)));
 
+        // True while the open run will not be written (progress was reset during it).
+        public bool RunVoided => _runVoided;
+
+        // A run began (RunDirector, before the STARTING RELIC choice). A run that
+        // never called it is written as before.
+        public void OnRunStarted()
+        {
+            _runOpen = true;
+            _runVoided = false;
+        }
+
         public MetaChanges OnRunEnded(RunResult result, int islandReached, float runSeconds, string aimMode)
         {
+            bool voided = _runVoided;
+            _runOpen = false;
+            _runVoided = false;
+            // F3-3: progress was reset during this run; nothing is written (no Save either).
+            if (voided) return new MetaChanges();
+
             string aim = Aim(aimMode);
             bool victory = result == RunResult.Victory;
             int reached = victory ? VictoryIsland : Math.Max(0, Math.Min(islandReached, VictoryIsland - 1));
@@ -137,9 +159,11 @@ namespace HandHero.Core
         }
 
         // Clears every hh.meta.* key (the aim mode, tutorial flag and other
-        // settings live under other keys and stay), then saves once.
+        // settings live under other keys and stay), then saves once. During a run,
+        // that run is then not written when it ends (F3-3).
         public void Reset()
         {
+            if (_runOpen) _runVoided = true;
             foreach (string aim in StoredAims())
             {
                 _store.Delete(IslandKey(aim));

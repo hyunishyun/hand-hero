@@ -33,8 +33,11 @@ namespace HandHero.Core
         public float EnemyHealthPerIsland;
         [Tooltip("Bots alive at once on Arena and Horde islands")]
         public int MaxAlive;
+        [Tooltip("Elite island bot: x max health, on top of the island scaling")]
         public float EliteHealthMult;
+        [Tooltip("Elite island bot: x shot damage, on top of EnemyDamageMult")]
         public float EliteDamageMult;
+        [Tooltip("Boss: x max health, on top of the island scaling")]
         public float BossHealthMult;
         [Tooltip("Every run bot's shot damage, on top of the Elite multiplier (Quick Match and the tutorial bot never read it). 0 reads as 1")]
         public float EnemyDamageMult;
@@ -200,7 +203,8 @@ namespace HandHero.Core
         public IslandSpec Spec { get; private set; }
         public int IslandsCleared { get; private set; }
         public int Kills { get; private set; }
-        // Unpaused seconds since StartRun, frozen at Victory / Defeat.
+        // Unpaused seconds since StartRun, without the STARTING RELIC choice (round 5,
+        // F1-2), frozen at Victory / Defeat.
         public float RunTime { get; private set; }
 
         public float PhaseTime => _phaseTime;
@@ -391,7 +395,10 @@ namespace HandHero.Core
         {
             if (IsPaused || Phase == RunPhase.Idle || Phase == RunPhase.Victory || Phase == RunPhase.Defeat) return;
             _phaseTime += dt;
-            RunTime += dt;
+            // Round 5 (F1-2): the STARTING RELIC choice has no time limit and comes
+            // before the run proper, so it counts neither in RunTime nor in the best
+            // Victory time (MetaProgress reads RunTime). Every later choice still counts.
+            if (Phase != RunPhase.StartRelic) RunTime += dt;
 
             switch (Phase)
             {

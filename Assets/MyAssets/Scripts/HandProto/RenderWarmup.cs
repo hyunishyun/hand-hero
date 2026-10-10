@@ -40,6 +40,7 @@ public class RenderWarmup : MonoBehaviour
         new Color(1f, 0.25f, 0.2f),
         new Color(1f, 0.85f, 0.2f),
     };
+    [Tooltip("The damage vignette, drawn at an invisible alpha during the warmup frames")]
     [SerializeField] private DamageVignette vignette;
     [Tooltip("The player's charge orb (inactive until a charge)")]
     [SerializeField] private Transform chargeOrb;

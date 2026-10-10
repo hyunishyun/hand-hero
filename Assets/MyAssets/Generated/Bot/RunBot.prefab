@@ -564,8 +564,6 @@ MonoBehaviour:
   deathEffectPrefab: {fileID: 4411213796529574118, guid: 0d65183a6cca52146829b2ecaa00f12b, type: 3}
   baseColorRenderers:
   - {fileID: 527276598927087562}
-  - {fileID: 8666724669730828959}
-  - {fileID: 4701824385600907079}
   - {fileID: 8371166736931851453}
   - {fileID: 8138284495183758395}
   - {fileID: 2477956693721097985}

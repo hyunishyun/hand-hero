@@ -324,5 +324,85 @@ namespace HandHero.Tests
             Assert.AreEqual(MetaUnlocks.SecondWind | MetaUnlocks.BigChests, Win(Cursor).NewUnlocks);
             Assert.AreEqual(MetaUnlocks.Dividends, Win(Assist).NewUnlocks);
         }
+
+        // --- RESET PROGRESS during a run (round 5, F3-3) ---
+
+        [Test]
+        public void ResetDuringARun_ThatRunIsNotWritten()
+        {
+            Lose(Assist, 3);
+            _meta.OnRunStarted();
+            _meta.Reset();
+            int saves = _store.SaveCount;
+
+            MetaChanges c = Win(Assist);
+
+            Assert.AreEqual(MetaUnlocks.None, c.NewUnlocks);
+            Assert.IsFalse(c.NewBestIsland);
+            Assert.IsFalse(c.NewBestTime);
+            Assert.AreEqual(0, _meta.Runs);
+            Assert.AreEqual(0, _meta.Wins);
+            Assert.AreEqual(0, _meta.BestIsland(Assist));
+            Assert.AreEqual(0f, _meta.BestWinSeconds(Assist));
+            Assert.AreEqual(MetaUnlocks.None, _meta.Unlocked);
+            Assert.IsFalse(_store.Keys.Any(k => k.StartsWith("hh.meta.")), "nothing written");
+            Assert.AreEqual(saves, _store.SaveCount, "no Save");
+        }
+
+        [Test]
+        public void ResetDuringARun_AQuitIsNotWrittenEither()
+        {
+            _meta.OnRunStarted();
+            _meta.Reset();
+
+            _meta.OnRunEnded(RunResult.Quit, 6, 300f, Cursor);
+
+            Assert.AreEqual(0, _meta.Runs);
+            Assert.AreEqual(MetaUnlocks.None, _meta.Unlocked);
+        }
+
+        [Test]
+        public void ResetDuringARun_TheNextRunIsWrittenAgain()
+        {
+            _meta.OnRunStarted();
+            _meta.Reset();
+            Lose(Assist, 6); // the voided run
+
+            _meta.OnRunStarted();
+            MetaChanges c = Lose(Assist, 5);
+
+            Assert.AreEqual(1, _meta.Runs);
+            Assert.AreEqual(5, _meta.BestIsland(Assist));
+            Assert.AreEqual(MetaUnlocks.SecondWind, c.NewUnlocks);
+        }
+
+        [Test]
+        public void ResetBetweenRuns_DoesNotVoidTheNextRun()
+        {
+            Lose(Assist, 3);
+            _meta.Reset();
+
+            _meta.OnRunStarted();
+            Win(Assist, 500f);
+
+            Assert.AreEqual(1, _meta.Runs);
+            Assert.AreEqual(500f, _meta.BestWinSeconds(Assist), 1e-4f);
+        }
+
+        [Test]
+        public void RunVoided_OnlyBetweenAResetAndTheRunEnd()
+        {
+            Assert.IsFalse(_meta.RunVoided);
+            _meta.Reset();
+            Assert.IsFalse(_meta.RunVoided, "no run open");
+
+            _meta.OnRunStarted();
+            Assert.IsFalse(_meta.RunVoided);
+            _meta.Reset();
+            Assert.IsTrue(_meta.RunVoided);
+
+            Lose(Assist, 2);
+            Assert.IsFalse(_meta.RunVoided);
+        }
     }
 }

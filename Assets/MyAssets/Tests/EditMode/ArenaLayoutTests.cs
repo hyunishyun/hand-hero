@@ -145,6 +145,60 @@ namespace HandHero.Tests
             CollectionAssert.AreEqual(fallbackSpawns, r.SpawnPoints);
         }
 
+        // Round 5 (S7-1-2): the pieces fit but the third spawn never does, so the last
+        // try is half placed. Without fallback arrays that try must not come back.
+        [Test]
+        public void ImpossibleRules_WithoutFallbackArrays_ReturnNull_NeverAHalfPlacedTry()
+        {
+            ArenaLayoutParams p = P;
+            p.MinSpawnGap = 100f; // the first spawn fits, the second never does
+            ArenaLayoutResult r = ArenaLayout.Generate(Size, Start, Pillars, Spawns, p, 5);
+            Assert.IsTrue(r.UsedFallback);
+            Assert.IsNull(r.Pieces);
+            Assert.IsNull(r.SpawnPoints);
+        }
+
+        [Test]
+        public void ImpossibleRules_WithOnlyFallbackPieces_CopyThem_AndNullSpawns()
+        {
+            ArenaLayoutParams p = P;
+            p.StartClearRadius = 100f; // nothing fits
+            Vector3[] fallbackPieces = { new Vector3(-7f, -5f, 4f), new Vector3(9f, -4f, 9f) };
+            ArenaLayoutResult r = ArenaLayout.Generate(Size, Start, Pillars, Spawns, p, 5, fallbackPieces);
+            Assert.IsTrue(r.UsedFallback);
+            CollectionAssert.AreEqual(fallbackPieces, r.Pieces);
+            Assert.AreNotSame(fallbackPieces, r.Pieces, "a copy: the caller's defaults stay untouched");
+            Assert.IsNull(r.SpawnPoints);
+        }
+
+        // Round 5 (S7-1-1): with today's pillars the sight-line rule almost never
+        // rejects a try (the spawns fly above the pillar tops), so force it: one
+        // wide wall as tall as the arena and one spawn point low over the floor.
+        // The other rules are relaxed so only the sight line can reject a try.
+        [Test]
+        public void SightLineRule_RejectsBlockedTries_AndTheLayoutStaysOpen_NotAFallback()
+        {
+            Vector3[] wall = { new Vector3(14f, 20f, 2f) };
+            ArenaLayoutParams p = P;
+            p.StartClearRadius = 0f;
+            p.SpawnClearRadius = 0f;
+            p.SpawnArea = new Bounds(new Vector3(0f, -8f, 13f), new Vector3(20f, 2f, 6f)); // 1-3 m over the floor
+            int blockedFirstTries = 0;
+            for (int seed = 0; seed < 100; seed++)
+            {
+                // A seed's first try is the same with 1 or 200 attempts (same stream).
+                p.Attempts = 1;
+                if (ArenaLayout.Generate(Size, Start, wall, 1, p, seed).UsedFallback) blockedFirstTries++;
+
+                p.Attempts = 200;
+                ArenaLayoutResult r = ArenaLayout.Generate(Size, Start, wall, 1, p, seed);
+                Assert.IsFalse(r.UsedFallback, $"seed {seed}");
+                Assert.IsFalse(ArenaLayout.SegmentBlocked(Start, r.SpawnPoints[0], r.Pieces, wall), $"seed {seed}");
+            }
+            // These seeds came out open only because the rule threw a blocked try away.
+            Assert.Greater(blockedFirstTries, 10);
+        }
+
         [Test]
         public void PiecesKeepOffTheKeepClearBoxes()
         {

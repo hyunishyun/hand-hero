@@ -53,10 +53,13 @@ namespace HandHero.Core
     [Serializable]
     public struct BotArchetype
     {
+        [Tooltip("Which archetype this entry tunes (RunDirector looks entries up by it)")]
         public BotArchetypeId Id;
         [Tooltip("Body tint; alpha 0 = the bot material's color")]
         public Color BodyColor;
+        [Tooltip("Silhouette parts shown on the run bot (Needle, Block, Lance); None = the plain bot")]
         public BotShape Shapes;
+        [Tooltip("How it telegraphs and fires (the boss's first pattern)")]
         public BotAttack Attack;
         [Tooltip("Second pattern, used only when SwitchEvery > 0 (the boss)")]
         public BotAttack AltAttack;
@@ -112,7 +115,10 @@ namespace HandHero.Core
                 // The player's shot cooldown is 0.35 s; a shorter gap would only buffer.
                 a.BurstGap = 0.36f;
                 a.BeamWidthMult = 0.8f;
-                a.BeamColor = new Color(1f, 0.6f, 0.15f);
+                // Round 5 (F3-4): was the CURSOR aim orange (1, 0.6, 0.15); now chartreuse
+                // (hue 90 deg), far from the target and cursor oranges (25-32 deg) and
+                // 30 deg from the yellow ASSIST reticle (60 deg).
+                a.BeamColor = new Color(0.6f, 1f, 0.2f);
                 a.FirePitch = 1.35f;
                 return a;
             }
@@ -147,9 +153,11 @@ namespace HandHero.Core
                         Attack = SniperAttack, AltAttack = SniperAttack,
                     };
                 case BotArchetypeId.Gunner:
+                    // Round 5 (F3-4): chartreuse (hue ~87 deg), not the old orange (1, 0.5, 0.1)
+                    // that matched the greybox targets and the CURSOR aim marker.
                     return new BotArchetype
                     {
-                        Id = id, BodyColor = new Color(1f, 0.5f, 0.1f), Shapes = BotShape.Block,
+                        Id = id, BodyColor = new Color(0.6f, 1f, 0.1f), Shapes = BotShape.Block,
                         Attack = GunnerAttack, AltAttack = GunnerAttack,
                     };
                 case BotArchetypeId.Lancer:

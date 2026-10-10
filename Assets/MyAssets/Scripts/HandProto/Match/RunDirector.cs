@@ -147,7 +147,8 @@ public class RunDirector : MonoBehaviour
     }
 
     // Pause panel RESET PROGRESS (after its confirm press): clears hh.meta.* only;
-    // the aim mode and the tutorial flag stay. A run in progress keeps its relic.
+    // the aim mode and the tutorial flag stay. A run in progress keeps its relic,
+    // but is not written to the meta progression when it ends (round 5, F3-3).
     public void ResetProgress()
     {
         _meta.Reset();
@@ -174,6 +175,8 @@ public class RunDirector : MonoBehaviour
     {
         _run.Params = rules;
         _lastMetaChanges = default;
+        // Round 5 (F3-3): from here to the run end, a RESET PROGRESS voids this run's meta record.
+        _meta.OnRunStarted();
         // Before StartRun: island 1's intro may come straight away and applies a layout.
         _layoutRunSeed = seed != 0 ? unchecked(seed * 53 + 29) : System.Environment.TickCount;
         // Before StartRun: it enters island 1's intro, which the recorder logs.
@@ -521,6 +524,7 @@ public class RunDirector : MonoBehaviour
 
         // Same moment as the run log (S5): the end screen or a quit, one PlayerPrefs.Save.
         // The aim mode the run was played in, as recorded at its start.
+        if (_meta.RunVoided) HHLog.Info("[RunDirector] progress was reset during this run: not written to meta");
         _lastMetaChanges = _meta.OnRunEnded(result, _run.Island, _run.RunTime, record.AimMode);
         RefreshBest();
     }

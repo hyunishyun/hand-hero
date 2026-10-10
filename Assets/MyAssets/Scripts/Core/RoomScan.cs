@@ -29,6 +29,7 @@ namespace HandHero.Core
         FirstPlanes,       // first non-empty plane result
         FirstBoxes,        // first non-empty bounding box result
         Summary,
+        PermissionDismissed, // round 5 (S8-1-2): dialog closed without an answer; a denial for this session
     }
 
     public struct RoomScanCommand
@@ -40,7 +41,8 @@ namespace HandHero.Core
 
     // Decides, once per frame, whether the AR managers run. Never asks for the
     // permission outside MR TABLE, asks at most once per app session, and a
-    // denial or a missing subsystem leaves everything off.
+    // denial, a dismissed dialog, a missing subsystem or a failure leaves
+    // everything off.
     public class RoomScanFlow
     {
         private enum PermissionState { Unknown, Asked, Granted, Denied }
@@ -48,22 +50,45 @@ namespace HandHero.Core
         private PermissionState _permission;
         private bool _running;
         private bool _reportedUnavailable;
+        private bool _failed;
+        private int _stopWait = -1;
 
         public bool Enabled = true;
+        // Round 5 (F2-2): frames the managers keep running after MR TABLE or the
+        // menu ends before Stopped comes (the probe then logs the summary and
+        // switches the managers off), so that work never lands on the match-start
+        // frame. 0 = the same frame (round 4).
+        public int StopDelayFrames;
+
         public bool Running => _running;
+        public bool Failed => _failed;
+
+        // Round 5 (S8-2-1): the permission query (a JNI call on Android) only
+        // matters until the answer is known; after that Step ignores `granted`.
+        public bool NeedsPermissionQuery =>
+            Enabled && !_failed && !_reportedUnavailable
+            && (_permission == PermissionState.Unknown || _permission == PermissionState.Asked);
 
         public RoomScanCommand Step(bool tabletop, bool available, bool granted)
         {
             var c = new RoomScanCommand();
+            if (_failed) return c;
             if (!Enabled || !tabletop)
             {
-                if (_running)
+                if (!_running) return c;
+                if (_stopWait < 0) _stopWait = Math.Max(0, StopDelayFrames);
+                if (_stopWait > 0)
                 {
-                    _running = false;
-                    c.Event = RoomScanEvent.Stopped;
+                    _stopWait--;
+                    c.RunManagers = true; // still on: Stopped comes a few frames later
+                    return c;
                 }
+                _stopWait = -1;
+                _running = false;
+                c.Event = RoomScanEvent.Stopped;
                 return c;
             }
+            _stopWait = -1; // back before a deferred stop: the managers just keep running
 
             if (!available)
             {
@@ -100,6 +125,52 @@ namespace HandHero.Core
             _permission = granted ? PermissionState.Granted : PermissionState.Denied;
             return granted ? RoomScanEvent.PermissionGranted : RoomScanEvent.PermissionDenied;
         }
+
+        // Round 5 (S8-1-2): the dialog was closed without an answer. A denial for
+        // this session (never asked again), logged as its own event.
+        public RoomScanEvent OnPermissionDismissed()
+        {
+            _permission = PermissionState.Denied;
+            return RoomScanEvent.PermissionDismissed;
+        }
+
+        // Round 5 (S8-1-3): switching the managers threw, or every subsystem died.
+        // Off for the rest of the session with no further events (no Started, no
+        // Stopped, so no summary either): returns Unavailable the first time, so
+        // the probe logs exactly one line, and None after that.
+        public RoomScanEvent OnFailed()
+        {
+            _failed = true;
+            _running = false;
+            _stopWait = -1;
+            if (_reportedUnavailable) return RoomScanEvent.None;
+            _reportedUnavailable = true;
+            return RoomScanEvent.Unavailable;
+        }
+    }
+
+    // Round 5 (S8-2-1 / F2-3 / F4-2): when RoomScanProbe asks Android whether the
+    // scene permission is granted (a JNI call). Only while the flow still needs
+    // the answer (RoomScanFlow.NeedsPermissionQuery), the first time at once and
+    // then at most once per Interval; in between the last answer stands.
+    public class RoomScanPermissionPoll
+    {
+        private double _next = double.NegativeInfinity;
+
+        // Seconds between two queries.
+        public double Interval = 0.5;
+
+        public bool LastAnswer { get; private set; }
+
+        // True when the caller should query now and pass the result to Answer.
+        public bool Due(bool needed, double now)
+        {
+            if (!needed || now < _next) return false;
+            _next = now + Math.Max(0.0, Interval);
+            return true;
+        }
+
+        public void Answer(bool granted) => LastAnswer = granted;
     }
 
     // Time from Start to the first non-empty result of each kind.
@@ -299,6 +370,7 @@ namespace HandHero.Core
                 case RoomScanEvent.FirstPlanes: return "FIRST_PLANES";
                 case RoomScanEvent.FirstBoxes: return "FIRST_BOXES";
                 case RoomScanEvent.Summary: return "SUMMARY";
+                case RoomScanEvent.PermissionDismissed: return "PERMISSION_DISMISSED";
                 default: return "NONE";
             }
         }

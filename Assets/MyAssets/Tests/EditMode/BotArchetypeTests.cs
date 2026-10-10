@@ -101,6 +101,33 @@ namespace HandHero.Tests
             }
         }
 
+        // Round 5 (F3-4): the Gunner was orange like the greybox targets and the
+        // CURSOR aim marker (HandHeroSceneBuilder materials "Target" and "AimCursor").
+        // It must also stay off the player's own yellow ASSIST reticle ("Reticle"),
+        // with a looser bound: the reticle is a small sphere, not a body or a beam.
+        [Test]
+        public void Gunner_BodyAndBeam_AreFarFromTheTargetAndCursorOrange()
+        {
+            var target = new Color(1f, 0.5f, 0.15f);
+            var cursor = new Color(1f, 0.6f, 0.15f);
+            var reticle = new Color(1f, 1f, 0.3f);
+            BotArchetype gunner = Get(BotArchetypeId.Gunner);
+            foreach (Color c in new[] { gunner.BodyColor, gunner.Attack.BeamColor, Get(BotArchetypeId.Boss).Attack.BeamColor })
+            {
+                Assert.GreaterOrEqual(HueGapDegrees(c, target), 40f, $"{c} vs the target orange");
+                Assert.GreaterOrEqual(HueGapDegrees(c, cursor), 40f, $"{c} vs the cursor orange");
+                Assert.GreaterOrEqual(HueGapDegrees(c, reticle), 25f, $"{c} vs the reticle yellow");
+            }
+        }
+
+        private static float HueGapDegrees(Color a, Color b)
+        {
+            Color.RGBToHSV(a, out float hueA, out _, out _);
+            Color.RGBToHSV(b, out float hueB, out _, out _);
+            float gap = Mathf.Abs(hueA - hueB) * 360f;
+            return Mathf.Min(gap, 360f - gap);
+        }
+
         [Test]
         public void Defaults_HoldEveryArchetypeOnce_InIdOrder()
         {
