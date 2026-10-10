@@ -41,6 +41,7 @@ from collections import Counter, defaultdict
 RUN_LIMIT_S = 600.0       # judged session: a full run must fit in 10 minutes
 QUICK_HOLD_S = 0.5        # a charge started by a shorter hold was probably meant as a normal shot
 LONG_HOLD_S = 1.0         # round 5: share of holds over this, per aim mode (ASSIST release bug)
+LONG_HOLD_LIST = 8        # deep review DR-9: holds over LONG_HOLD_S listed with their strengths
 RELEASE_ORDER = ("meta", "absolute", "relative", "lost", "none")
 BOSS_ISLAND = 9
 NO_STAMP = "no build stamp"   # runs written before the deep-review build stamp (DR-7)
@@ -264,9 +265,14 @@ def pinch_holds_by_mode(runs):
     Deep review DR-5: the headline (holds, median, share over 1 s) counts only runs with
     release diagnostics (round-5 APKs). Holds from older APKs, still in the device file
     after `adb install -r`, are printed on their own line; a mode with only older holds
-    keeps them in the headline and says "not recorded"."""
+    keeps them in the headline and says "not recorded".
+
+    Deep review DR-9: holds over 1 s are also listed one by one (longest first, up to
+    LONG_HOLD_LIST) with their peak and lowest strength while held. A hold that was
+    not meant as a charge sat at the resting thumb, so its lowest strength is where the
+    thumb rests (report section 2, A5)."""
     modes = defaultdict(lambda: {"durations": [], "older": [], "release": Counter(), "recorded": 0,
-                                 "meta_seen": 0, "peak": [], "low": [], "at_release": []})
+                                 "meta_seen": 0, "peak": [], "low": [], "at_release": [], "long": []})
     for r in runs:
         m = modes[r.get("aim", "?")]
         holds = r.get("hold_s", [])
@@ -290,6 +296,8 @@ def pinch_holds_by_mode(runs):
                 m["low"].append(lows[i])
             if i < len(at_release):
                 m["at_release"].append(at_release[i])
+            if i < len(holds) and holds[i] > LONG_HOLD_S and i < len(peaks) and i < len(lows):
+                m["long"].append((holds[i], peaks[i], lows[i]))
 
     def holds_line(durations):
         long_holds = sum(1 for d in durations if d > LONG_HOLD_S)
@@ -320,6 +328,12 @@ def pinch_holds_by_mode(runs):
         if m["peak"]:
             out.append(f"    strength (median, unsmoothed): peak {median(m['peak']):.2f},"
                        f" lowest while held {median(m['low']):.2f}, at release {median(m['at_release']):.2f}")
+        if m["long"]:
+            longest = sorted(m["long"], key=lambda h: -h[0])
+            listed = ", ".join(f"{d:.1f} s {peak:.2f}/{low:.2f}" for d, peak, low in longest[:LONG_HOLD_LIST])
+            more = len(longest) - LONG_HOLD_LIST
+            out.append(f"    holds over {LONG_HOLD_S:g} s, longest first (peak / lowest while held): {listed}"
+                       + (f", +{more} more" if more > 0 else ""))
         if older:
             out.append(f"    older APKs (rounds 3-4, not in the numbers above): {holds_line(older)}")
     return out

@@ -1,4 +1,4 @@
-"""Tests for run_summary.py (deep review DR-5, DR-7).
+"""Tests for run_summary.py (deep review DR-5, DR-7, DR-9).
 
 Run from the project root:
     python -m unittest discover -s AUTO/tools -p "test_*.py"
@@ -73,6 +73,42 @@ class PinchHoldsByModeTests(unittest.TestCase):
     def test_round_5_only_has_no_older_line(self):
         lines = rs.pinch_holds_by_mode([r5_assist_run("2026-10-10T10:00:00", [0.1, 1.2])])
         self.assertFalse(any("older APKs" in line for line in lines))
+
+
+class LongHoldStrengthTests(unittest.TestCase):
+    """DR-9: report A5 tunes the release to the resting thumb, which only the long
+    holds show (their lowest strength while held), so they get their own line."""
+
+    def long_hold_line(self, lines):
+        found = [line for line in lines if "holds over 1 s, longest first" in line]
+        return found[0] if found else None
+
+    def test_long_holds_list_peak_and_lowest_longest_first(self):
+        run = r5_assist_run("2026-10-10T10:00:00", [0.1] * 5 + [1.5, 2.9])
+        run["peak_strength"] = [1.0] * 5 + [1.0, 0.93]
+        run["min_strength"] = [0.72] * 5 + [0.97, 0.77]
+        line = self.long_hold_line(rs.pinch_holds_by_mode([run]))
+        self.assertEqual("    holds over 1 s, longest first (peak / lowest while held):"
+                         " 2.9 s 0.93/0.77, 1.5 s 1.00/0.97", line)
+
+    def test_no_line_without_long_holds(self):
+        run = r5_assist_run("2026-10-10T10:00:00", [0.1, 0.2, 0.9])
+        self.assertIsNone(self.long_hold_line(rs.pinch_holds_by_mode([run])))
+
+    def test_trigger_holds_have_no_strengths_and_are_skipped(self):
+        run = r5_assist_run("2026-10-10T10:00:00", [1.2, 3.0])
+        run["aim"] = "Cursor"
+        run["release_by"] = ["relative", "none"]
+        run["peak_strength"] = [0.98, 0.0]
+        run["min_strength"] = [0.8, 0.0]
+        line = self.long_hold_line(rs.pinch_holds_by_mode([run]))
+        self.assertEqual("    holds over 1 s, longest first (peak / lowest while held): 1.2 s 0.98/0.80", line)
+
+    def test_at_most_eight_listed(self):
+        run = r5_assist_run("2026-10-10T10:00:00", [1.0 + 0.1 * i for i in range(1, 11)])
+        line = self.long_hold_line(rs.pinch_holds_by_mode([run]))
+        self.assertEqual(8, line.count(" s 1.00/"), line)
+        self.assertTrue(line.endswith(", +2 more"), line)
 
 
 class SelectRunsTests(unittest.TestCase):

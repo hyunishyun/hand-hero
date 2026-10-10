@@ -37,9 +37,8 @@ public class HandMenuPointer : MonoBehaviour
     [Tooltip("Mouse cursor + left click stand in for the hand when it isn't tracked")]
     [SerializeField] private bool mouseFallback = true;
 
-    private HysteresisGate _pinch;
+    private readonly MenuPinchPress _press = new MenuPinchPress();
     private readonly SystemGestureGate _systemGesture = new SystemGestureGate();
-    private bool _waitForOpenHand;
     private HandMenuButton _hovered;
     private float _rayWidth = -1f;
     private float _scale = 1f; // tabletop view: menus and hands are this many times larger in world units
@@ -48,13 +47,13 @@ public class HandMenuPointer : MonoBehaviour
     // was firing when the match ended): that pinch must open before one counts.
     private void OnEnable()
     {
-        _waitForOpenHand = true;
+        _press.RequireReopen();
     }
 
     private void OnDisable()
     {
         Hover(null);
-        _pinch.Reset();
+        _press.RequireReopen();
         _systemGesture.Reset();
         if (ray != null) ray.enabled = false;
     }
@@ -124,15 +123,14 @@ public class HandMenuPointer : MonoBehaviour
                 fromHand = true;
                 // The Meta system gesture's pinch belongs to the OS menu (CR-7).
                 float pinch = _systemGesture.Step(hand.SystemGesture, hand.PinchStrength, pinchReleaseThreshold);
-                if (_waitForOpenHand && pinch <= pinchReleaseThreshold) _waitForOpenHand = false;
-                pressed = _pinch.Step(pinch, pinchPressThreshold, pinchReleaseThreshold)
-                    == GateEdge.Rising && !_waitForOpenHand;
+                pressed = _press.Step(true, pinch, pinchPressThreshold, pinchReleaseThreshold);
                 return true;
             }
         }
 
-        // Tracking lost: a pinch in progress ends here, never later somewhere else.
-        _pinch.Reset();
+        // Tracking lost: a pinch in progress ends here, never later somewhere else;
+        // one still closed when the hand is back must open before it presses (DR-8).
+        _press.Step(false, 0f, pinchPressThreshold, pinchReleaseThreshold);
 
         if (!mouseFallback) return false;
         Mouse mouse = Mouse.current;

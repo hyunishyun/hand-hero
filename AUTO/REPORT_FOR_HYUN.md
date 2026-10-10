@@ -84,6 +84,7 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
    - 발사 쿨다운(0.35초, 한 발 버퍼) 때문에 1초에 3번보다 빨리 탭하면 발사 수가 핀치 수보다 적다. 이것은 정상이다(리뷰 T0-R2-6).
 3. 핀치를 1초쯤 쥐었다 놓기를 3번 한다. 0.25초 뒤 차지가 시작되고, 놓을 때 차지샷이 나가야 한다.
    - 쥐고 있는데 차지가 끊기거나 차지샷이 일찍 나가는지 본다.
+   - Meta 신호가 오면(`meta_seen`이 0보다 크면) 손가락을 붙인 채 쥐어도 플래그가 잠깐 꺼질 수 있다. 그 사이에 튄 한 프레임으로 차지가 끊기던 문제를 고쳤다(딥 리뷰 DR-6). 이제 Meta 놓기도 2프레임을 본다.
 4. 런을 끝내거나 포기한 뒤 위 명령으로 `run_summary.py`를 돌린다. "Pinch holds by aim mode"에서 볼 것:
    - Assist의 1초 넘는 쥐기 비율. 3차 APK로 한 18:07 런은 103번 중 22번이었다(4차 APK의 23:02 런은 20번 중 15번이 차지를 시작했다). 이번에는 일부러 한 차지 3번 정도만 남아야 한다.
    - 맨 위 "Build:" 또는 "Summarizing the newest build only:" 줄이 방금 설치한 APK인지 먼저 본다. `0203` APK는 `no build stamp (round 5)`로 나온다.
@@ -91,10 +92,23 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
    - `release_by` 분포를 읽을 때 주의할 점이 두 가지다(리뷰 Minor, 고치지 않음).
      - `relative`가 거의 전부로 나와도 정상이다. 이 라벨은 "새 규칙만 놓았다"는 뜻이 아니다. 손을 보통 속도로 펴면 상대 기준이 먼저 걸린다(T0-R2-5, F1-1).
      - `lost`는 항상 0이다. 추적이 끊기거나 시스템 제스처로 끝난 쥐기는 `hold_s`에서도 빠진다. 그래서 1초 넘는 비율이 실제보다 조금 낮게 나올 수 있다(T0-R1-3 외).
-5. 쉬는 엄지가 남보다 가까운 편이면 연사가 끊길 수 있다. 그때는 `release_strength`·`min_strength`를 보고 `XRHandsInputSource`의 `pinchReleaseFloorMargin`을 0.03으로 줄인다.
+5. 쉬는 엄지가 남보다 가까우면 탭이 쏘지 않거나, 짧은 탭이 쥔 채로 남아 차지가 될 수 있다. 그때 값을 고르는 법이다(딥 리뷰 DR-9에서 고쳤다).
+   - 예전 안내("`pinchReleaseFloorMargin`을 0.03으로")는 아주 좁은 경우에만 듣는다. 가벼운 탭이면서 쉬는 엄지가 2.63–2.54 cm일 때다. 0.03은 바닥 0.77(2.54 cm)이고, 2.5 cm는 0.778이라 덮지 못한다. 엄지를 붙이는 탭에는 아무 효과가 없다.
+   - 먼저 `run_summary.py`의 Assist 아래 `holds over 1 s, longest first (peak / lowest while held)` 줄을 본다(딥 리뷰 DR-9에서 더한 줄).
+     - 일부러 하지 않은 긴 쥐기의 `lowest while held`가 쉬는 엄지의 강도(r)다. 강도 = (6 − 거리 cm) ÷ 4.5다. 0.71은 2.8 cm, 0.75는 2.63 cm, 0.8은 2.4 cm다.
+     - `peak`가 0.95보다 낮으면 가벼운 탭, 1.00이면 엄지를 검지에 붙인 탭이다.
+   - r에 따라 고른다. 아래 수치는 `PinchTrigger`를 그대로 옮긴 시뮬레이션이다(탭 10번, 섬 시작 직후와 처음 상태 모두).
+     - **r이 0.75 이하(엄지가 2.63 cm보다 멀다):** 놓기 기준 때문이 아니다. 값을 바꾸지 않는다.
+     - **r이 0.75–0.78이고 가벼운 탭:** `pinchReleaseFloorMargin`을 0.79 − r 이하로 둔다(0.01 단위로 내림). 그러면 바닥(0.8 − 값)이 r보다 0.01 이상 높다. r 0.76이면 0.03, r 0.77이면 0.02, r 0.78이면 0.01이다.
+       - 0은 바닥을 끄므로 쓰지 않는다. 바닥이 0.8에 가까울수록 가볍게 쥔 차지는 쉽게 끊긴다.
+       - `pinchRelativeRelease` 0.15도 r 0.78(2.5 cm)까지 1.8 cm 탭이 모두 나갔다. 다만 놓기와 다시 누르기 모두 여유가 0.005뿐이다.
+     - **엄지를 붙인 탭:** r이 0.8보다 낮으면(2.4 cm보다 멀면) 기본값으로 모두 나갔다. 이때 `pinchReleaseFloorMargin`은 효과가 없다. 놓기 기준 0.8이 바닥보다 높기 때문이다.
+     - **r이 0.79 이상(엄지가 약 2.45 cm보다 가깝다):** 바닥으로는 여유가 남지 않는다. 0.8 이상이면 쉬는 엄지 자체가 누르기로 읽힌다. 손을 완전히 폈다가 가리키는 자세로 돌아오면 한 발이 나가고 쥔 채로 남는다. `pinchRelativeRelease`와 `pinchReleaseFloorMargin`으로는 고칠 수 없다.
+       - 시험해 볼 조합은 `pinchFireThreshold` 0.9 + `pinchRelativeRelease` 0.15다. 시뮬레이션(쉬는 엄지 2.4·2.3 cm)에서는 붙이는 탭이 모두 나가고 헛발이 없었다.
+       - 다만 누르기가 1.95 cm로 바뀐다. 1.8 cm 가벼운 탭은 거의 나가지 않는다. 다시 누르기에 0.95(약 1.7 cm)가 필요하기 때문이다. 런 기록을 남겨 두고 다음 라운드에서 맞춘다(6절 1번).
    - 인스펙터에서 바꾸고 `Arena_Main` 씬을 저장한 뒤 **`HandHero > Build Quest APK (release, keep scene edits)`**로 빌드한다. PowerShell이면 `-ExecuteMethod HandHero.EditorTools.BuildScript.BuildQuestApkReleaseKeepScenes`다(4절 첫머리).
    - 다른 빌드 메뉴와 `compile_check`의 `BuildQuestApkRelease`는 빌드 전에 씬을 코드로 다시 만든다. 그러면 이 값이 0.05로 돌아가서, 다시 해 봐도 똑같이 느껴진다(딥 리뷰 DR-4).
-   - 0.03을 계속 쓰기로 하면 `XRHandsInputSource.cs`의 기본값(`pinchReleaseFloorMargin = 0.05f`)을 바꾸고 씬을 다시 만든다.
+   - 고른 값을 계속 쓰기로 하면 `XRHandsInputSource.cs`의 기본값(예: `pinchReleaseFloorMargin = 0.05f`)을 바꾸고 씬을 다시 만든다.
 6. CURSOR로도 한 판 쏴 본다. CURSOR의 검지 방아쇠는 바뀌지 않았다.
 
 **B. 데모 모드와 녹화 (3절 가이드와 같이)**
@@ -168,6 +182,17 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
     - 설치 뒤 `dumpsys`의 `versionName`이 APK 파일 이름의 도장(예: `20261010_1042_release`)과 같아야 한다.
     - RUN 한 판 뒤 `run_log.jsonl` 마지막 줄의 `"build"`와 `perf_log.txt` 머리줄의 `app`도 같은 값이어야 한다.
     - Unity 에디터에서 `Arena_Main`의 값 하나를 바꿔 저장하고 `HandHero > Build Quest APK (release)`를 누른다. "scene edits will be reset" 창이 떠야 한다. Cancel을 누르면 빌드하지 않는다. 시험한 값은 되돌린다.
+32. 메뉴 핀치가 손이 잠깐 끊긴 뒤 두 번 눌리지 않는지 본다(딥 리뷰 DR-8).
+    - 일시정지 > RESET PROGRESS를 가리키고 한 번 핀치한다. 쥔 채로 오른손을 잠깐 시야 밖으로 뺐다가 다시 넣는다.
+    - 버튼이 `CONFIRM RESET`으로 바뀌기만 하고, 3초 뒤 `RESET PROGRESS`로 돌아와야 한다. `PROGRESS RESET`이 뜨면(진행이 지워지면) 안 된다.
+    - 지워진 진행은 되살릴 수 없다. 지워져도 괜찮은 상태에서 시험한다.
+    - 상점 REROLL도 같은 방법으로 한 번 핀치에 한 번만 바뀌고 한 번만 값을 치르는지 본다.
+    - 평소처럼 가리키고 핀치하는 메뉴 선택이 느려지거나 씹히지 않는지 본다.
+33. 영웅을 끄는 왼손 주먹이 잠깐 끊겨도 끌기가 이어지는지 본다(딥 리뷰 DR-10).
+    - 주먹으로 영웅을 빠르게 끌면서 왼손을 잠깐 다른 손 뒤로 가리거나 시야 끝에 댄다. 영웅이 멈칫하거나 덜 가지 않아야 한다.
+    - 손을 1초 넘게 시야 밖에 두면 예전처럼 놓고 미끄러지듯 활공해야 한다. 0.25초 동안은 마지막 목표점으로 가다가 놓는다.
+    - `perf_log`의 `HAND_LOST hand=L` 줄이 싸움 중에 나온 때와 끌기 느낌을 같이 본다. 4차 기록에는 0.25초보다 짧은 끊김이 16번 있었다.
+    - 거슬리면 씬 `XRHandsInputSource`의 `clutchLostGraceTime`을 바꾼다(0 = 예전, 4.1의 60번).
 
 ## 3. 녹화 가이드 (T4, 원본 `AUTO/RECORDING_GUIDE.md`)
 
@@ -265,13 +290,13 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
   - 이 PC에서 씬을 만든 기록과 비교한다. 그래서 git으로 다른 커밋을 받은 뒤에도 "EDITED"로 나올 수 있다.
 - 에디터 Play(Link)는 인스펙터 값을 그대로 쓴다.
 
-### 4.1 대신 내린 결정 (모두 되돌릴 수 있음, 자세한 내용은 `QUESTIONS_FOR_HYUN.md` 1–57번)
+### 4.1 대신 내린 결정 (모두 되돌릴 수 있음, 자세한 내용은 `QUESTIONS_FOR_HYUN.md` 1–61번)
 
 | # | 결정 | 되돌리려면 |
 |---|---|---|
 | 1 | 누르기는 강도 0.8 그대로다. Meta 플래그는 놓기에만 쓴다. | `PinchTrigger.Step`의 누르기 조건에 `MetaPinching` 상승 에지를 넣는다. |
 | 2 | ASSIST 누르기·놓기는 부드럽게 하기 전 강도(`RawPinchStrength`)를 쓴다. 누르기가 1–2프레임 빨라진다. 메뉴 포인터와 손목 메뉴는 그대로다. | `XRHandsInputSource.Sample()`에서 `Strength = aimHand.PinchStrength` |
-| 3, 51 | Meta 플래그로 놓으려면 이번 누름에서 플래그가 한 번 켜진 뒤 2프레임 꺼져야 하고, 강도도 최고값보다 0.05 낮아야 한다. | `metaPinchReleaseFrames` = 0(Meta 끔), `metaPinchReleaseDrop` = 0(플래그만으로 놓음) |
+| 3, 51 | Meta 플래그로 놓으려면 이번 누름에서 플래그가 한 번 켜진 뒤 2프레임 꺼져야 하고, 강도도 최고값보다 0.05 낮아야 한다(2프레임 연속, 58번). | `metaPinchReleaseFrames` = 0(Meta 끔), `metaPinchReleaseDrop` = 0(플래그만으로 놓음) |
 | 4, 48 | 놓인 뒤 다시 누르려면 가장 낮았던 값 + 0.2가 필요하고, 상한은 0.85다. 가벼운 핀치도 0.75 바닥 아래에서 놓인다. | `pinchRelativeRelease`, `pinchRearmMargin`, `pinchReleaseFloorMargin` |
 | 5 | 시스템 제스처는 `PinchTrigger` 안에서 추적 끊김처럼 다룬다. 쥔 차지는 취소되고, 다시 열어야 쏠 수 있다. | git에서 `XRHandsInputSource`의 예전 게이트 체인을 되살린다. |
 | 6–7 | 런 기록에 `min_strength`, `release_strength`, `release_by`, `peak_strength`, `meta_seen`을 넣었다. 라벨은 meta → absolute → relative 순으로 붙인다. | `RunRecordJson.ToJson`, `PinchTrigger.ReleaseRule` |
@@ -304,6 +329,10 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | 47 | 디버그 키 `G` = 데모 시작. 데모 중에는 퀵 매치 봇을 숨긴다. 잡는 손은 왼손으로 둔다. | `GhostHands`·`GestureCaptions`의 `Clutch Is Left` 등 |
 | 56 | 딥 리뷰 DR-4: 보통 APK 빌드는 그대로 씬을 다시 만든다(씬이 늘 코드와 같다). 인스펙터 값을 쓰는 빌드 `…KeepScenes`와 `Check Scene Edits`를 더했다. 저장된 씬이 빌더가 쓴 것과 다르면 메뉴는 묻고, 배치 빌드는 NOTE를 남긴다. | 새 빌드를 쓰지 않으면 예전과 같다. 묻는 창은 `BuildScript.PrepareScenes`, 기록은 `Library/HandHero/SceneBuildFingerprints.txt`다. |
 | 57 | 딥 리뷰 DR-7: APK 버전 이름에 빌드 도장(`9.2.0+날짜_시각_종류`)을 빌드하는 동안만 단다. 런 기록에 `build`를 넣었다. `run_summary.py`는 가장 최근 빌드만 요약한다. | 도장: `BuildScript.BuildQuestApk`의 `bundleVersion` 두 줄. 요약: `--all` |
+| 58 | 딥 리뷰 DR-6: Meta 플래그로 놓을 때 강도 하락(0.05)도 2프레임 연속이어야 한다(`pinchConfirmFrames`). 플래그가 꺼진 동안 튄 한 프레임으로 차지가 끊기지 않는다. 진짜로 놓을 때는 강도 규칙과 같은 2프레임이다. | `PinchTrigger.ReleaseRule`의 `_metaDropFrames >= confirm`을 `_metaDropFrames >= 1`로 |
+| 59 | 딥 리뷰 DR-8: 메뉴 포인터는 오른손 추적이 끊기면, 손이 돌아온 뒤 한 번 열어야 다시 누를 수 있다. 패널이 뜰 때와 같은 규칙이다. 판정은 Core `MenuPinchPress`로 옮겼다. | `MenuPinchPress.Step`의 `!tracked` 분기에서 `RequireReopen()`을 `_gate.Reset()`으로 |
+| 60 | 딥 리뷰 DR-10: 잡은 클러치는 왼손 추적이 0.25초까지 끊겨도 유지된다(그동안 끌기 0). 주먹을 쥔 채 돌아오면 같은 잡기로 이어지고, 손이 있는 자리에서 기준을 다시 잡는다(점프 없음). 더 오래 끊기면 예전처럼 놓고 활공한다. CURSOR 조준 끌기는 그대로다. | 씬 `XRHandsInputSource` > `clutchLostGraceTime` = 0 |
+| 61 | 딥 리뷰 DR-9: 2절 A5의 조정 안내를 고쳤다. `run_summary.py`가 1초 넘는 쥐기를 8개까지 peak / lowest while held와 함께 적는다. 다시 누르기 규칙과 바닥은 바꾸지 않았다(기기 데이터가 먼저다). | 요약 줄: `run_summary.py`의 `LONG_HOLD_LIST` |
 
 ### 4.2 바뀐 값과 되돌리는 법
 
@@ -331,6 +360,10 @@ python AUTO\tools\run_summary.py .\run_log.jsonl
 | `run_summary.py` 기본 범위(딥 리뷰 DR-7) | 파일의 모든 런 → 가장 최근 빌드의 런 | `select_runs` | `--all` |
 | `run_summary.py` 핀치 요약과 묶음(딥 리뷰 DR-5) | 모드별 첫 줄이 파일의 모든 런 → 진단값이 있는 런(5차 이후)만, 예전 런은 `older APKs` 줄. 도장 없는 런 한 묶음 → `(round 5)`·`(rounds 3-4)` 두 묶음. 새 옵션 `--since` | `pinch_holds_by_mode`, `build_of`, `runs_since`, 테스트 `AUTO/tools/test_run_summary.py` | `--build none`은 예전처럼 도장 없는 런을 모두 고른다. |
 | APK 빌드 메뉴(딥 리뷰 DR-4) | 4개 → 6개(`keep scene edits` 2개), `Check Scene Edits` | `BuildScript` | 4.1의 56번 |
+| Meta 놓기의 강도 하락(딥 리뷰 DR-6) | 그 프레임만 → 2프레임 연속 | `PinchTrigger.ReleaseRule` | 4.1의 58번 |
+| 메뉴 핀치, 추적이 끊긴 뒤(딥 리뷰 DR-8) | 핀치만 떨어뜨림 → 손이 돌아오면 한 번 열어야 누름 | `MenuPinchPress`(`HandMenuPointer`가 씀) | 4.1의 59번 |
+| 클러치 추적 끊김 유예(딥 리뷰 DR-10) | 0초 → 0.25초 | 씬 `XRHandsInputSource.clutchLostGraceTime`, `HandClutchSampler` | 0 |
+| `run_summary.py` 긴 쥐기 줄(딥 리뷰 DR-9) | 없음 → 1초 넘는 쥐기를 8개까지 peak / lowest while held와 함께 | `pinch_holds_by_mode` | — |
 
 ProjectSettings, 매니페스트, 패키지, XR·렌더 설정은 바뀌지 않았다(APK 버전 이름의 도장은 빌드하는 동안만 단다, DR-7). 퀵 매치와 튜토리얼의 수치와 배치도 그대로다. 4차 게임 수치(`HordeTime`, 보스 체력, `EnemyDamageMult`, 원형 공격 숫자)도 그대로다.
 
@@ -383,6 +416,7 @@ Critical은 0건이다.
 1. **기기 데이터로 ASSIST 감각과 밸런스를 맞춘다.**
    - 먼저 진단 Minor 2건을 고친다. `lost`가 기록되게 하고(T0-R1-3 외), `release_by` 라벨이 "예전 규칙도 놓았을까"에 답하게 한다(T0-R2-5). 그래야 `run_summary.py` 숫자를 믿을 수 있다.
    - 그 숫자로 `pinchReleaseFloorMargin`·`pinchRelativeRelease`를 맞춘다. Meta 신호가 오면(`meta_seen`) 그쪽 비중을 높인다.
+   - 지금 기준은 쉬는 엄지 2.8 cm 하나를 가정해서 맞췄다. 기기에서 잰 값이 아니다. 다시 누르기 기준이 바닥에서 갑자기 바뀌는 것을 잇고, 플레이어마다 쉬는 엄지를 재서 바닥을 정하는 안을 검토한다(딥 리뷰 DR-9, 이번에는 안내만 고쳤다).
    - 적 움직임 숫자(Gunner 좌우 폭, Lancer 돌진 거리)와 원형별 피해를 다시 맞춘다. Gunner 예고선 선회(T2-R2-2)와 Lancer 미끄러짐(T2-R1-2)도 같이 본다.
 2. **아트 방향을 정한다(아트 패스).**
    - 테마 3종을 실제 아트(재질, 하늘, 조각 모양)로 바꾼다. 테마가 바뀔 때는 페이드를 넣는다(F3-3).

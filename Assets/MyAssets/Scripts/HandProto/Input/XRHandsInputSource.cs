@@ -24,6 +24,8 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     [SerializeField] private float grabThreshold = 0.7f;
     [Tooltip("Fist strength below this releases it (lower than grab = no flicker)")]
     [SerializeField] private float releaseThreshold = 0.45f;
+    [Tooltip("Deep review DR-10: seconds a held clutch survives while the clutch hand is untracked (zero drag meanwhile; back with the fist closed = same grab, re-anchored where the hand is). A 1-2 frame dropout used to release and regrab from the hero, losing the target's lead. A longer loss still opens the clutch (glide). 0 = open on the first untracked frame")]
+    [SerializeField] private float clutchLostGraceTime = 0.25f;
 
     [Header("Firing (pinch) thresholds with hysteresis")]
     [Tooltip("Pinch strength (unsmoothed since round 5) at or above this fires once")]
@@ -40,7 +42,7 @@ public class XRHandsInputSource : HandInputSourceBehaviour
     [SerializeField] private int pinchConfirmFrames = 2;
     [Tooltip("Round 5 (D1): a pinch also ends when Meta's own index-pinch flag (Hand Tracking Aim) is off for this many frames after it was on in this press. 0 = ignore the Meta flag")]
     [SerializeField] private int metaPinchReleaseFrames = 2;
-    [Tooltip("Round 5 review: Meta's flag ends a pinch only on a frame where the strength is also at least this far below the press's peak (the thumb moved), so a flag flicker with the fingers still closed keeps the charge. 0 = the flag alone")]
+    [Tooltip("Round 5 review: Meta's flag ends a pinch only once the strength is also at least this far below the press's peak (the thumb moved) on pinchConfirmFrames frames in a row (deep review DR-6), so a flag flicker with the fingers still closed, plus one bad tracking frame, keeps the charge. 0 = the flag alone")]
     [SerializeField] private float metaPinchReleaseDrop = 0.05f;
 
     [Header("CURSOR trigger (index finger) with hysteresis")]
@@ -105,9 +107,10 @@ public class XRHandsInputSource : HandInputSourceBehaviour
         data.ClutchHandLost = !clutchHand.IsTracked;
 
         // Tracking loss opens the clutch: the character glides instead of
-        // teleporting when the hand comes back somewhere else.
+        // teleporting when the hand comes back somewhere else. A short dropout
+        // (clutchLostGraceTime, DR-10) keeps it, so the drag's lead is not lost.
         data.ClutchHeld = _clutch.Step(clutchHand.IsTracked, clutchHand.FistStrength, clutchHand.TrackingPalmPosition,
-            grabThreshold, releaseThreshold, out data.ClutchDelta);
+            grabThreshold, releaseThreshold, clutchLostGraceTime, Time.unscaledDeltaTime, out data.ClutchDelta);
 
         // Aim-hand gun grip (middle/ring/little) = CURSOR aim drag, with the
         // puppeteer's fist thresholds; the index stays free as the trigger.

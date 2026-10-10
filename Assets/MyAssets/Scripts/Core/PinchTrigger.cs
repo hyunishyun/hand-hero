@@ -75,9 +75,10 @@ namespace HandHero.Core
         // Meta's flag off for this many steps (after it was on in this press)
         // releases. 0 = the Meta flag is ignored.
         public int MetaReleaseFrames;
-        // ...and only on a sample at least this far below the press's peak (the
-        // thumb moved), so a flag flicker while the fingers stay closed does not
-        // end the hold. 0 = the flag alone.
+        // ...and only once the strength is at least this far below the press's peak
+        // (the thumb moved) on ConfirmFrames samples in a row, so a flag flicker
+        // while the fingers stay closed, plus one tracking outlier, does not end the
+        // hold (deep review DR-6). 0 = the flag alone.
         public float MetaReleaseDrop;
 
         public static PinchReleaseParams Default => new PinchReleaseParams
@@ -98,7 +99,7 @@ namespace HandHero.Core
     // Press: strength rises to FireThreshold (on the sample it gets there: no added
     // shot latency). Release (round 5, D1), whichever comes first:
     // - Meta's index-pinch flag off for MetaReleaseFrames steps after it was on in
-    //   this press, on a sample MetaReleaseDrop below the press's peak (a flag
+    //   this press, with the strength MetaReleaseDrop below the press's peak (a flag
     //   flicker while the fingers stay closed is not a release);
     // - strength at or below ResetThreshold;
     // - strength at or below the press's release level: RelativeRelease below its
@@ -107,9 +108,10 @@ namespace HandHero.Core
     //   above the reset, so a pinch used to stay "held" for seconds and read as a
     //   charge; the floor makes a light press (peak 0.8-0.9) end there too (review
     //   T0-R1-1/R2-1). It does not count while Meta's flag is on (D1: the fallback).
-    // The strength rules need ConfirmFrames consecutive samples (review T0-R1-2/R2-3):
-    // one tracking outlier inside a hold neither ends it nor, with the next sample
-    // back at the peak, fires a second shot.
+    // The strength rules, and the Meta rule's drop, need ConfirmFrames consecutive
+    // samples (review T0-R1-2/R2-3, deep review DR-6): one tracking outlier inside a
+    // hold neither ends it nor, with the next sample back at the peak, fires a
+    // second shot.
     //
     // A release above the reset re-arms relatively: the next press must rise
     // RelativeRelease above the lowest settled strength since (the highest of
@@ -149,6 +151,8 @@ namespace HandHero.Core
         private float _last;
         private bool _metaSeen;
         private int _metaOffFrames;
+        // Consecutive samples MetaReleaseDrop below the peak (DR-6).
+        private int _metaDropFrames;
         // Consecutive samples at or below the release level / the reset.
         private int _lowFrames;
         private int _resetFrames;
@@ -218,6 +222,7 @@ namespace HandHero.Core
             _last = v;
             _metaSeen = sample.HasMeta && sample.MetaPinching;
             _metaOffFrames = 0;
+            _metaDropFrames = 0;
             _lowFrames = 0;
             _resetFrames = 0;
             state.FireTriggered = true;
@@ -308,9 +313,12 @@ namespace HandHero.Core
 
             _resetFrames = v <= p.ResetThreshold ? _resetFrames + 1 : 0;
             _lowFrames = p.RelativeRelease > 0f && !metaPinching && v <= ReleaseLevel(p) ? _lowFrames + 1 : 0;
+            // Confirmed like the strength rules (DR-6): with the flag off and the
+            // fingers still closed, one outlier sample used to end the hold.
+            _metaDropFrames = v <= _peak - p.MetaReleaseDrop ? _metaDropFrames + 1 : 0;
 
             if (p.MetaReleaseFrames > 0 && _metaSeen && _metaOffFrames >= p.MetaReleaseFrames
-                && (p.MetaReleaseDrop <= 0f || v <= _peak - p.MetaReleaseDrop))
+                && (p.MetaReleaseDrop <= 0f || _metaDropFrames >= confirm))
                 return PinchReleaseBy.Meta;
             if (_resetFrames >= confirm) return PinchReleaseBy.Absolute;
             if (_lowFrames >= confirm) return PinchReleaseBy.Relative;

@@ -76,6 +76,7 @@ namespace HandHero.Tests
             public int ChargeStarts;
             public int ChargeShots;
             public float FirstChargeHoldSeconds;
+            public PinchReleaseBy LastReleaseBy;
         }
 
         // The pinch rule into the charge rule and model, as PointingBeamController uses it.
@@ -91,6 +92,27 @@ namespace HandHero.Tests
                 ChargeStep step = charge.Step(ps.Held, Dt, ChargeParams.Default);
                 held = ps.Held ? held + Dt : 0f;
                 if (step.Charging && result.FirstChargeHoldSeconds < 0f) result.FirstChargeHoldSeconds = held;
+                if (step.HoldEnded)
+                {
+                    result.Holds++;
+                    if (step.ChargeStarted) result.ChargeStarts++;
+                    if (step.Released) result.ChargeShots++;
+                }
+            }
+            return result;
+        }
+
+        // Chain with Meta's aim state valid on every frame: (strength, Meta's index-pinch flag).
+        private ChainResult MetaChain(List<(float strength, bool flag)> frames)
+        {
+            var charge = new ChargeShotModel();
+            var result = new ChainResult();
+            foreach ((float strength, bool flag) in frames)
+            {
+                PinchState ps = Step(strength, hasMeta: true, metaPinching: flag);
+                if (ps.FireTriggered) result.Fires++;
+                if (ps.Release.Ended) result.LastReleaseBy = ps.Release.By;
+                ChargeStep step = charge.Step(ps.Held, Dt, ChargeParams.Default);
                 if (step.HoldEnded)
                 {
                     result.Holds++;
@@ -657,6 +679,72 @@ namespace HandHero.Tests
                 Assert.IsTrue(s.Held, $"flag back on, frame {i}");
                 Assert.IsFalse(s.FireTriggered, $"flag back on, frame {i}");
             }
+        }
+
+        // Deep review DR-6: the Meta rule tested only the current sample against its
+        // drop. Once the flag had been off for 2 frames with the fingers still closed
+        // (Q51: it needs Meta strength exactly 1.0), one 3 cm tracking outlier ended
+        // the hold: the charge was thrown away (0.44 s held, not ready) and the
+        // still-closed pinch stayed dead (re-arm 1.2). The strength rules need 2
+        // samples (T0-R2-3); the Meta drop now does too.
+        [TestCase(true)]
+        [TestCase(false)]
+        public void MetaFlagOff_FingersClosed_OneFrame3cmSpike_OneShotOneChargeShot(bool flagBackOn)
+        {
+            var frames = new List<(float, bool)>();
+            for (int i = 0; i < 6; i++) frames.Add((Cm(RestCm), false));
+            frames.Add((Cm(1.2f), true));
+            for (int i = 0; i < 30; i++) frames.Add((Cm(PinchCm), true));
+            frames.Add((Cm(PinchCm), false));
+            frames.Add((Cm(3f), false)); // second flag-off frame: one outlier sample
+            for (int i = 0; i < 40; i++) frames.Add((Cm(PinchCm), flagBackOn));
+            frames.Add((Cm(1.6f), false));
+            frames.Add((Cm(2.2f), false));
+            frames.Add((Cm(RestCm), false));
+            frames.Add((Cm(RestCm), false));
+
+            ChainResult r = MetaChain(frames);
+            Assert.AreEqual(1, r.Fires);
+            Assert.AreEqual(1, r.Holds, "the outlier did not end the hold");
+            Assert.AreEqual(1, r.ChargeStarts);
+            Assert.AreEqual(1, r.ChargeShots, "the charge fired on the real release");
+            Assert.AreEqual(PinchReleaseBy.Meta, r.LastReleaseBy, "the real opening is still Meta's release");
+        }
+
+        // DR-6: a light pinch (thumb to 1.8 cm, 0.93) under a flag flicker ended on
+        // one sample 0.05 lower (about 2 mm of jitter).
+        [Test]
+        public void LightPinch_MetaFlagOff_OneLowerSample_KeepsTheHold()
+        {
+            Assert.IsTrue(Step(Cm(1.8f), hasMeta: true, metaPinching: true).FireTriggered);
+            for (int i = 0; i < 30; i++) Step(Cm(1.8f), hasMeta: true, metaPinching: true);
+            for (int i = 0; i < 4; i++)
+                Assert.IsTrue(Step(Cm(1.8f), hasMeta: true, metaPinching: false).Held, $"flag off frame {i}");
+
+            PinchState jitter = Step(0.88f, hasMeta: true, metaPinching: false);
+            Assert.IsTrue(jitter.Held, "one sample 0.05 under the peak is not a release");
+            Assert.IsFalse(jitter.Release.Ended);
+            for (int i = 0; i < 10; i++)
+            {
+                PinchState s = Step(Cm(1.8f), hasMeta: true, metaPinching: false);
+                Assert.IsTrue(s.Held, $"back at the peak, frame {i}");
+                Assert.IsFalse(s.FireTriggered, $"back at the peak, frame {i}");
+            }
+        }
+
+        // DR-6: the confirm does not slow a real Meta release beyond the strength
+        // rules' 2 samples: the thumb opens to 1.8 cm and stays there.
+        [Test]
+        public void MetaFlagOff_TwoSamplesDown_Releases()
+        {
+            Assert.IsTrue(Step(Cm(PinchCm), hasMeta: true, metaPinching: true).FireTriggered);
+            for (int i = 0; i < 10; i++) Step(Cm(PinchCm), hasMeta: true, metaPinching: true);
+            for (int i = 0; i < 3; i++) Step(Cm(PinchCm), hasMeta: true, metaPinching: false);
+
+            Assert.IsTrue(Step(Cm(1.8f), hasMeta: true, metaPinching: false).Held, "one sample down");
+            PinchState s = Step(Cm(1.8f), hasMeta: true, metaPinching: false);
+            Assert.IsFalse(s.Held, "two samples down");
+            Assert.AreEqual(PinchReleaseBy.Meta, s.Release.By);
         }
 
         // A light tap from the resting pointing pose: the thumb only closes to `closestCm`.
