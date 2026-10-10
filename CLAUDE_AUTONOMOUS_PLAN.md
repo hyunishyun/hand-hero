@@ -1,228 +1,184 @@
-# CLAUDE_AUTONOMOUS_PLAN — Round 4: first-run hitch, balance, leftover fixes, meta progression A, enemy and terrain variety (first slice), MR room-scan spike
+# CLAUDE_AUTONOMOUS_PLAN — Round 5: ASSIST pinch release, minors, enemy movement, terrain stage 2, demo mode
 
 ## 한국어 요약
 
-- **목표:** 3차 기기 테스트 결과를 반영해 게임 자체를 다듬는다.
-  - 독립형에서는 멈춤이 없었다. 다만 RUN 시작 직후 약 30초 동안 프레임이 조금씩 빠졌는데, 이걸 없앤다.
-  - 런이 쉽고 길었다(9분 48초, 받은 피해 166). 밸런스를 맞춘다.
-  - 리뷰에서 남은 Minor 4건을 고친다.
-  - 메타 진행 A안(시작 유물 + 개인 최고 기록)을 **심사용 기능 없이**, 좋은 게임의 기본기로 구현한다.
-  - 적 다양성(생김새·공격 방식)과 지형 다양성(지금 지형의 위치 무작위)을 1단계로 구현한다. MR 테이블이 내 방을 스캔해 지형을 만드는 기능은 **가능성 확인용 프로브(스파이크)**로 만든다.
-- **근거:** `AUTO/device_logs/2026-10-09/`
-  - `perf_log.txt`: 게임플레이 중 50 ms 넘는 프레임 0개. 메뉴에서만 138·395·167 ms.
-  - `freeze_session.txt`: VrApi 기준으로 앱이 빠뜨린 프레임이 앱 시작과 RUN 시작 직후 30초에 몰려 있다.
-  - `run_log.jsonl`: 승리, 587.9초, Horde 45초 ×3, 보스 102초.
+- **목표:**
+  - ASSIST 모드에서 핀치를 놓아도 "아직 쥐고 있다"고 읽는 문제를 고친다. 이 문제 때문에 차지 오인이 생기고, 연사가 끊긴다.
+  - 남은 Minor 13건을 정리한다.
+  - 적과 지형의 2단계를 만든다.
+  - 링크드인 영상을 찍을 데모 모드를 넣는다.
+- **근거:** `AUTO/device_logs/2026-10-09-r4/run_log.jsonl`. 핀치를 쥔 시간의 중앙값이 CURSOR는 0.125초인데, ASSIST는 0.19–7.9초였고 최대 22초였다. 3차 APK에서도 똑같아서 4차에서 생긴 회귀가 아니다. 가리키는 자세에서는 엄지와 검지 사이가 고정 기준(약 3.3 cm) 밖으로 거의 벗어나지 않는다.
 - **바뀌는 것(파일):**
-  - 첫 런 끊김: 풀·이펙트 미리 만들기(로딩 때), GPU 워밍업, `PerfSpikeLogger` 작은 끊김 카운터
-  - 밸런스: `RunParams`(Horde 시간, 보스 체력, 런 봇 데미지 배수)
-  - Minor 4건: 시스템 제스처 때 차지 취소, `PerfSpikeLogger`, `PinchHoldStats`, 봇 `Random`
-  - 적 4종(`BotArchetype`, `BotBrain` 공격부, RunBot 모양), 지형 무작위 배치(`ArenaLayout`, `ArenaLayoutApplier`), `RoomScanProbe`(MR TABLE 전용) + OpenXR 평면·바운딩 박스 기능 설정
-  - 메타 진행: Core `MetaProgress` + `IKeyValueStore`(새 파일), `RunStateMachine`(StartRelic 단계), `RunDirector`, `RunChoiceMenu`, `MatchHud`·메뉴·끝 화면·일시정지 패널, `HandHeroSceneBuilder`
+  - 핀치 판정: `PinchTrigger`(또는 새 Core 규칙), `HandGestureTracker`(원시·Meta 핀치 값 노출), `XRHandsInputSource`, `RunRecord`(핀치 진단 값)
+  - 적 움직임: `BotBrain`·`BotArchetype`
+  - 지형: `ArenaLayout`·`ArenaLayoutApplier`·`HandHeroSceneBuilder`(새 조각·테마)
+  - 데모: 새 `DemoDirector`·`GhostHands`·`GestureCaptions`, 메뉴
+  - Minor 13건에 해당하는 파일들
 - **결정:**
-  - **D1** 첫 런 끊김 제거
-    - RunBot 풀과 이펙트 풀을 런 시작 때가 아니라 **씬 로드 때** 미리 만든다.
-    - 로드 직후 봇·빔·피격·처치 폭발·비네트를 몇 프레임 실제로 그려서 셰이더와 파이프라인을 미리 준비한다(GPU 워밍업).
-    - 로거는 50 ms 스파이크와 별도로 25 ms 넘는 "작은 끊김"도 센다.
-  - **D2** 밸런스(퀵 매치는 그대로)
-    - Horde 45 → 30초
-    - 보스 체력 배수 6 → 5
-    - 런 봇 데미지 ×1.15
-  - **D3** 리뷰에서 남은 Minor 4건
-    - 시스템 제스처가 시작되면 차지를 쏘지 않고 취소한다.
-    - 로거의 머리 장치 조회를 0.25초 간격으로 줄인다.
-    - 핀치 기록은 런 중에만 쌓는다.
-    - 봇 `Random`을 스폰마다 새로 만들지 않고 재사용한다.
-  - **D4** 메타 진행 A
-    - 시작 유물 해금 조건: 섬 5 도달 → Second Wind, 첫 승리 → Big Chests, 다른 조준 모드로 승리 → Dividends
-    - 섬 1 전에 시작 유물 상자(해금된 것 + NONE)
-    - 조준 모드별 개인 최고 기록(최고 섬, 최단 승리 시간): 메뉴에 한 줄, 끝 화면에 NEW BEST·UNLOCKED
-    - Greed는 넣지 않는다.
-  - **D5** 심사 현장용 기능은 넣지 않는다(쇼케이스 해금 토글, 심사위원마다 초기화하는 흐름 없음). 진행 초기화는 일반 게임처럼 일시정지 메뉴의 RESET PROGRESS(확인 한 번 더)로만 한다.
-  - **D7** 적 다양성 1단계: **생김새와 공격 방식만 다른** 적 4종을 만든다(이동·체력 규칙은 같다).
-    - Striker: 지금 봇 그대로
-    - Sniper: 예고가 길고, 느리게 쏘지만 아프다
-    - Gunner: 3연발
-    - Lancer: 넓은 차지샷
-    - 섬이 깊어질수록 종류가 늘고, 보스는 Gunner와 Lancer 패턴을 번갈아 쓴다.
-    - 모양은 단순 도형, 색은 프로퍼티 블록, 발사음은 합성음을 변형해서 쓴다.
-  - **D8** 지형 다양성 1단계: 지금 아레나와 기둥은 그대로 두고 **위치만** 섬마다 시드로 무작위 배치한다(봇 스폰 위치도).
-    - 제약: 경계 안, 기둥끼리 거리, 시작 위치와 스폰 주변은 비워 두기, 시작 시야 하나는 열어 두기
-    - 퀵 매치와 튜토리얼은 지금 배치 그대로
-  - **D9** MR 방 스캔 스파이크
-    - MR TABLE 모드에서만 Meta OpenXR의 평면·바운딩 박스(·메시)를 켜서, 무엇이 얼마나 빨리 잡히는지 `perf_log`에 기록하고 디버그 와이어프레임으로 보여 준다.
-    - 이 작업에 한해 해당 OpenXR 기능과 scene 권한 설정 변경을 허용한다. 새 패키지는 넣지 않는다.
-    - 권한을 거부하면 지금과 똑같이 동작한다.
-    - 결과는 지형 설계 문서의 "방 기반 지형" 절에 넣는다.
-  - **D6** 브랜치 `auto/2026-10-09-run`(`perf/freeze-hunt` `a3b1dd1`에서), 커밋 `[auto] S<n>: …`, push 금지.
+  - **D1** 핀치 놓기 판정
+    - 1순위: Meta Hand Tracking Aim의 검지 핀치 신호를 쓴다(플랫폼이 보정한 값).
+    - 보조: 쥔 동안 가장 강했던 값에서 일정량 이상 떨어지면 놓은 것으로 본다(상대 기준).
+    - 핀치를 누르는 판정은 지금처럼 0.8이다. 차지 대기 0.25초는 그대로 둔다.
+  - **D2** 핀치마다 최소 거리, 놓은 순간의 값, 어느 판정이 놓았는지를 런 기록에 남긴다(기기에서 다시 맞추기 위해).
+  - **D3** Minor 13건을 모두 고친다.
+    - Gunner 색은 조준 표시 주황과 구별되게 바꾼다.
+    - 지느러미는 결정대로 빨간 계열을 유지한다.
+    - 런 중에 RESET을 누르면 그 런은 메타에 기록하지 않는다.
+    - STARTING RELIC 화면에 머문 시간은 런 시간에서 뺀다.
+  - **D4** 적 2단계: 움직임 성격만 추가하고, 이동 규칙(비행 모델·속도 상한)은 플레이어와 같다.
+    - Sniper는 멀리 머문다.
+    - Lancer는 돌진한 뒤 멈춰서 조준한다.
+    - Gunner는 가까이서 좌우로 움직인다.
+    - Striker는 지금 그대로다.
+  - **D5** 지형 2단계
+    - 새 조각: 낮은 벽, 떠 있는 발판, 가는 기둥
+    - 섬 테마 3종: 바닥·벽 색과 조명 색만 바꾼다. 실제 아트는 아트 패스 때 한다.
+    - 퀵 매치와 튜토리얼은 지금 그대로다.
+  - **D6** 데모 모드
+    - 메인 메뉴에 DEMO 버튼을 둔다.
+    - 죽지 않는 연습장: 느린 Striker 1–2마리와 과녁이 계속 다시 나온다. 타이머와 점수 HUD는 없다.
+    - 반투명 손(관절 점과 뼈 선)을 실제 손 위치에 그린다.
+    - 동작 캡션(GRAB / PINCH = FIRE / HOLD = CHARGE / PUSH = SHOCKWAVE)이 동작이 감지될 때 손 옆에 잠깐 뜬다.
+    - 손목 일시정지로 메뉴에 돌아간다.
+    - 휴대폰 촬영·편집 가이드를 보고서에 쓴다.
+  - **D7** 실행: 이 데스크탑 채팅(학교 계정)에서 울트라코드 워크플로로 한다. 사용 한도에 걸리면 이 세션의 크론 감시가 초기화 뒤 자동으로 이어서 한다.
+  - **D8** 브랜치 `auto/2026-10-09-r5`(4차 `a8cd3c2` 위), 커밋 `[auto] T<n>: …`, push 금지.
 - **테스트·검증:**
-  - 순수 로직은 TDD: `MetaProgress`, StartRelic 단계, 차지 취소 규칙, 작은 끊김 카운터, 밸런스 값.
-  - 461개 테스트를 유지한다. 옛 밸런스 값을 고정해 둔 기존 테스트는 D2에 맞게 고치고 커밋에 적는다.
-  - 컴파일, 씬 재생성, APK 2종, 최종 리뷰.
+  - 핀치 판정은 기기 기록을 본뜬 입력 시퀀스로 TDD한다. 엄지가 2.8 cm에 머무는 경우, 빠른 탭, 1초 차지, Meta 신호 유무, 추적 끊김을 다룬다.
+  - 적 움직임과 지형 규칙도 TDD한다. Striker는 프레임 단위로 지금과 같아야 하고, 기존 601개 테스트는 유지한다.
+  - 컴파일, 씬 재생성, APK 2종, 단계별 리뷰와 최종 리뷰를 한다.
   - **헤드셋 확인은 없다.**
 - **기기에서 확인할 것:**
-  - RUN 시작 직후 30초가 부드러운지(VrApi Stale, `perf_log`의 작은 끊김 수)
-  - 런 시간 8–9분, 난이도 체감
-  - 시작 유물 상자, 최고 기록 줄, NEW BEST·UNLOCKED, RESET PROGRESS
-  - 3차에서 못 해 본 것: 부활, DEFEAT 화면
-  - MR TABLE에서 권한 허용 → 방의 평면·가구가 잡히는지(와이어프레임, `perf_log`). Quest의 공간 설정(Space Setup)을 먼저 해 둬야 한다.
+  - ASSIST로 30초 연사 → 핀치 수와 발사 수가 비슷하고, 차지샷은 의도한 것만 나오는지(`run_summary.py`의 오인률)
+  - 적 움직임이 원형마다 다르게 느껴지는지
+  - 새 지형 조각과 테마
+  - 데모 모드에서 손과 캡션이 녹화에 잘 보이는지
+  - MR TABLE 메뉴에서 10–20초 기다린 뒤 방 스캔 결과
 - **위험:**
-  - GPU 워밍업이 로딩을 조금 늘린다(목표 1초 이내).
-  - 밸런스 값은 런 한 판에서 나온 추정이다. 다음에 `run_summary.py`로 다시 잰다.
-  - Second Wind를 처음부터 가지고 시작하면 런이 쉬워질 수 있다. 기기에서 확인한다.
-  - MR 프로브는 기기 없이 확인할 수 없다. 권한·기능 설정이 MR 모드 시작을 깨뜨릴 위험이 있어서, 권한을 거부했을 때와 기능이 실패했을 때 모두 지금처럼 동작하게 만든다.
+  - Meta 핀치 신호가 이 펌웨어에서 오지 않을 수 있다. 그래서 보조 판정을 둔다.
+  - 손 그리기는 프레임 비용이 든다. 데모 모드에서만 켠다.
+  - 떠 있는 발판이 비행 경로를 막을 수 있다. 배치 규칙에 높이 여유를 넣는다.
 
 ---
 
-> Operating instructions for Claude Code while Hyun is away. Read this file top to bottom at the start of every session.
-> Sessions can end at any time (usage limits, crashes); `run_autonomous.ps1` starts a new one. **Memory lives only in files and git.**
+> Operating instructions for the build agents of round 5. Read this file top to bottom before every task.
+> Work can stop at any time (usage limits); a watchdog resumes it. **State lives only in files and git**: every task checks `AUTO/PROGRESS.md` first and returns at once if it is already DONE.
 >
-> Background (read once per session, skim later):
-> - `AUTO/device_logs/2026-10-09/` — Hyun's standalone device logs from round 3 (`perf_log.txt`, `run_log.jsonl`, `freeze_session.txt` = UTF-16 logcat with VrApi lines).
-> - `docs/superpowers/specs/2026-10-09-meta-progression-design.md` — implement approach **A** with the answers in section 4 below. Where the doc differs (showcase toggle, per-judge reset), section 4 wins.
-> - Round 3 plan and reports: `AUTO/archive/2026-10-09/` (`PERF_REPORT.md` section 1 lists the four leftover minors).
+> Background:
+> - `AUTO/device_logs/2026-10-09-r4/` — round-4 device logs (run_log.jsonl with `hold_s` / `hold_started` / `hold_charged` per pinch; perf_log.txt).
+> - `AUTO/archive/2026-10-09-r4/REPORT_FOR_HYUN.md` section 7 — the 13 leftover minors (IDs S7-1-1, S7-1-2, S8-1-2, S8-1-3, S8-2-1/F2-3/F4-2, F2-2, F1-2, F3-3, F3-4, F4-1, F4-3).
+> - Round-4 plan: `AUTO/archive/2026-10-09-r4/CLAUDE_AUTONOMOUS_PLAN.md` (S6 archetypes, S7 layout).
 >
-> Logs, reports and decision notes for Hyun are in Korean. Code, comments and commit messages are in English.
+> Reports and decision notes for Hyun are in Korean. Code, comments and commit messages are in English.
 
 ## 0. Facts
 
-- Unity **6000.6.4f1**. Branch **`auto/2026-10-09-run`** (from `perf/freeze-hunt` @ `a3b1dd1`). Remote `origin` exists; never push.
-- Round 3 device results (Hyun, 2026-10-09, standalone release APK, Quest 3, 72 Hz):
-  - No gameplay frame over 50 ms; frame ~14 ms, GPU 1–2 ms. Spikes only in Menu: 138 and 395 ms at app start, 167 ms right before RUN started (gc +2, heap 3.9 → 4.9 MB: the RunBot pool prewarm).
-  - VrApi (app pid 22378): stale-frame bursts at app start (Stale=41) and during the first ~30 s after RUN started (12:49:36–12:50:09, 7–37 stale per second); near zero afterwards. Those frames were under 50 ms, so the logger missed them.
-  - Run (CURSOR, tabletop): Victory, 587.9 s, damage taken 166 (easy), Boss 102 s, island 7 Arena 85 s, three Horde islands 45 s each.
-  - Confirmed on device: charge misfire fixed (ASSIST and CURSOR), sounds, hit feel, hitch recovery, wall drag, tracking-lost grey cue, no bot friendly fire, system-gesture pinch, colors, Quick Match, tutorial, label autosize, rapid trigger. Not tried yet: revive, DEFEAT screen.
-- The Quest Link editor freeze is treated as editor/Link-side and is out of scope.
-- Tests: 461 EditMode tests pass at the start. They must all stay green.
+- Unity **6000.6.4f1**. Branch **`auto/2026-10-09-r5`** (from `auto/2026-10-09-run` @ `a8cd3c2`). Remote `origin` exists; never push.
+- Device evidence (Hyun, 2026-10-09, Quest 3, standalone):
+  - Pinch hold seconds per run — CURSOR (12:49): median 0.125, 12 of 508 holds over 1 s. ASSIST (17:56, round-3 APK): 8 holds, median 7.9 s, max 22 s, 15 shots in 100 s. ASSIST (18:07, round-3 APK): 103 holds, 22 over 1 s, max 8 s. ASSIST (23:02, round-4 APK): 20 holds, median 0.94 s, 15 started a charge.
+  - So in ASSIST the release edge is missed: `HandGestureTracker` smooths `PinchStrength = InverseLerp(0.06, 0.015, thumb–index distance)` and `PinchTrigger` releases only below `pinchResetThreshold` 0.6 (≈ 3.3 cm). A pointing hand rests the thumb closer than that. Not a round-4 regression.
+  - Gameplay perf: no spike in fights with the round-4 APK; warmup 44 ms. Room scan: permission granted, plane + box subsystems started, the menu was left after 6 s (no results yet).
+- XR Hands 1.9 (`Library/PackageCache/com.unity.xr.hands@*`): `XRHandSubsystem.TryGetAimState(handedness, out XRHandAimState)`, `XRHandAimState.pinchStrengthIndex`, `MetaAimHandState(in aim).aimFlags` with `MetaAimFlags` (verify the exact `IndexPinching` member name in the package source before use). `HandGestureTracker` already reads `SystemGesture` this way.
+- Tests: 601 EditMode tests pass at the start. They must all stay green (update a test only where a decision deliberately changes behaviour; say which in the commit).
 
 ## 1. Mode
 
-**Unattended.** Never ask questions; nobody answers.
-- When a choice is needed, take the most reasonable default that fits section 4 and log it in `AUTO/QUESTIONS_FOR_HYUN.md` (task / question / choice / why / how to undo).
-- When stuck, log it in `AUTO/BLOCKERS.md` and move on. Don't spend more than 30 minutes on one problem.
+**Unattended.** Never ask questions. When a choice is needed, take the most reasonable default that fits section 4 and log it in `AUTO/QUESTIONS_FOR_HYUN.md` (task / question / choice / why / how to undo). When stuck, log it in `AUTO/BLOCKERS.md`, mark the task `BLOCKED(<why>)` and stop; don't spend more than 30 minutes on one problem.
 
-## 2. Session protocol (every session, in this order)
+## 2. Task protocol
 
-1. Read this file, then `AUTO/PROGRESS.md`, `AUTO/DECISIONS.md`, `AUTO/BLOCKERS.md`, and `git log --oneline -15`.
-2. If a task is `IN_PROGRESS`, the previous session was cut off. Run `git status`, then a compile check. If it is salvageable, finish it; otherwise `git stash push -m "abandoned-<task>"` and restart the task.
-3. Otherwise mark the first `TODO` task `IN_PROGRESS` and start it.
-4. When a task finishes: compile check → EditMode tests → commit `[auto] S<n>: <summary>` → mark it `DONE` in `PROGRESS.md` with 2–4 lines (results, caveats) → commit.
-5. **At most 2 tasks per session.** Then tidy `PROGRESS.md` and end the session.
-6. When every task is `DONE` or `BLOCKED`: write the report (section 6), put `STATUS: ALL_DONE` on the first line of `PROGRESS.md`, commit and end.
+1. Read this file, `AUTO/PROGRESS.md`, `AUTO/DECISIONS.md`, `AUTO/BLOCKERS.md`, `git log --oneline -15`, `git status`.
+2. If your task is already `DONE`, return at once. If it is `IN_PROGRESS`, a previous run was cut off: compile-check, keep what is salvageable, otherwise `git stash push -m "abandoned-<task>"` and restart it.
+3. Mark it `IN_PROGRESS`, do it, then: compile check → EditMode tests → (scene build if serialized fields or the builder changed) → commit `[auto] T<n>: <summary>` → mark it `DONE` in `PROGRESS.md` with 2–4 Korean lines (results, caveats, audit IDs) → commit.
 
 ## 3. Verification (no headset)
 
-- Commands (Unity must not be running; exit 4 = Unity open → log a blocker, keep coding, mark commits `[unverified]`):
+- Commands (Unity must not be running; exit 4 = Unity open → blocker):
   - Compile: `powershell -NoProfile -ExecutionPolicy Bypass -File "AUTO\tools\compile_check.ps1"`
-  - Tests: the same command + `-Tests`
-  - Scenes: the same command + `-ExecuteMethod HandHero.EditorTools.HandHeroSceneBuilder.BuildAll` (the builder throws on a missing serialized field).
-  - APK: the same command + `-BuildTarget Android -TimeoutMinutes 120 -ExecuteMethod HandHero.EditorTools.BuildScript.BuildQuestApkDev` (and `BuildQuestApkRelease`). The APK build regenerates the scenes; commit them. Always `git checkout -- ProjectSettings/UnityConnectSettings.asset` before committing.
-- **Pure logic goes in `HandHero.Core` with EditMode tests first (TDD)**: write the test, watch it fail, implement, watch it pass. The test assembly references only Core, so put every rule you want tested there; keep MonoBehaviours thin. MonoBehaviour wiring and scenes = compile + scene build + a device-checklist item.
-- **Never hand-edit `.unity` YAML.** Scenes come only from `HandHeroSceneBuilder.BuildAll`, which must stay idempotent.
-- Use `git add <paths>`. Never `git add -A`.
+  - Tests: the same + `-Tests`
+  - Scenes: the same + `-ExecuteMethod HandHero.EditorTools.HandHeroSceneBuilder.BuildAll` (throws on a missing serialized field).
+  - APK: the same + `-BuildTarget Android -TimeoutMinutes 120 -ExecuteMethod HandHero.EditorTools.BuildScript.BuildQuestApkDevClean` (and `BuildQuestApkRelease`). Commit the regenerated scenes. Always `git checkout -- ProjectSettings/UnityConnectSettings.asset` before committing.
+- Never run two Unity commands at once. Never hand-edit `.unity` YAML. `git add <paths>`, never `-A`.
+- **Pure logic in `HandHero.Core` with EditMode tests first (TDD: red, then green).** MonoBehaviour wiring = compile + scene build + a device-checklist item.
 
-## 4. Decisions (approval status and details: `AUTO/DECISIONS.md`)
+## 4. Decisions (approval and details: `AUTO/DECISIONS.md`)
 
-D1 first-run hitch: prewarm pools at scene load + GPU warmup + a 25 ms hitch counter · D2 balance: Horde 30 s, BossHealthMult 5, run-bot damage ×1.15 (Quick Match unchanged) · D3 the four leftover minors · D4 meta progression A · D5 no judge-only features · D6 branch/commit rules · D7 enemy variety first slice: looks + attack patterns only · D8 terrain variety first slice: seeded random positions of the current pieces · D9 MR room-scan spike (OpenXR plane/bounding-box features + scene permission approved for S8 only).
+D1 pinch release: Meta aim index pinch first, relative-drop fallback · D2 per-pinch diagnostics in the run log · D3 fix all 13 minors · D4 enemy movement personalities, same flight rules · D5 terrain stage 2: low wall, floating platform, thin pillar + 3 colour/light themes · D6 demo mode with ghost hands and gesture captions · D7 workflow + watchdog · D8 branch/commit rules.
 
 ## 5. Task queue (in order)
 
-### S1. First-run hitch (D1)
-- Move the RunBot pool prewarm (`RunDirector`, `MaxAlive + 1`) and every effect pool prewarm to scene load (the owning component's `Start`). Starting a run must not instantiate anything.
-- GPU warmup right after scene load, while the menu opens: for 2–3 frames, draw one prewarmed RunBot (not registered as a target, controls off), a beam with the player, bot and crit colors, one BeamImpact, one KillBurst, the damage vignette at minimal non-zero alpha and the charge orb, placed inside the camera view at the far side of the arena and scaled small but non-zero so they still render; then return everything to its pool. Before writing this by hand, check whether Unity 6.6 has a usable PSO/shader warmup API (e.g. `GraphicsStateCollection`, `ShaderWarmup`): confirm it exists in the editor's managed assemblies or package cache and is meant for Vulkan; use it only if it compiles; log the choice in `QUESTIONS_FOR_HYUN.md`.
-- `PerfSpikeLogger`: keep the 50 ms spike records; add, per flush, the count of frames over `hitchThresholdMs` (25) and the worst one, and record the first such frame after each phase change (TDD the counter in Core). Put the warmup time in the session header next to `sfx … ms`.
-- DONE: Core tests; compile; scenes rebuilt; device item (first 30 s of a RUN smooth; app start may take up to ~1 s longer).
+### T0. ASSIST pinch release (D1, D2) — TDD
+- `HandGestureTracker`: per hand also expose the **unsmoothed** pinch strength and, when `TryGetAimState` succeeds, the Meta aim `pinchStrengthIndex` and the index-pinching flag (+ a `HasMetaPinch` bool). Read them where `SystemGesture` is read today; no allocation.
+- Core: a pinch release rule used by `PinchTrigger` (extend it or add `PinchReleaseRule`; keep the public behaviour for CURSOR's trigger path unchanged). Press stays at `pinchFireThreshold` 0.8 (or the Meta flag's rising edge when present — choose one, log it). Release when ANY of: (a) Meta flag present and off (with a short debounce, e.g. 2 frames); (b) the raw strength has fallen by at least `relativeRelease` (tunable, start 0.2 ≈ 1 cm) below the peak reached during this press; (c) the existing absolute `pinchResetThreshold`. Tracking loss still drops the pinch and requires a reopen (existing behaviour).
+- Tests built from the device numbers: thumb settles at ~2.8 cm after a pinch (old rule never releases, new rule releases within ≤ 3 frames); 10 quick taps → 10 fires, 0 charge starts; a deliberate 1 s hold → charge starts after `HoldDelay` and fires on release; Meta flag path; no flag (fallback only); jitter around the release point does not double-fire; tracking loss mid-hold.
+- `XRHandsInputSource` uses it for ASSIST; CURSOR (trigger gesture) untouched.
+- Run log: per pinch add `min_strength`, `release_strength`, `release_by` (meta / relative / absolute / lost); update `run_summary.py` to print the release-by mix and the share of holds over 1 s.
+- DONE: tests; compile; scenes rebuilt if fields changed; device item "30 s of rapid ASSIST fire → shots ≈ pinches, no unintended charge".
 
-### S2. Balance (D2)
-- `RunParams`: `HordeTime` 45 → 30, `BossHealthMult` 6 → 5, new `EnemyDamageMult` 1.15 applied to every run bot's shot damage, on top of the Elite/Boss multipliers. Quick Match and the tutorial bot keep their damage.
-- Recompute the run-time estimate (method: "R5 시간 추정" in `AUTO/archive/2026-10-08/PROGRESS.md`) using the device numbers above and write it in `PROGRESS.md`. Make `run_summary.py` print the run time against the 10-minute limit if it doesn't already.
-- DONE: tests (update tests that pin the old values; say which in the commit); compile.
+### T1. Leftover minors (D3)
+Fix every item from the round-4 report section 7, each with a test where the logic lives in Core:
+- S7-1-1: a Generate-level test that forces the sight-line rule to reject layouts (tall piece / low spawn area) and checks the result stays open and not a fallback; optionally require the sight line to spawn index 0.
+- S7-1-2: with no fallback arrays, `Generate` returns the input defaults or null arrays — never a half-placed mix; document + test.
+- S8-1-2: handle `PermissionRequestDismissed` (treat as denied for this session, log it).
+- S8-1-3: a failed `SetManagers(true)` logs UNAVAILABLE once and nothing else.
+- S8-2-1 / F2-3 / F4-2: stop polling the permission (JNI) every frame once it is decided; poll at most every 0.5 s before that.
+- F2-2: leaving MR TABLE menu: build the summary without `Debug.Log` stack traces in release (`HHLog` or `LogType.Log` with `StackTraceLogType.None`), and defer manager shutdown off the match-start frame if cheap.
+- F1-2: time spent on the STARTING RELIC screen is excluded from run time and best-time records (TDD in `RunStateMachine`).
+- F3-3: a RESET PROGRESS during a run marks that run as not recorded to meta (TDD in `MetaProgress`/`RunDirector` rule).
+- F3-4: Gunner colour clearly different from the target / CURSOR orange (pick a hue ≥ 40° away, log it).
+- F4-1: fins keep the red family (builder: remove `Fin_L`/`Fin_R` from `baseColorRenderers`).
+- F4-3: add `[Tooltip]` to every listed field.
+- Also fix `AUTO/SECOND_PC_SETUP.md` section 0 only if it still says the CLI and the desktop app use different accounts (it was corrected by hand already if not).
+- DONE: tests; compile; scenes rebuilt.
 
-### S3. Leftover minors (D3)
-- Core (TDD): when the system gesture starts on the aim hand while a charge is held, the charge is cancelled (no shot). A pinch still closed after the gesture ends must reopen (already true; keep the test).
-- `PerfSpikeLogger`: query the head XR device at most every 0.25 s (reuse the cached list).
-- `PinchHoldStats`: record only while a run is active, or cap at 256 and drop the oldest; no list growth outside runs.
-- Bots: one `System.Random` per bot, reseeded per spawn, instead of a new one per spawn.
-- DONE: tests; compile.
+### T2. Enemy movement personalities (D4) — TDD
+- Add movement parameters to `BotArchetype` (preferred distance to the player, strafe amplitude/frequency, a dash-then-hold pattern) and read them in `BotBrain`'s movement part only. The bot still drives the same `HandInputData` path, the same flight model and the same speed caps as the player (ADR fairness).
+  - Sniper: keeps far (preferred distance ~1.5× today's), small strafe, repositions after each shot.
+  - Lancer: dashes to a new spot before its telegraph, holds still while telegraphing and firing, then dashes again.
+  - Gunner: keeps closer (~0.7×), wider strafe.
+  - Striker: exactly today's behaviour (frame-for-frame tests stay green unchanged). Boss: Gunner movement during Gunner pattern, Lancer during Lancer pattern.
+- Movement must respect arena bounds and the T3 pieces (bots already fly with the clamp; add a cheap avoidance only if a test shows bots pinned inside pieces — log the choice).
+- DONE: tests; compile; scenes/RunBot prefab rebuilt; device item (each archetype moves differently; fights stay fair).
 
-### S4. Meta progression core (D4) — TDD
-- Core `IKeyValueStore` (minimal: get/set int, float, string; has; delete; save) and `MetaProgress` per the design doc section 5 (keys under `hh.meta.`, version 1, version mismatch → reset).
-- `OnRunEnded(result, islandReached, runSeconds, aimMode) → MetaChanges` (new unlock bits, new best island, new best time). Unlocks: island 5 reached (any result, including quitting after reaching it) → Second Wind; first Victory → Big Chests; a Victory with the other aim mode than the first Victory → Dividends. Bests never get worse; quit runs count for island reached, never for time.
-- `StartingRelicChoices()` → unlocked relic ids in a fixed order. `Reset()` clears only `hh.meta.*` (aim mode and tutorial-seen live in other keys and must survive).
-- A dictionary-backed store for tests; a `PlayerPrefs` adapter in HandProto.
-- DONE: tests (thresholds, per-mode bests, never worse, quit rules, version reset, reset keeps foreign keys); compile.
+### T3. Terrain stage 2 (D5) — TDD for the layout rules
+- New piece kinds built by `HandHeroSceneBuilder` (simple primitives, a small pool per kind, all disabled by default): low wall (≈ 6 × 3 × 1), floating platform (≈ 4 × 0.6 × 4 at y between 2 and 8), thin pillar (≈ 1 × 14 × 1). Today's two pillars stay as they are.
+- `ArenaLayout`: heterogeneous pieces with per-kind counts per island (an island-depth table, seeded); floating platforms are not on the floor and keep a vertical clearance band for flight lanes; every existing rule (bounds, gaps, start/spawn clearance, sight line, keep-clear boxes) still holds; deterministic per seed; fallback = today's two pillars only.
+- Island themes (3, e.g. "Dusk", "Frost", "Ember"): floor/wall/piece colours via MaterialPropertyBlock and the directional light colour/intensity; chosen per island from the run seed; Quick Match / tutorial / menu restore the default look.
+- Run log: theme and piece counts per island.
+- DONE: tests; compile; scenes rebuilt; device item (islands look and play differently; no piece blocks the start or a spawn; tabletop scale OK).
 
-### S5. Meta progression wiring (D4, D5)
-- `RunStateMachine`: new phase `StartRelic` before island 1's intro when at least one relic is unlocked. Choosing a relic adds it to the inventory (so `ChestRoller` never offers it again); NONE skips. Pause works as in OpenChest. TDD the transitions.
-- `RunChoiceMenu`: the starting relic chest uses the existing card UI (unlocked relics + a NONE card), title `STARTING RELIC`; the 0.4 s arm delay applies.
-- Main menu: one TextMeshPro line above the grid, `BEST  ISLAND 7  ·  WIN 9:12`, for the current aim mode (updates when AIM toggles); hidden before the first run.
-- End panel: under the run summary, `NEW BEST` and/or `UNLOCKED: SECOND WIND START` lines at the existing font size.
-- Pause panel: `RESET PROGRESS`, which needs a second press (`CONFIRM RESET`) within a few seconds. No showcase toggle (D5).
-- Write meta progress at the same moment as `run_log.jsonl` (end screen / quit) with one `PlayerPrefs.Save()`; never during a fight.
-- DONE: tests; compile; scenes rebuilt (0 wiring errors).
+### T4. Demo mode (D6)
+- Main menu: a `DEMO` button (fits the existing grid; adjust the layout cleanly). Demo = a match phase or a director of its own that reuses the arena: player invulnerable (health never drops, no death), 1–2 slow Strikers (low damage, long telegraph) and the practice targets respawning, no timer/score HUD, run systems off. Wrist pause → menu works as today.
+- `GhostHands`: draws both tracked hands as translucent joint spheres + bone lines at the real hand poses (world space from `HandGestureTracker`; correct in VR arena and tabletop scale), one material, MaterialPropertyBlock colour per hand, no per-frame allocation, only active in demo mode. Clutch hand tints when GRAB is held; aim hand tints when PINCH is held.
+- `GestureCaptions`: small world-space TMP labels beside each hand: `GRAB` (clutch rising edge), `PINCH = FIRE` (shot), `HOLD = CHARGE` (charge start), `PUSH = SHOCKWAVE` (shockwave); fade after ~0.8 s; readable in a headset recording (size, contrast), never covering the hero.
+- Keep the hero, beam, impacts and sounds exactly as in the game.
+- Report: a Korean recording guide — Quest built-in recording steps, recommended mode (VR arena vs MR TABLE), 30–60 s shot list (grab-fly → aim → fire → charge → shockwave → dodge), phone filming of the real hands from the side, side-by-side edit for LinkedIn (1:1 or 4:5).
+- DONE: compile; scenes rebuilt; device item.
 
-### S6. Enemy variety, first slice: different looks and attacks (D7)
-- Scope (Hyun, 2026-10-09): bots differ **only in appearance and attack pattern**. Same flight model, health rules, hit receiver and AI movement as today (ADR fairness: bots use the player's rules). No shields, healing, splitting or other new mechanics.
-- Core (TDD): `BotArchetype` data (id, colors, silhouette parameters, attack parameters) plus a per-island spawn table in `RunRules` that picks an archetype per spawn from the run's seeded stream. Archetypes (placeholder English names):
-  - **Striker** = today's bot (unchanged numbers).
-  - **Sniper**: longer telegraph (x1.6), slower fire (x1.8 interval), higher damage (x1.8), thin long-lasting beam, tall needle silhouette, cold color.
-  - **Gunner**: 3-shot burst (short gap, e.g. 0.18 s) after one short telegraph, low damage per shot (x0.45), chunky wide silhouette, warm color.
-  - **Lancer**: a wide charge shot (reuse the charge width visual), long telegraph, high damage (x2.2), slow (x2.5 interval); forces a dodge.
-  - Island table (first guess; log it): islands 1-2 Striker only; 3-4 add Gunner; 5-6 add Sniper; 7-8 add Lancer; Elite = one archetype with the Elite multipliers; Boss alternates Gunner bursts and Lancer shots (switch every N shots).
-- `BotBrain`: only the attack part reads the archetype (telegraph time, burst count/gap, charge shot); movement untouched. TDD burst timing, per-archetype telegraph, boss pattern switching, and that Striker reproduces today's behaviour exactly (existing BotBrain tests stay green unchanged).
-- Visuals: the builder gives RunBot archetype child shapes (simple primitives: needle, block, lance) toggled by `RunBot.Activate(..., archetype)`; colors via the existing MaterialPropertyBlock path; telegraph line color/width per archetype. One pool, reconfigured per activation (keep the S1 prewarm and warmup for every archetype's look).
-- Sound: a per-archetype fire cue variant from the P11 synth (pitch/length) and the existing telegraph warning; no new assets.
-- Telemetry: `run_log.jsonl` records kills and damage taken per archetype.
-- DONE: tests; compile; scenes and RunBot prefab rebuilt (0 wiring errors); device item (each archetype readable at a glance and by sound; damage feels fair).
-
-### S7. Terrain variety, first slice: random placement in the current arena (D8)
-- Scope (Hyun, 2026-10-09): keep the current arena and terrain pieces; **only their positions are randomized** per island, seeded by the run (reproducible). No new terrain types, hazards or modules yet.
-- Core (TDD): an `ArenaLayout` generator: arena bounds, piece sizes (today's `Pillar_L` / `Pillar_R`), player start, bot spawn area and a seed in; positions out, satisfying: inside bounds with a margin; a minimum distance between pieces; a clear sphere around the player start and every bot spawn point; at least one unobstructed line of sight from the player start to the bot side; the same output for the same seed. Bot spawn points are also randomized inside the spawn area under the same constraints. Tests for every constraint and for determinism.
-- Runtime: an `ArenaLayoutApplier` moves the existing pillar and spawn point transforms at each island's Intro (during the countdown, before bots spawn), then calls `Physics.SyncTransforms()` once. Quick Match and the tutorial keep today's fixed layout and get it back when a run ends. Cover, aim assist and raycasts keep working because the same objects move. Positions are arena-local, so tabletop scale works.
-- Telemetry: `run_log.jsonl` stores the layout seed per island.
-- DONE: tests; compile; scenes rebuilt; device item (islands look different; pillars never block the start or overlap a bot; cover still blocks beams).
-
-### S8. MR room-scan spike (D9) — capability probe, throwaway-safe
-- Question to answer: in this project (Meta OpenXR 2.6.1, AR Foundation 6.6.2, already installed), can MR TABLE mode get the player's room layout — planes (floor, walls, table, couch…), bounding boxes (furniture with classifications) and/or the room mesh — and how fast, so a later round can generate island terrain from it?
-- Probe, kept small and isolated: a `RoomScanProbe` component that only runs in MR TABLE mode, enables `ARPlaneManager` / `ARBoundingBoxManager` (and `ARMeshManager` if cheap) when the matching Meta OpenXR features are on, and writes to `perf_log.txt` (via `PerfSpikeLogger.Mark`) and the Unity log: whether each subsystem started, time to first result, counts and classifications, sizes, and the largest horizontal surface near the table position. A debug wireframe of what it found, toggled by a serialized flag (default on in dev builds, off in release).
-- Settings: enabling the Meta OpenXR Planes / Bounding Boxes (/ Meshing) features for Android and the scene permission the feature requires (`com.oculus.permission.USE_SCENE`, asked at runtime only when MR TABLE is chosen) is **approved for this task only**; change them through an editor script, list every changed key in `PROGRESS.md`. Verify each API name in `Library/PackageCache/com.unity.xr.meta-openxr@*/` and `com.unity.xr.arfoundation@*/` before use. If something cannot be done without a new package or a manifest hand edit, log a blocker and keep only the research.
-- Must not change VR arena mode or Quick Match/RUN behaviour; if the permission is denied, MR TABLE works exactly as today.
-- Write `docs/superpowers/specs/2026-10-09-room-terrain-research.md` ("Room-based terrain", starts with `## 한국어 요약`) — what the probe can tell us, how scanned surfaces could become island terrain at tabletop scale (e.g. real table edge = arena edge, furniture boxes → cover blocks), privacy note (scene data stays on device, never logged beyond counts/sizes), and the device steps Hyun needs (Space Setup on Quest).
-- DONE: compile; scenes rebuilt; device item "MR TABLE → allow permission → perf_log shows planes/boxes".
-
-### S9. Scenes, tests, APKs
-- Rebuild scenes, run all tests, build `BuildQuestApkDev` and `BuildQuestApkRelease` (if the dev APK keeps stale content again, do a clean build); record paths and sizes in `PROGRESS.md`.
-
-### S10. Final review and report
-- One code-review subagent over `a3b1dd1..HEAD` (exclude `.unity`): fix every confirmed Critical/Important finding, re-test, record Minor ones.
-- Write `AUTO/REPORT_FOR_HYUN.md` (section 6), then `STATUS: ALL_DONE`.
+### T5. Scenes, tests, APKs, final review, report
+- Rebuild scenes, run all tests, build `BuildQuestApkDevClean` and `BuildQuestApkRelease`; record paths and sizes in `PROGRESS.md`.
+- Final review fixes (the workflow runs the reviewers), then write `AUTO/REPORT_FOR_HYUN.md` (section 6) and put `STATUS: ALL_DONE` on the first line of `PROGRESS.md`.
 
 ## 5b. Hard rules
 
 1. **The XR Origin never moves or rotates.** No follow camera.
 2. Don't delete the 20 legacy scripts in the `Scripts\` root or `Networking~`. Don't touch the scenes in `Assets/Scenes/`.
-3. Every gesture threshold uses hysteresis. Every tunable is `[SerializeField]` + `[Tooltip]`. **Don't change existing gameplay tuning defaults** except the S2 balance values (archetype and layout values are new tunables).
-4. **Quick Match, the tutorial, both aim modes and RUN must keep working.** All existing tests stay green; existing tests may be updated only where a decision above deliberately changes behaviour (say which in the commit).
+3. Every gesture threshold uses hysteresis. Every tunable is `[SerializeField]` + `[Tooltip]`. Don't change existing gameplay tuning defaults except as a decision above says (new tunables are fine).
+4. **Quick Match, the tutorial, both aim modes and RUN must keep working.** All existing tests stay green.
 5. No account creation, login, payments or sign-ups.
 6. **No `git push`.** No force commands. Never `git reset --hard` committed work.
 7. Don't modify files outside the project folder and `MetaAwards\Build\`.
-8. No new packages. `ProjectSettings/` / XR settings changes only as named in S8; list any in `PROGRESS.md`.
-9. Never commit a broken compile. If it is unavoidable, mark it `[broken]` and fix it in the next commit.
+8. No new packages. No `ProjectSettings/` changes unless a build needs them; list any in `PROGRESS.md`.
+9. Never commit a broken compile.
 10. In-game text in English. Reports for Hyun in Korean.
 11. No XR/render setting changes (FFR, MSAA, latency mode, depth submission, refresh rate).
-12. Build for players, not for a judging booth: no showcase-only toggles or judge-specific flows (Hyun, 2026-10-09).
+12. Build for players, not for a judging booth (the demo mode is Hyun's recording tool and a practice mode, not a judge-only flow).
 
 ## 6. Report (`AUTO/REPORT_FOR_HYUN.md`, Korean)
 
-1. Task table (done / blocked / not started).
-2. Headset checklist by priority:
-   - first 30 s of a RUN smooth (logcat command in `AUTO/archive/2026-10-09/PERF_REPORT.md` section 3, plus the hitch counts in `perf_log.txt`)
-   - run length and difficulty (`python AUTO\tools\run_summary.py <run_log.jsonl>`)
-   - starting relic chest after reaching island 5, the best line on the menu, NEW BEST / UNLOCKED on the end panel, RESET PROGRESS
-   - revive and the DEFEAT screen (not tried in round 3)
-   - the four archetypes (readable by look and sound, fair damage) and per-island pillar layouts (fair openings, cover works)
-   - MR TABLE room-scan probe (Space Setup first, allow the permission, what perf_log and the wireframe show; MR TABLE still works if denied)
-   - regressions: Quick Match, tutorial, both aim modes
-3. Decisions taken for Hyun (summary of `QUESTIONS_FOR_HYUN.md`), each reversible.
-4. Changed values and how to undo each.
-5. The room-terrain research findings and open questions (with recommended answers), and the tuning knobs for archetypes and layouts.
-6. Three next steps, game-first.
+1. Task table (done / blocked / not started) with commits.
+2. Headset checklist by priority: ASSIST rapid fire and charge (with `run_summary.py`), demo mode recording, enemy movement, terrain pieces/themes, room scan (wait 10–20 s in MR TABLE menu), regressions (Quick Match, tutorial, CURSOR, a full RUN, meta progression).
+3. The recording guide (T4).
+4. Decisions taken for Hyun (summary of `QUESTIONS_FOR_HYUN.md`), each reversible; changed values and how to undo each.
+5. Review results (fixed / minor left).
+6. Three game-first next steps (e.g. art direction, FIT TO TABLE, balance from data).
